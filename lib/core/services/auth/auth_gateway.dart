@@ -21,3 +21,11 @@ abstract interface class AuthGateway {
   Future<AuthSession> login(LoginRequest request);
   Future<void> logout();
 }
+
+class AuthException implements Exception {
+  const AuthException(this.message);
+  final String message;
+
+  @override
+  String toString() => message;
+}

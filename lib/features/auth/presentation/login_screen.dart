@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/services/auth/mock_auth_gateway.dart';
+import '../../../core/services/auth/auth_gateway.dart';
 import '../../../core/session/app_session_controller.dart';
 import '../../../core/widgets/tenant_logo.dart';
 
@@ -18,8 +18,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _employeeController = TextEditingController(text: 'EMP-1024');
-  final _passwordController = TextEditingController(text: 'demo123');
+  final _employeeController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   bool _loading = false;
   bool _obscure = true;
@@ -46,11 +46,11 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text,
       );
     } on AuthException catch (error) {
-      if (!mounted) return;
-      setState(() => _error = error.message);
+      if (mounted) setState(() => _error = error.message);
     } catch (_) {
-      if (!mounted) return;
-      setState(() => _error = 'Unable to sign in. Please try again.');
+      if (mounted) {
+        setState(() => _error = 'Unable to sign in. Check your connection and try again.');
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -67,30 +67,31 @@ class _LoginScreenState extends State<LoginScreen> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
+              constraints: const BoxConstraints(maxWidth: 420),
               child: Column(
                 children: [
-                  TenantLogo(tenant: tenant, size: 92),
-                  const SizedBox(height: 24),
+                  TenantLogo(tenant: tenant, size: 84),
+                  const SizedBox(height: 22),
                   const Text(
-                    'Employee Login',
+                    'Field work, made simple.',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 27,
+                      fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(height: 7),
+                  const SizedBox(height: 8),
                   const Text(
-                    'Field sales and operations',
-                    style: TextStyle(color: Colors.white70, fontSize: 14),
+                    'Sign in. See today’s work. Get it done.',
+                    style: TextStyle(color: Colors.white70),
                   ),
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 28),
                   Container(
                     padding: const EdgeInsets.all(22),
                     decoration: BoxDecoration(
                       color: Colors.white,
-                      borderRadius: BorderRadius.circular(22),
+                      borderRadius: BorderRadius.circular(24),
                     ),
                     child: Form(
                       key: _formKey,
@@ -101,7 +102,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             controller: _employeeController,
                             textInputAction: TextInputAction.next,
                             decoration: const InputDecoration(
-                              labelText: 'Employee ID',
+                              labelText: 'Employee ID / mobile login',
                               prefixIcon: Icon(Icons.badge_outlined),
                             ),
                             validator: (value) =>
@@ -115,12 +116,10 @@ class _LoginScreenState extends State<LoginScreen> {
                             obscureText: _obscure,
                             onFieldSubmitted: (_) => _login(),
                             decoration: InputDecoration(
-                              labelText: 'Password / PIN',
-                              prefixIcon:
-                                  const Icon(Icons.lock_outline_rounded),
+                              labelText: 'Password',
+                              prefixIcon: const Icon(Icons.lock_outline_rounded),
                               suffixIcon: IconButton(
-                                onPressed: () =>
-                                    setState(() => _obscure = !_obscure),
+                                onPressed: () => setState(() => _obscure = !_obscure),
                                 icon: Icon(
                                   _obscure
                                       ? Icons.visibility_outlined
@@ -147,7 +146,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           FilledButton(
                             onPressed: _loading ? null : _login,
                             style: FilledButton.styleFrom(
-                              minimumSize: const Size.fromHeight(52),
+                              minimumSize: const Size.fromHeight(54),
                               backgroundColor: tenant.primaryColor,
                             ),
                             child: _loading
@@ -159,17 +158,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : const Text('LOGIN'),
-                          ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Current build uses mock authentication only. '
-                            'Employee management belongs to the separate admin backend.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Color(0xFF7A7F8B),
-                              fontSize: 12,
-                            ),
+                                : const Text('SIGN IN'),
                           ),
                         ],
                       ),
