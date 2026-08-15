@@ -3,82 +3,150 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../../config/api_config.dart';
+import '../../config/tenant_config.dart';
+import '../../database/app_database.dart';
 import '../../models/app_user.dart';
 import '../../models/auth_session.dart';
 import '../../models/mobile_capability.dart';
 import 'auth_gateway.dart';
 
 class BackendAuthGateway implements AuthGateway {
-  BackendAuthGateway({http.Client? client}) : _client = client ?? http.Client();
+  BackendAuthGateway({
+    http.Client? client,
+    AppDatabase? database,
+  })  : _client = client ?? http.Client(),
+        _database = database ?? AppDatabase.instance;
+
+  static const _cacheKey = 'last_auth_session';
 
   final http.Client _client;
+  final AppDatabase _database;
 
   @override
-  Future<AuthSession> login(LoginRequest r) async {
-    final lr = await _client.post(
+  Future<AuthSession> login(LoginRequest request) async {
+    final loginResponse = await _client.post(
       Uri.parse('${ApiConfig.baseUrl}/api/salesApp/auth/login'),
       headers: {'content-type': 'application/json'},
       body: jsonEncode({
-        'salesmanLoginId': r.identifier.trim(),
-        'password': r.password,
+        'salesmanLoginId': request.identifier.trim(),
+        'password': request.password,
       }),
     );
 
-    final lb = _decodeMap(lr.body);
-    if (lr.statusCode != 200 || lb['success'] != true) {
+    final loginBody = _decodeMap(loginResponse.body);
+    if (loginResponse.statusCode != 200 || loginBody['success'] != true) {
       throw AuthException(
-        (lb['error'] ?? 'Unable to sign in.').toString(),
+        (loginBody['error'] ?? 'Unable to sign in.').toString(),
       );
     }
 
-    final token = lb['token']?.toString();
+    final token = loginBody['token']?.toString();
     if (token == null || token.isEmpty) {
-      throw const AuthException('Login succeeded but no access token was returned.');
+      throw const AuthException(
+        'Login succeeded but no access token was returned.',
+      );
     }
 
-    final br = await _client.get(
+    final bootstrapResponse = await _client.get(
       Uri.parse('${ApiConfig.baseUrl}/api/salesApp/bootstrap'),
       headers: {'authorization': 'Bearer $token'},
     );
 
-    final b = _decodeMap(br.body);
-    if (br.statusCode != 200 || b['success'] != true) {
+    final bootstrap = _decodeMap(bootstrapResponse.body);
+    if (bootstrapResponse.statusCode != 200 || bootstrap['success'] != true) {
       throw AuthException(
-        (b['error'] ?? 'Unable to load workspace.').toString(),
+        (bootstrap['error'] ?? 'Unable to load workspace.').toString(),
       );
     }
 
-    final rawUser = b['user'];
-    if (rawUser is! Map) {
-      throw const AuthException('Workspace did not contain an employee profile.');
+    final session = _buildSession(
+      tenant: request.tenant,
+      token: token,
+      identifier: request.identifier,
+      bootstrap: bootstrap,
+    );
+
+    await _database.putCache(_cacheKey, {
+      'token': token,
+      'identifier': request.identifier.trim(),
+      'bootstrap': bootstrap,
+    });
+
+    return session;
+  }
+
+  Future<AuthSession?> restoreCachedSession(TenantConfig tenant) async {
+    final cached = await _database.getCache(_cacheKey);
+    if (cached is! Map) return null;
+
+    final map = Map<String, dynamic>.from(cached);
+    final token = map['token']?.toString();
+    final identifier = map['identifier']?.toString();
+    final rawBootstrap = map['bootstrap'];
+
+    if (token == null ||
+        token.isEmpty ||
+        identifier == null ||
+        rawBootstrap is! Map) {
+      return null;
     }
 
-    final u = Map<String, dynamic>.from(rawUser);
-    final modulesRaw = b['modules'];
-    final permissionsRaw = b['permissions'];
+    try {
+      return _buildSession(
+        tenant: tenant,
+        token: token,
+        identifier: identifier,
+        bootstrap: Map<String, dynamic>.from(rawBootstrap),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  AuthSession _buildSession({
+    required TenantConfig tenant,
+    required String token,
+    required String identifier,
+    required Map<String, dynamic> bootstrap,
+  }) {
+    final rawUser = bootstrap['user'];
+    if (rawUser is! Map) {
+      throw const AuthException(
+        'Workspace did not contain an employee profile.',
+      );
+    }
+
+    final user = Map<String, dynamic>.from(rawUser);
+    final modulesRaw = bootstrap['modules'];
+    final permissionsRaw = bootstrap['permissions'];
 
     return AuthSession(
       accessToken: token,
-      tenant: r.tenant,
+      tenant: tenant,
       user: AppUser(
-        id: u['id'].toString(),
-        employeeCode: (u['employeeCode'] ?? u['salesmanLoginId'] ?? r.identifier).toString(),
-        name: (u['name'] ?? u['displayName'] ?? r.identifier).toString(),
-        designation: (u['designation'] ?? u['role'] ?? 'Employee').toString(),
-        department: u['department']?.toString(),
+        id: user['id'].toString(),
+        employeeCode:
+            (user['employeeCode'] ?? user['salesmanLoginId'] ?? identifier)
+                .toString(),
+        name: (user['name'] ?? user['displayName'] ?? identifier).toString(),
+        designation:
+            (user['designation'] ?? user['role'] ?? 'Employee').toString(),
+        department: user['department']?.toString(),
         roles: [
-          if (u['role'] is String) u['role'] as String,
+          if (user['role'] is String) user['role'] as String,
         ],
       ),
       permissions: {
         if (permissionsRaw is List)
-          ...permissionsRaw.map((e) => e.toString()),
+          ...permissionsRaw.map((item) => item.toString()),
       },
       modules: [
         if (modulesRaw is List)
-          ...modulesRaw
-              .whereType<Map>()
-              .map((e) => MobileCapability.fromJson(Map<String, dynamic>.from(e))),
+          ...modulesRaw.whereType<Map>().map(
+                (item) => MobileCapability.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              ),
       ],
     );
   }
@@ -86,12 +154,16 @@ class BackendAuthGateway implements AuthGateway {
   Map<String, dynamic> _decodeMap(String body) {
     try {
       final decoded = jsonDecode(body);
-      return decoded is Map ? Map<String, dynamic>.from(decoded) : <String, dynamic>{};
+      return decoded is Map
+          ? Map<String, dynamic>.from(decoded)
+          : <String, dynamic>{};
     } catch (_) {
       return <String, dynamic>{};
     }
   }
 
   @override
-  Future<void> logout() async {}
+  Future<void> logout() async {
+    await _database.removeCache(_cacheKey);
+  }
 }

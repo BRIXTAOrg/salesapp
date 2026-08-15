@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import 'app/brixta_app.dart';
 import 'core/config/tenant_config.dart';
 import 'core/database/app_database.dart';
@@ -14,6 +15,8 @@ Future<void> main() async {
   await AppDatabase.instance.initialize();
 
   final connectivity = await DeviceConnectivityGateway.create();
+  final authGateway = BackendAuthGateway(database: AppDatabase.instance);
+  final cachedSession = await authGateway.restoreCachedSession(TenantConfig.demo);
 
   late final AppSessionController controller;
 
@@ -28,14 +31,11 @@ Future<void> main() async {
 
   controller = AppSessionController(
     tenant: TenantConfig.demo,
-    authGateway: BackendAuthGateway(),
+    authGateway: authGateway,
     connectivityGateway: connectivity,
     syncGateway: syncGateway,
+    session: cachedSession,
   );
 
-  runApp(
-    BrixtaApp(
-      controller: controller,
-    ),
-  );
+  runApp(BrixtaApp(controller: controller));
 }

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/services/location/field_tracking_service.dart';
-import '../../../core/session/app_session_controller.dart';
+import '../../../core/design/app_design.dart';
+import 'tracking_controller.dart';
 
 class TrackingScreen extends StatelessWidget {
   const TrackingScreen({
@@ -9,74 +9,84 @@ class TrackingScreen extends StatelessWidget {
     required this.controller,
   });
 
-  final AppSessionController controller;
+  final TrackingController controller;
 
   @override
   Widget build(BuildContext context) {
-    final tracker = FieldTrackingService.instance;
-    final session = controller.session!;
-
     return Scaffold(
-      appBar: AppBar(title: const Text('Field tracking')),
-      body: ListenableBuilder(
-        listenable: tracker,
-        builder: (context, _) {
+      appBar: AppBar(
+        title: const Text('Travel meter'),
+      ),
+      body: AnimatedBuilder(
+        animation: controller,
+        builder: (_, _) {
+          final snapshot = controller.snapshot;
+
           return ListView(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.fromLTRB(
+              18,
+              12,
+              18,
+              28,
+            ),
             children: [
-              _HeroDistance(
-                distanceKm: tracker.distanceKm,
-                isTracking: tracker.isTracking,
-              ),
-              const SizedBox(height: 18),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        tracker.isTracking ? 'Tracking is ON' : 'Tracking is OFF',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 18,
-                        ),
-                      ),
-                      const SizedBox(height: 7),
-                      Text(
-                        tracker.message ??
-                            'Tracking is normally started when you check in and stopped when you check out.',
-                      ),
-                      const SizedBox(height: 16),
-                      FilledButton.icon(
-                        onPressed: tracker.isTracking
-                            ? tracker.stop
-                            : () => tracker.start(
-                                  employeeId: session.user.id,
-                                  accessToken: session.accessToken,
-                                ),
-                        icon: Icon(
-                          tracker.isTracking
-                              ? Icons.stop_circle_outlined
-                              : Icons.play_circle_outline,
-                        ),
-                        label: Text(
-                          tracker.isTracking ? 'STOP TRACKING' : 'START TRACKING',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              _MeterHero(
+                distanceKm:
+                    snapshot.distanceKm,
+                speedKmh:
+                    snapshot.speedKmh,
+                state:
+                    controller.meterState,
               ),
               const SizedBox(height: 14),
-              const Card(
-                child: ListTile(
-                  leading: Icon(Icons.privacy_tip_outlined),
-                  title: Text('When location is used'),
-                  subtitle: Text(
-                    'Your route is recorded for field-work visibility and travel-distance calculation. '
-                    'The app makes tracking visible and you can see when it is on.',
-                  ),
+              _InfoCard(
+                icon: Icons.speed_rounded,
+                title: 'Motion-aware metering',
+                subtitle:
+                    snapshot.moving
+                        ? 'The phone is moving, so the meter is sampling more closely.'
+                        : 'The phone looks still, so the meter reduces sampling to save battery.',
+                trailing:
+                    snapshot.moving
+                        ? 'MOVING'
+                        : 'LOW POWER',
+              ),
+              const SizedBox(height: 10),
+              _InfoCard(
+                icon: Icons.memory_rounded,
+                title: 'Phone-first storage',
+                subtitle:
+                    'Measurements are kept on the phone first and uploaded when the server is available.',
+                trailing: 'OFFLINE SAFE',
+              ),
+              const SizedBox(height: 10),
+              _InfoCard(
+                icon: Icons.gps_fixed_rounded,
+                title: 'Position fix',
+                subtitle:
+                    _positionText(snapshot),
+                trailing:
+                    snapshot.accuracyM > 0
+                        ? '±${snapshot.accuracyM.toStringAsFixed(0)} m'
+                        : 'WAITING',
+              ),
+              const SizedBox(height: 18),
+              OutlinedButton.icon(
+                onPressed: controller.locateNow,
+                icon: const Icon(
+                  Icons.my_location_rounded,
+                ),
+                label: const Text(
+                  'REFRESH POSITION NOW',
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'The travel meter uses motion sensors to decide when higher-rate phone positioning is worth using. Position access remains required for reliable route distance and for a current admin map position.',
+                style: TextStyle(
+                  color: AppDesign.muted,
+                  fontSize: 11.5,
+                  height: 1.45,
                 ),
               ),
             ],
@@ -85,47 +95,251 @@ class TrackingScreen extends StatelessWidget {
       ),
     );
   }
+
+  static String _positionText(
+    dynamic snapshot,
+  ) {
+    final lastFixAt = snapshot.lastFixAt;
+
+    if (lastFixAt == null) {
+      return 'No position fix has been recorded yet.';
+    }
+
+    final local = lastFixAt.toLocal();
+    final minute =
+        local.minute.toString().padLeft(2, '0');
+
+    return 'Last reliable phone position at '
+        '${local.hour}:$minute.';
+  }
 }
 
-class _HeroDistance extends StatelessWidget {
-  const _HeroDistance({
+class _MeterHero extends StatelessWidget {
+  const _MeterHero({
     required this.distanceKm,
-    required this.isTracking,
+    required this.speedKmh,
+    required this.state,
   });
 
   final double distanceKm;
-  final bool isTracking;
+  final double speedKmh;
+  final String state;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: const Color(0xFF303541),
+        color: Colors.white,
         borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: AppDesign.line,
+        ),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
         children: [
-          Text(
-            isTracking ? 'TODAY · LIVE' : 'TODAY',
-            style: const TextStyle(
-              color: Colors.white70,
-              fontWeight: FontWeight.w700,
-            ),
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppDesign.softBlue,
+                  borderRadius:
+                      BorderRadius.circular(13),
+                ),
+                child: const Icon(
+                  Icons.speed_rounded,
+                  color: AppDesign.blue,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: AppDesign.softGray,
+                  borderRadius:
+                      BorderRadius.circular(999),
+                ),
+                child: Text(
+                  state.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight:
+                        FontWeight.w800,
+                    letterSpacing: .4,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 22),
           Text(
             '${distanceKm.toStringAsFixed(1)} km',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 38,
-              fontWeight: FontWeight.w900,
+            style: Theme.of(context)
+                .textTheme
+                .headlineLarge,
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Captured travel',
+            style: TextStyle(
+              color: AppDesign.muted,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          const Text(
-            'GPS-filtered field distance',
-            style: TextStyle(color: Colors.white70),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: _SmallMetric(
+                  label: 'PHONE SPEED',
+                  value:
+                      '${speedKmh.toStringAsFixed(0)} km/h',
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 42,
+                color: AppDesign.line,
+              ),
+              Expanded(
+                child: _SmallMetric(
+                  label: 'MODE',
+                  value: state,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SmallMetric extends StatelessWidget {
+  const _SmallMetric({
+    required this.label,
+    required this.value,
+  });
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: AppDesign.muted,
+            fontSize: 9.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: .5,
+          ),
+        ),
+        const SizedBox(height: 5),
+        Text(
+          value,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  const _InfoCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.trailing,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(
+          color: AppDesign.line,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment:
+            CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppDesign.softGray,
+              borderRadius:
+                  BorderRadius.circular(11),
+            ),
+            child: Icon(
+              icon,
+              size: 19,
+            ),
+          ),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        title,
+                        style:
+                            const TextStyle(
+                          fontSize: 13,
+                          fontWeight:
+                              FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      trailing,
+                      style: const TextStyle(
+                        color:
+                            AppDesign.muted,
+                        fontSize: 9.5,
+                        fontWeight:
+                            FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: AppDesign.muted,
+                    fontSize: 11.5,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),

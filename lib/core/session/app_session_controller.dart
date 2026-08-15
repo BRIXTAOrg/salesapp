@@ -14,6 +14,7 @@ class AppSessionController extends ChangeNotifier {
     required this.authGateway,
     required this.connectivityGateway,
     required this.syncGateway,
+    this.session,
   })  : connectivity = connectivityGateway.current,
         syncSnapshot = syncGateway.current {
     _connectivitySub = connectivityGateway.changes.listen((value) {
@@ -44,6 +45,7 @@ class AppSessionController extends ChangeNotifier {
   StreamSubscription<SyncSnapshot>? _syncSub;
 
   bool get isOnline => connectivity == ConnectivityStateValue.online;
+  bool get isOffline => !isOnline;
 
   Future<void> login({
     required String identifier,

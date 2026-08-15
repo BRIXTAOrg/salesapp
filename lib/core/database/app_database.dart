@@ -20,17 +20,21 @@ class AppDatabase {
 
     _db = await openDatabase(
       'kamdhenu_field.db',
-      version: 2,
+      version: 3,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
       onCreate: (db, version) async {
         await _createBaseTables(db);
         await _createTrackingTable(db);
+        await _createCacheTable(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _createTrackingTable(db);
+        }
+        if (oldVersion < 3) {
+          await _createCacheTable(db);
         }
       },
     );
@@ -124,6 +128,53 @@ class AppDatabase {
     await db.execute(
       'CREATE INDEX IF NOT EXISTS idx_tracking_points_sync '
       'ON tracking_points(synced, recorded_at)',
+    );
+  }
+
+
+  Future<void> _createCacheTable(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS app_cache (
+        cache_key TEXT PRIMARY KEY,
+        value_json TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  Future<void> putCache(String key, Object? value) async {
+    await db.insert(
+      'app_cache',
+      {
+        'cache_key': key,
+        'value_json': jsonEncode(value),
+        'updated_at': DateTime.now().toUtc().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<Object?> getCache(String key) async {
+    final rows = await db.query(
+      'app_cache',
+      columns: ['value_json'],
+      where: 'cache_key = ?',
+      whereArgs: [key],
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    try {
+      return jsonDecode(rows.first['value_json']! as String);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> removeCache(String key) async {
+    await db.delete(
+      'app_cache',
+      where: 'cache_key = ?',
+      whereArgs: [key],
     );
   }
 

@@ -1,110 +1,146 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
-import '../../../core/database/app_database.dart';
 import '../../../core/config/field_api.dart';
+import '../../../core/design/app_design.dart';
 import '../../../core/session/app_session_controller.dart';
+import '../../tracking/presentation/tracking_controller.dart';
 
 class AllowancesScreen extends StatefulWidget {
   const AllowancesScreen({
     super.key,
     required this.controller,
+    required this.trackingController,
   });
 
   final AppSessionController controller;
+  final TrackingController trackingController;
 
   @override
-  State<AllowancesScreen> createState() => _AllowancesScreenState();
+  State<AllowancesScreen> createState() =>
+      _AllowancesScreenState();
 }
 
 class _AllowancesScreenState extends State<AllowancesScreen> {
   bool _loading = true;
   List<Map<String, dynamic>> _claims = const [];
-  double _distanceKm = 0;
 
   @override
   void initState() {
     super.initState();
+
+    widget.trackingController.ensureAutomatic(
+      widget.controller.session!.user.id,
+    );
+
     _load();
   }
 
   Future<void> _load() async {
-    final session = widget.controller.session!;
-    final distance = await AppDatabase.instance.todayDistanceKm(session.user.id);
-    List<Map<String, dynamic>> claims = [];
+    List<Map<String, dynamic>> claims = const [];
 
     try {
-      final response = await FieldApi(accessToken: session.accessToken)
-          .getJson('/api/salesApp/tada-bills');
-      final data = response['data'];
-      if (data is List) {
-        claims = data
+      final response = await FieldApi(
+        accessToken:
+            widget.controller.session!.accessToken,
+      ).getJson('/api/salesApp/tada-bills');
+
+      final raw = response['data'];
+
+      if (raw is List) {
+        claims = raw
             .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
+            .map((item) => Map<String, dynamic>.from(item))
             .toList();
       }
     } catch (_) {}
 
     if (!mounted) return;
+
     setState(() {
-      _distanceKm = distance;
       _claims = claims;
       _loading = false;
     });
   }
 
   Future<void> _newClaim() async {
-    final result = await showModalBottomSheet<_ClaimDraft>(
+    final draft = await showModalBottomSheet<_ClaimDraft>(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _ClaimSheet(distanceKm: _distanceKm),
+      useSafeArea: true,
+      backgroundColor: AppDesign.canvas,
+      builder: (_) => _ClaimSheet(
+        distanceKm:
+            widget.trackingController.distanceKm,
+      ),
     );
 
-    if (result == null) return;
+    if (draft == null) return;
 
-    final session = widget.controller.session!;
-    final today = DateTime.now();
-    final date = _dateKey(today);
+    final date = _dateKey(DateTime.now());
 
     try {
-      await FieldApi(accessToken: session.accessToken)
-          .postJson('/api/salesApp/tada-bills', {
+      await FieldApi(
+        accessToken:
+            widget.controller.session!.accessToken,
+      ).postJson('/api/salesApp/tada-bills', {
         'billDate': date,
         'fromDate': date,
         'toDate': date,
-        'dailyAllowance': result.dailyAllowance,
-        'totalCost': result.totalCost,
-        'remarks': result.remarks,
+        'dailyAllowance': draft.dailyAllowance,
+        'totalCost': draft.totalCost,
+        'remarks': draft.remarks,
         'status': 'PENDING',
         'items': [
           {
-            'fromLocation': result.fromLocation,
-            'toLocation': result.toLocation,
-            'distanceTravelled': _distanceKm.toStringAsFixed(2),
-            'transportFare': result.transportFare,
-            'lodgingFare': result.lodgingFare,
-            'foodingFare': result.foodingFare,
-            'localConveyance': result.localConveyance,
-            'outOfPocketPaid': result.outOfPocket,
+            'fromLocation': draft.fromLocation,
+            'toLocation': draft.toLocation,
+            'distanceTravelled': widget
+                .trackingController.distanceKm
+                .toStringAsFixed(2),
+            'transportFare': draft.transportFare,
+            'lodgingFare': draft.lodgingFare,
+            'foodingFare': draft.foodingFare,
+            'localConveyance': draft.localConveyance,
+            'outOfPocketPaid': draft.outOfPocket,
             'totalBillsAdded': 0,
-            'remarks': result.remarks,
-          }
+            'remarks': draft.remarks,
+          },
         ],
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('TA/DA claim sent for review.')),
+          const SnackBar(
+            content: Text('Claim sent for review.'),
+          ),
         );
       }
+
       await _load();
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not submit claim: $error')),
+          SnackBar(
+            content: Text(
+              'Claim could not be sent yet: $error',
+            ),
+          ),
         );
       }
     }
   }
+
+  int get _pendingClaims => _claims
+      .where(
+        (claim) =>
+            (claim['status'] ?? '')
+                .toString()
+                .toUpperCase() ==
+            'PENDING',
+      )
+      .length;
 
   String _dateKey(DateTime value) =>
       '${value.year.toString().padLeft(4, '0')}-'
@@ -113,86 +149,369 @@ class _AllowancesScreenState extends State<AllowancesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('TA / DA')),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _loading ? null : _newClaim,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('NEW CLAIM'),
-      ),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 100),
-          children: [
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: const Color(0xFF303541),
-                borderRadius: BorderRadius.circular(22),
+    return SafeArea(
+      child: Scaffold(
+        body: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(
+              18,
+              24,
+              18,
+              100,
+            ),
+            children: [
+              Text(
+                'TA / DA',
+                style:
+                    Theme.of(context).textTheme.headlineLarge,
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 6),
+              const Text(
+                'Travel is captured automatically. Review, add expenses and submit.',
+                style: TextStyle(color: AppDesign.muted),
+              ),
+              const SizedBox(height: 20),
+              AnimatedBuilder(
+                animation: widget.trackingController,
+                builder: (_, _) => _TravelCard(
+                  distanceKm:
+                      widget.trackingController.distanceKm,
+                  active:
+                      widget.trackingController.active,
+                  pendingClaims: _pendingClaims,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const _AutoCaptureList(),
+              const SizedBox(height: 28),
+              Row(
                 children: [
-                  const Text(
-                    'Today’s tracked distance',
-                    style: TextStyle(color: Colors.white70),
-                  ),
-                  const SizedBox(height: 7),
                   Text(
-                    '${_distanceKm.toStringAsFixed(1)} km',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 34,
-                      fontWeight: FontWeight.w900,
-                    ),
+                    'Claims',
+                    style:
+                        Theme.of(context).textTheme.titleLarge,
                   ),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'Filled automatically from field tracking',
-                    style: TextStyle(color: Colors.white70),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed:
+                        _loading ? null : _newClaim,
+                    icon: const Icon(
+                      Icons.add_rounded,
+                      size: 18,
+                    ),
+                    label: const Text('New claim'),
                   ),
                 ],
               ),
+              const SizedBox(height: 8),
+              if (_loading)
+                const LinearProgressIndicator(
+                  minHeight: 2,
+                )
+              else if (_claims.isEmpty)
+                const _NoClaims()
+              else
+                for (final claim in _claims) ...[
+                  _ClaimRow(claim: claim),
+                  const SizedBox(height: 8),
+                ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TravelCard extends StatelessWidget {
+  const _TravelCard({
+    required this.distanceKm,
+    required this.active,
+    required this.pendingClaims,
+  });
+
+  final double distanceKm;
+  final bool active;
+  final int pendingClaims;
+
+  @override
+  Widget build(BuildContext context) {
+    final visualProgress =
+        math.min(distanceKm / 40, 1.0);
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFFF2F8FF),
+            Color(0xFFF7F3FF),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0xFFDDE5F5),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _TinyPill(
+                text: active
+                    ? 'AUTO CAPTURE ON'
+                    : 'AUTO CAPTURE STANDBY',
+                color: Colors.white,
+              ),
+              const Spacer(),
+              const Icon(
+                Icons.route_rounded,
+                size: 29,
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Text(
+            '${distanceKm.toStringAsFixed(1)} km',
+            style: const TextStyle(
+              fontSize: 35,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -1,
             ),
-            const SizedBox(height: 18),
-            const Text(
-              'Claims',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 3),
+          const Text(
+            'captured today',
+            style: TextStyle(
+              color: AppDesign.muted,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
             ),
-            const SizedBox(height: 10),
-            if (_loading)
-              const Center(child: Padding(
-                padding: EdgeInsets.all(30),
-                child: CircularProgressIndicator(),
-              ))
-            else if (_claims.isEmpty)
-              const Card(
-                child: Padding(
-                  padding: EdgeInsets.all(20),
-                  child: Text('No claims yet.'),
-                ),
-              )
-            else
-              ..._claims.map(
-                (claim) => Card(
-                  child: ListTile(
-                    leading: const CircleAvatar(
-                      child: Icon(Icons.receipt_long_outlined),
-                    ),
-                    title: Text(
-                      '₹${claim['totalCost'] ?? claim['total_cost'] ?? '0'}',
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
-                    subtitle: Text(
-                      '${claim['billDate'] ?? claim['bill_date'] ?? ''} · '
-                      '${claim['status'] ?? 'PENDING'}',
-                    ),
+          ),
+          const SizedBox(height: 19),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: visualProgress,
+              minHeight: 9,
+              backgroundColor:
+                  Colors.white.withValues(alpha: .8),
+              valueColor: const AlwaysStoppedAnimation(
+                AppDesign.ink,
+              ),
+            ),
+          ),
+          const SizedBox(height: 11),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Route points are saved offline first.',
+                  style: TextStyle(
+                    color: AppDesign.muted,
+                    fontSize: 11.5,
                   ),
                 ),
               ),
-          ],
+              if (pendingClaims > 0)
+                _TinyPill(
+                  text: '$pendingClaims pending',
+                  color: AppDesign.softAmber,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TinyPill extends StatelessWidget {
+  const _TinyPill({
+    required this.text,
+    required this.color,
+  });
+
+  final String text;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 9,
+        vertical: 6,
+      ),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 9.5,
+          fontWeight: FontWeight.w800,
+          letterSpacing: .45,
         ),
+      ),
+    );
+  }
+}
+
+class _AutoCaptureList extends StatelessWidget {
+  const _AutoCaptureList();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Column(
+        children: const [
+          _MiniRow(
+            icon: Icons.route_outlined,
+            title: 'Distance',
+            value: 'Automatic',
+          ),
+          Divider(height: 1, indent: 54),
+          _MiniRow(
+            icon: Icons.cloud_done_outlined,
+            title: 'Offline saving',
+            value: 'On',
+          ),
+          Divider(height: 1, indent: 54),
+          _MiniRow(
+            icon: Icons.receipt_long_outlined,
+            title: 'Claim',
+            value: 'Review only',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniRow extends StatelessWidget {
+  const _MiniRow({
+    required this.icon,
+    required this.title,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String title;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 13,
+      ),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            size: 19,
+            color: AppDesign.muted,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: const TextStyle(
+              color: AppDesign.muted,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoClaims extends StatelessWidget {
+  const _NoClaims();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(17),
+      decoration: BoxDecoration(
+        color: AppDesign.softGreen,
+        borderRadius: BorderRadius.circular(17),
+      ),
+      child: const Row(
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: Colors.white,
+            child: Icon(
+              Icons.check_rounded,
+              color: AppDesign.green,
+              size: 19,
+            ),
+          ),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'No claims yet. Travel capture can keep running in the background.',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClaimRow extends StatelessWidget {
+  const _ClaimRow({required this.claim});
+
+  final Map<String, dynamic> claim;
+
+  @override
+  Widget build(BuildContext context) {
+    final status =
+        (claim['status'] ?? 'PENDING').toString();
+    final amount =
+        claim['totalCost'] ?? claim['total_cost'] ?? '0';
+    final date =
+        claim['billDate'] ?? claim['bill_date'] ?? '';
+
+    return Card(
+      child: ListTile(
+        leading: const CircleAvatar(
+          backgroundColor: AppDesign.softBlue,
+          child: Icon(
+            Icons.receipt_long_outlined,
+            color: AppDesign.ink,
+          ),
+        ),
+        title: Text(
+          '₹$amount',
+          style: const TextStyle(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        subtitle: Text('$date • $status'),
+        trailing:
+            const Icon(Icons.chevron_right_rounded),
       ),
     );
   }
@@ -231,11 +550,15 @@ class _ClaimDraft {
 }
 
 class _ClaimSheet extends StatefulWidget {
-  const _ClaimSheet({required this.distanceKm});
+  const _ClaimSheet({
+    required this.distanceKm,
+  });
+
   final double distanceKm;
 
   @override
-  State<_ClaimSheet> createState() => _ClaimSheetState();
+  State<_ClaimSheet> createState() =>
+      _ClaimSheetState();
 }
 
 class _ClaimSheetState extends State<_ClaimSheet> {
@@ -245,89 +568,119 @@ class _ClaimSheetState extends State<_ClaimSheet> {
   final lodging = TextEditingController(text: '0');
   final food = TextEditingController(text: '0');
   final local = TextEditingController(text: '0');
-  final oop = TextEditingController(text: '0');
-  final da = TextEditingController(text: '0');
+  final outOfPocket =
+      TextEditingController(text: '0');
+  final daily = TextEditingController(text: '0');
   final remarks = TextEditingController();
 
-  double n(TextEditingController c) => double.tryParse(c.text.trim()) ?? 0;
+  double _number(TextEditingController controller) =>
+      double.tryParse(controller.text.trim()) ?? 0;
 
   @override
   void dispose() {
-    for (final c in [from, to, transport, lodging, food, local, oop, da, remarks]) {
-      c.dispose();
+    for (final controller in [
+      from,
+      to,
+      transport,
+      lodging,
+      food,
+      local,
+      outOfPocket,
+      daily,
+      remarks,
+    ]) {
+      controller.dispose();
     }
+
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(
-          18,
-          18,
-          18,
-          18 + MediaQuery.viewInsetsOf(context).bottom,
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'New TA / DA claim',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                '${widget.distanceKm.toStringAsFixed(1)} km will be attached from today’s GPS tracking.',
-              ),
-              const SizedBox(height: 18),
-              TextField(controller: from, decoration: const InputDecoration(labelText: 'From')),
-              const SizedBox(height: 10),
-              TextField(controller: to, decoration: const InputDecoration(labelText: 'To')),
-              const SizedBox(height: 10),
-              ...[
-                ('Transport fare', transport),
-                ('Lodging', lodging),
-                ('Food', food),
-                ('Local conveyance', local),
-                ('Out of pocket', oop),
-                ('Daily allowance', da),
-              ].map(
-                (field) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: TextField(
-                    controller: field.$2,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: InputDecoration(labelText: field.$1, prefixText: '₹ '),
-                  ),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+        18,
+        20,
+        18,
+        18 + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Review claim',
+              style:
+                  Theme.of(context).textTheme.headlineMedium,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${widget.distanceKm.toStringAsFixed(1)} km has already been captured automatically.',
+              style:
+                  const TextStyle(color: AppDesign.muted),
+            ),
+            const SizedBox(height: 20),
+            TextField(
+              controller: from,
+              decoration:
+                  const InputDecoration(labelText: 'From'),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: to,
+              decoration:
+                  const InputDecoration(labelText: 'To'),
+            ),
+            const SizedBox(height: 10),
+            for (final field in [
+              ('Transport fare', transport),
+              ('Lodging', lodging),
+              ('Food', food),
+              ('Local conveyance', local),
+              ('Out of pocket', outOfPocket),
+              ('Daily allowance', daily),
+            ]) ...[
+              TextField(
+                controller: field.$2,
+                keyboardType:
+                    const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: InputDecoration(
+                  labelText: field.$1,
+                  prefixText: '₹ ',
                 ),
               ),
-              TextField(
-                controller: remarks,
-                maxLines: 2,
-                decoration: const InputDecoration(labelText: 'Remarks (optional)'),
+              const SizedBox(height: 10),
+            ],
+            TextField(
+              controller: remarks,
+              maxLines: 2,
+              decoration: const InputDecoration(
+                labelText: 'Remarks (optional)',
               ),
-              const SizedBox(height: 18),
-              FilledButton(
-                onPressed: () => Navigator.pop(
+            ),
+            const SizedBox(height: 18),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(
                   context,
                   _ClaimDraft(
                     fromLocation: from.text.trim(),
                     toLocation: to.text.trim(),
-                    transportFare: n(transport),
-                    lodgingFare: n(lodging),
-                    foodingFare: n(food),
-                    localConveyance: n(local),
-                    outOfPocket: n(oop),
-                    dailyAllowance: n(da),
+                    transportFare: _number(transport),
+                    lodgingFare: _number(lodging),
+                    foodingFare: _number(food),
+                    localConveyance: _number(local),
+                    outOfPocket: _number(outOfPocket),
+                    dailyAllowance: _number(daily),
                     remarks: remarks.text.trim(),
                   ),
-                ),
-                child: const Text('SUBMIT FOR REVIEW'),
-              ),
-            ],
-          ),
+                );
+              },
+              child: const Text('SUBMIT FOR REVIEW'),
+            ),
+          ],
         ),
       ),
     );
