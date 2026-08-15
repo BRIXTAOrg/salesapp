@@ -19,6 +19,10 @@ class AppSessionController extends ChangeNotifier {
     _connectivitySub = connectivityGateway.changes.listen((value) {
       connectivity = value;
       notifyListeners();
+
+      if (value == ConnectivityStateValue.online && session != null) {
+        unawaited(syncGateway.syncNow());
+      }
     });
 
     _syncSub = syncGateway.changes.listen((value) {
@@ -42,21 +46,23 @@ class AppSessionController extends ChangeNotifier {
   bool get isOnline => connectivity == ConnectivityStateValue.online;
 
   Future<void> login({
-    required String portalKey,
-    required String roleCode,
     required String identifier,
     required String password,
   }) async {
     session = await authGateway.login(
       LoginRequest(
         tenant: tenant,
-        portalKey: portalKey,
-        roleCode: roleCode,
+        portalKey: 'employee',
+        roleCode: 'EMPLOYEE',
         identifier: identifier,
         password: password,
       ),
     );
     notifyListeners();
+
+    if (isOnline) {
+      unawaited(syncGateway.syncNow());
+    }
   }
 
   Future<void> logout() async {

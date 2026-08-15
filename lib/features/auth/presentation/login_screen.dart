@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../../core/registry/portal_registry.dart';
 import '../../../core/services/auth/mock_auth_gateway.dart';
 import '../../../core/session/app_session_controller.dart';
 import '../../../core/widgets/tenant_logo.dart';
@@ -9,11 +8,9 @@ class LoginScreen extends StatefulWidget {
   const LoginScreen({
     super.key,
     required this.controller,
-    required this.portal,
   });
 
   final AppSessionController controller;
-  final PortalDefinition portal;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -45,15 +42,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       await widget.controller.login(
-        portalKey: widget.portal.key,
-        roleCode: widget.portal.roleCode,
         identifier: _employeeController.text,
         password: _passwordController.text,
       );
-
-      if (!mounted) return;
-
-      Navigator.of(context).popUntil((route) => route.isFirst);
     } on AuthException catch (error) {
       if (!mounted) return;
       setState(() => _error = error.message);
@@ -61,9 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
       setState(() => _error = 'Unable to sign in. Please try again.');
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -83,21 +72,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   TenantLogo(tenant: tenant, size: 92),
                   const SizedBox(height: 24),
-                  Text(
-                    widget.portal.label,
-                    style: const TextStyle(
+                  const Text(
+                    'Employee Login',
+                    style: TextStyle(
                       color: Colors.white,
                       fontSize: 28,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
                   const SizedBox(height: 7),
-                  Text(
-                    widget.portal.subtitle,
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
-                    ),
+                  const Text(
+                    'Field sales and operations',
+                    style: TextStyle(color: Colors.white70, fontSize: 14),
                   ),
                   const SizedBox(height: 30),
                   Container(
@@ -105,13 +91,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(22),
-                      boxShadow: const [
-                        BoxShadow(
-                          blurRadius: 28,
-                          offset: Offset(0, 14),
-                          color: Color(0x33000000),
-                        ),
-                      ],
                     ),
                     child: Form(
                       key: _formKey,
@@ -125,12 +104,10 @@ class _LoginScreenState extends State<LoginScreen> {
                               labelText: 'Employee ID',
                               prefixIcon: Icon(Icons.badge_outlined),
                             ),
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Enter your employee ID';
-                              }
-                              return null;
-                            },
+                            validator: (value) =>
+                                value == null || value.trim().isEmpty
+                                    ? 'Enter your employee ID'
+                                    : null,
                           ),
                           const SizedBox(height: 14),
                           TextFormField(
@@ -139,7 +116,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             onFieldSubmitted: (_) => _login(),
                             decoration: InputDecoration(
                               labelText: 'Password / PIN',
-                              prefixIcon: const Icon(Icons.lock_outline_rounded),
+                              prefixIcon:
+                                  const Icon(Icons.lock_outline_rounded),
                               suffixIcon: IconButton(
                                 onPressed: () =>
                                     setState(() => _obscure = !_obscure),
@@ -150,27 +128,18 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                             ),
-                            validator: (value) {
-                              if (value == null || value.isEmpty) {
-                                return 'Enter your password';
-                              }
-                              return null;
-                            },
+                            validator: (value) =>
+                                value == null || value.isEmpty
+                                    ? 'Enter your password'
+                                    : null,
                           ),
                           if (_error != null) ...[
                             const SizedBox(height: 14),
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFFFEEEE),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                _error!,
-                                style: const TextStyle(
-                                  color: Color(0xFFB42318),
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            Text(
+                              _error!,
+                              style: const TextStyle(
+                                color: Color(0xFFB42318),
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
                           ],
@@ -180,9 +149,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             style: FilledButton.styleFrom(
                               minimumSize: const Size.fromHeight(52),
                               backgroundColor: tenant.primaryColor,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
                             ),
                             child: _loading
                                 ? const SizedBox(
@@ -193,17 +159,12 @@ class _LoginScreenState extends State<LoginScreen> {
                                       color: Colors.white,
                                     ),
                                   )
-                                : const Text(
-                                    'LOGIN',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 0.6,
-                                    ),
-                                  ),
+                                : const Text('LOGIN'),
                           ),
                           const SizedBox(height: 12),
                           const Text(
-                            'Demo build: any non-empty ID and password works.',
+                            'Current build uses mock authentication only. '
+                            'Employee management belongs to the separate admin backend.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: Color(0xFF7A7F8B),

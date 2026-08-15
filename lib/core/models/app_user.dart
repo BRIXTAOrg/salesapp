@@ -5,11 +5,9 @@ class AppUser {
     required this.name,
     required this.designation,
     required this.roles,
+    this.department,
   });
-
-  final String id;
-  final String employeeCode;
-  final String name;
-  final String designation;
+  final String id, employeeCode, name, designation;
+  final String? department;
   final List<String> roles;
 }

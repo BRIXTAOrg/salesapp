@@ -1,5 +1,6 @@
 import '../config/tenant_config.dart';
 import 'app_user.dart';
+import 'mobile_capability.dart';
 
 class AuthSession {
   const AuthSession({
@@ -7,12 +8,12 @@ class AuthSession {
     required this.tenant,
     required this.user,
     required this.permissions,
+    this.modules = const [],
   });
-
   final String accessToken;
   final TenantConfig tenant;
   final AppUser user;
   final Set<String> permissions;
-
-  bool can(String permission) => permissions.contains(permission);
+  final List<MobileCapability> modules;
+  bool can(String p) => permissions.contains(p);
 }

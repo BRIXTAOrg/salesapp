@@ -1,21 +1,41 @@
 import 'package:flutter/material.dart';
-
 import 'app/brixta_app.dart';
 import 'core/config/tenant_config.dart';
-import 'core/services/auth/mock_auth_gateway.dart';
-import 'core/services/connectivity/mock_connectivity_gateway.dart';
-import 'core/services/sync/mock_sync_gateway.dart';
+import 'core/database/app_database.dart';
+import 'core/services/auth/backend_auth_gateway.dart';
+import 'core/services/connectivity/device_connectivity_gateway.dart';
+import 'core/services/sync/local_sync_gateway.dart';
+import 'core/services/sync/sync_transport.dart';
 import 'core/session/app_session_controller.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final controller = AppSessionController(
-    tenant: TenantConfig.demo,
-    authGateway: MockAuthGateway(),
-    connectivityGateway: MockConnectivityGateway(),
-    syncGateway: MockSyncGateway(),
+  await AppDatabase.instance.initialize();
+
+  final connectivity = await DeviceConnectivityGateway.create();
+
+  late final AppSessionController controller;
+
+  final syncGateway = LocalSyncGateway(
+    database: AppDatabase.instance,
+    connectivityGateway: connectivity,
+    transport: const UnconfiguredSyncTransport(),
+    employeeIdProvider: () => controller.session?.user.id,
   );
 
-  runApp(BrixtaApp(controller: controller));
+  await syncGateway.initialize();
+
+  controller = AppSessionController(
+    tenant: TenantConfig.demo,
+    authGateway: BackendAuthGateway(),
+    connectivityGateway: connectivity,
+    syncGateway: syncGateway,
+  );
+
+  runApp(
+    BrixtaApp(
+      controller: controller,
+    ),
+  );
 }

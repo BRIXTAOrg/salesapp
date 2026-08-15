@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/database/app_database.dart';
+
 class EnquiryFormScreen extends StatefulWidget {
-  const EnquiryFormScreen({super.key});
+  const EnquiryFormScreen({
+    super.key,
+    required this.employeeId,
+  });
+
+  final String employeeId;
 
   @override
   State<EnquiryFormScreen> createState() => _EnquiryFormScreenState();
@@ -15,6 +22,7 @@ class _EnquiryFormScreenState extends State<EnquiryFormScreen> {
   final _requirement = TextEditingController();
 
   String _type = 'Dealer';
+  bool _saving = false;
 
   @override
   void dispose() {
@@ -25,14 +33,33 @@ class _EnquiryFormScreenState extends State<EnquiryFormScreen> {
     super.dispose();
   }
 
-  void _save() {
-    if (!_formKey.currentState!.validate()) return;
+  Future<void> _save() async {
+    if (!_formKey.currentState!.validate() || _saving) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Enquiry saved locally and queued for sync.'),
-      ),
-    );
+    setState(() => _saving = true);
+    try {
+      await AppDatabase.instance.saveEnquiry(
+        employeeId: widget.employeeId,
+        enquiryType: _type,
+        contactPerson: _name.text.trim(),
+        phone: _phone.text.trim(),
+        company: _company.text.trim(),
+        requirement: _requirement.text.trim(),
+      );
+
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Enquiry saved on this device. It is queued for backend sync.',
+          ),
+        ),
+      );
+      Navigator.of(context).pop();
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override
@@ -62,7 +89,8 @@ class _EnquiryFormScreenState extends State<EnquiryFormScreen> {
                   child: Text('Institutional'),
                 ),
               ],
-              onChanged: (value) => setState(() => _type = value ?? _type),
+              onChanged: (value) =>
+                  setState(() => _type = value ?? _type),
             ),
             const SizedBox(height: 12),
             TextFormField(
@@ -99,20 +127,13 @@ class _EnquiryFormScreenState extends State<EnquiryFormScreen> {
               decoration: const InputDecoration(
                 labelText: 'Requirement / notes',
                 alignLabelWithHint: true,
-                prefixIcon: Padding(
-                  padding: EdgeInsets.only(bottom: 76),
-                  child: Icon(Icons.description_outlined),
-                ),
               ),
             ),
             const SizedBox(height: 20),
             FilledButton.icon(
-              onPressed: _save,
+              onPressed: _saving ? null : _save,
               icon: const Icon(Icons.add_task_rounded),
-              label: const Text('SAVE ENQUIRY'),
-              style: FilledButton.styleFrom(
-                minimumSize: const Size.fromHeight(54),
-              ),
+              label: Text(_saving ? 'SAVING…' : 'SAVE ENQUIRY'),
             ),
           ],
         ),
