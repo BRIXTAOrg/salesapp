@@ -28,9 +28,9 @@ class TenantConfig {
     code: 'DEMO_CEMENT',
     displayName: 'BRIXTA Cement',
     appName: 'BRIXTA Field',
-    primaryColor: Color(0xFFD71920),
-    surfaceColor: Color(0xFF454A57),
-    backgroundColor: Color(0xFF303541),
+    primaryColor: Color(0xFF2563EB),
+    surfaceColor: Color(0xFFFFFFFF),
+    backgroundColor: Color(0xFFF9FAFB),
     logoText: 'B',
   );
 }

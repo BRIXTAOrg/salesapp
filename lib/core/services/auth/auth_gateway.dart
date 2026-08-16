@@ -19,6 +19,12 @@ class LoginRequest {
 
 abstract interface class AuthGateway {
   Future<AuthSession> login(LoginRequest request);
+
+  /// Refreshes the employee workspace using the current authenticated token.
+  /// This is what makes admin capability changes disappear/appear without
+  /// requiring the employee to sign out and back in.
+  Future<AuthSession> refresh(AuthSession current);
+
   Future<void> logout();
 }
 

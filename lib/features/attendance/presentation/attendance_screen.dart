@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/config/field_api.dart';
@@ -10,6 +12,7 @@ import '../../../core/design/app_design.dart';
 import '../../../core/offline/offline_attendance_queue.dart';
 import '../../../core/services/media/local_photo_store.dart';
 import '../../../core/session/app_session_controller.dart';
+import '../../tracking/domain/tracking_repository.dart';
 import '../../tracking/presentation/tracking_controller.dart';
 
 class AttendanceScreen extends StatefulWidget {
@@ -17,14 +20,15 @@ class AttendanceScreen extends StatefulWidget {
     super.key,
     required this.controller,
     required this.trackingController,
+    this.onReviewTaDa,
   });
 
   final AppSessionController controller;
   final TrackingController trackingController;
+  final VoidCallback? onReviewTaDa;
 
   @override
-  State<AttendanceScreen> createState() =>
-      _AttendanceScreenState();
+  State<AttendanceScreen> createState() => _AttendanceScreenState();
 }
 
 class _AttendanceScreenState extends State<AttendanceScreen> {
@@ -34,14 +38,12 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   Timer? _clock;
   DateTime _now = DateTime.now();
   String? _photoPath;
+  CurrentLocationFix? _lastFix;
   bool _busy = true;
 
-  String get employeeId =>
-      widget.controller.session!.user.id;
-
+  String get employeeId => widget.controller.session!.user.id;
   bool get checkedIn => _session?['status'] == 'active';
-  bool get completed =>
-      _session?['status'] == 'completed';
+  bool get completed => _session?['status'] == 'completed';
 
   @override
   void initState() {
@@ -51,15 +53,15 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     _clock = Timer.periodic(
       const Duration(seconds: 20),
       (_) {
-        if (mounted) {
-          setState(() => _now = DateTime.now());
-        }
+        if (mounted) setState(() => _now = DateTime.now());
       },
     );
 
     if (widget.controller.isOnline) {
-      OfflineAttendanceQueue.flush(
-        widget.controller.session!.accessToken,
+      unawaited(
+        OfflineAttendanceQueue.flush(
+          widget.controller.session!.accessToken,
+        ),
       );
     }
   }
@@ -71,9 +73,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
   }
 
   Future<void> _load() async {
-    final value =
-        await AppDatabase.instance.todayWorkSession(employeeId);
-
+    final value = await AppDatabase.instance.todayWorkSession(employeeId);
     if (!mounted) return;
 
     setState(() {
@@ -99,18 +99,10 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       );
 
       await LocalPhotoStore.delete(_photoPath);
-
-      if (mounted) {
-        setState(() => _photoPath = persisted);
-      }
+      if (mounted) setState(() => _photoPath = persisted);
     } catch (error) {
       if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Could not open camera: $error'),
-        ),
-      );
+      _message('Could not open camera: $error');
     }
   }
 
@@ -118,57 +110,42 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     if (_busy || completed) return;
 
     final photoPath = _photoPath;
-
     if (photoPath == null || photoPath.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Take a quick attendance photo first.',
-          ),
-        ),
-      );
+      _message('Take a quick face photo first.');
       return;
     }
 
     setState(() => _busy = true);
 
     try {
-      final fix =
-          await widget.trackingController.currentLocation();
-
+      final fix = await widget.trackingController.currentLocation();
       if (fix == null) {
         throw const TrackingUiException(
           'Location is required to record attendance.',
         );
       }
 
-      final kind = checkedIn ? 'out' : 'in';
+      final wasCheckedIn = checkedIn;
+      final kind = wasCheckedIn ? 'out' : 'in';
 
-      if (checkedIn) {
-        _session =
-            await AppDatabase.instance.checkOut(employeeId);
+      if (wasCheckedIn) {
+        _session = await AppDatabase.instance.checkOut(employeeId);
       } else {
-        _session =
-            await AppDatabase.instance.checkIn(employeeId);
-
-        // TA/DA travel capture remains independent from attendance.
-        await widget.trackingController.ensureAutomatic(
-          employeeId,
-        );
+        _session = await AppDatabase.instance.checkIn(employeeId);
       }
 
+      final attendanceId = _session!['id']!.toString();
       final event = <String, dynamic>{
+        'attendanceId': attendanceId,
         'kind': kind,
         'latitude': fix.latitude,
         'longitude': fix.longitude,
         'locationName': 'Field work',
         'photoPath': photoPath,
-        'createdAt':
-            DateTime.now().toUtc().toIso8601String(),
+        'createdAt': DateTime.now().toUtc().toIso8601String(),
       };
 
       var sent = false;
-
       if (widget.controller.isOnline) {
         try {
           await _sendNow(event);
@@ -180,62 +157,52 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
         await OfflineAttendanceQueue.enqueue(event);
       }
 
-      if (sent) {
-        await LocalPhotoStore.delete(photoPath);
+      if (sent) await LocalPhotoStore.delete(photoPath);
+
+      // The attendance row is the work-session envelope.
+      if (wasCheckedIn) {
+        await widget.trackingController.stop();
+      } else {
+        await widget.trackingController.ensureAutomatic(employeeId);
       }
+
+      await HapticFeedback.lightImpact();
 
       if (!mounted) return;
-
       setState(() {
         _photoPath = null;
+        _lastFix = fix;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            sent
-                ? checkedIn
-                    ? 'Checked in.'
-                    : 'Attendance recorded.'
-                : 'Saved on this phone. It will sync automatically.',
-          ),
-        ),
+      _message(
+        sent
+            ? wasCheckedIn
+                ? 'Day recorded. Attendance and travel session are closed.'
+                : 'Checked in. Your work session is now active.'
+            : 'Safe on this phone. It will sync automatically.',
       );
     } on TrackingUiException catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message)),
-        );
-      }
+      if (mounted) _message(error.message);
     } catch (error) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Attendance could not be saved: $error'),
-          ),
-        );
-      }
+      if (mounted) _message('Attendance could not be saved: $error');
     } finally {
-      if (mounted) {
-        setState(() => _busy = false);
-      }
+      if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _sendNow(
-    Map<String, dynamic> event,
-  ) async {
+  Future<void> _sendNow(Map<String, dynamic> event) async {
     final api = FieldApi(
-      accessToken:
-          widget.controller.session!.accessToken,
+      accessToken: widget.controller.session!.accessToken,
     );
 
     final photoPath = event['photoPath']!.toString();
     final photoUrl = await api.uploadPhoto(photoPath);
     final kind = event['kind']!.toString();
+    final attendanceId = event['attendanceId']!.toString();
 
     if (kind == 'in') {
       await api.postJson('/api/salesApp/attendance/in', {
+        'id': attendanceId,
         'locationName': event['locationName'],
         'inTimeLatitude': event['latitude'],
         'inTimeLongitude': event['longitude'],
@@ -244,6 +211,7 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
       });
     } else {
       await api.patchJson('/api/salesApp/attendance/out', {
+        'id': attendanceId,
         'outTimeLatitude': event['latitude'],
         'outTimeLongitude': event['longitude'],
         'outTimeImageUrl': photoUrl,
@@ -252,389 +220,244 @@ class _AttendanceScreenState extends State<AttendanceScreen> {
     }
   }
 
+  void _message(String text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final buttonLabel = completed
-        ? 'Completed'
+    final actionLabel = completed
+        ? 'Day complete'
         : checkedIn
-            ? 'Clock out'
-            : 'Clock in';
+            ? 'Check out'
+            : 'Check in';
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Attendance'),
-      ),
+      appBar: AppBar(title: const Text('Attendance')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 8, 18, 30),
+        padding: AppDesign.pageInset,
         children: [
-          const SizedBox(height: 5),
-          Center(
-            child: Text(
-              _timeLabel(_now),
-              style: const TextStyle(
-                color: AppDesign.ink,
-                fontSize: 31,
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.8,
-              ),
-            ),
+          const _Eyebrow('ATTENDANCE'),
+          const SizedBox(height: 8),
+          Text(
+            actionLabel,
+            style: Theme.of(context).textTheme.headlineLarge,
           ),
-          const SizedBox(height: 4),
-          Center(
-            child: Text(
-              _dateLabel(_now),
-              style: const TextStyle(
-                color: AppDesign.muted,
-                fontSize: 13,
-              ),
-            ),
+          const SizedBox(height: 8),
+          Text(
+            '${_dateLabel(_now)} · ${_timeLabel(_now)}',
+            style: Theme.of(context).textTheme.bodyMedium,
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 32),
           _PhotoCapture(
             photoPath: _photoPath,
+            completed: completed,
             onTap: completed ? null : _capturePhoto,
           ),
-          const SizedBox(height: 21),
-          Center(
-            child: _ClockButton(
-              label: buttonLabel,
-              checkedIn: checkedIn,
-              completed: completed,
-              busy: _busy,
-              onPressed:
-                  completed || _busy ? null : _submitAttendance,
-            ),
-          ),
-          const SizedBox(height: 18),
-          Center(
-            child: Text(
-              completed
-                  ? 'Attendance is complete for today.'
-                  : _photoPath == null
-                      ? 'Take a quick face photo, then tap $buttonLabel.'
-                      : 'Photo ready. Tap $buttonLabel when you’re ready.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: AppDesign.muted,
-                fontSize: 12,
-              ),
-            ),
-          ),
-          const SizedBox(height: 28),
-          _AttendanceFacts(
-            session: _session,
-            tracking: widget.trackingController,
-          ),
           const SizedBox(height: 24),
-          const _InfoRow(
-            icon: Icons.verified_user_outlined,
-            title: 'Photo evidence',
-            subtitle:
-                'A check-in/check-out photo is stored with the attendance record.',
+          _EvidenceRow(
+            icon: LucideIcons.map_pin,
+            label: 'Location',
+            value: _lastFix == null
+                ? 'Captured when you submit'
+                : '${_lastFix!.latitude.toStringAsFixed(5)}, '
+                    '${_lastFix!.longitude.toStringAsFixed(5)}',
           ),
-          const SizedBox(height: 10),
-          const _InfoRow(
-            icon: Icons.route_outlined,
-            title: 'Travel tracking is separate',
-            subtitle:
-                'TA/DA travel capture continues automatically and is not controlled by this clock button.',
+          const Divider(height: 32),
+          _EvidenceRow(
+            icon: LucideIcons.shield_check,
+            label: 'Record keeping',
+            value: widget.controller.isOffline
+                ? 'Safe on this phone'
+                : 'Ready to sync with office',
           ),
+          const SizedBox(height: 32),
+          FilledButton(
+            onPressed: completed || _busy ? null : _submitAttendance,
+            child: _busy
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Text(actionLabel),
+          ),
+          if (!completed) ...[
+            const SizedBox(height: 8),
+            Text(
+              _photoPath == null
+                  ? 'Take a face photo first. We add time and location automatically.'
+                  : 'Photo ready. One tap records the rest.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+          if (completed) ...[
+            const SizedBox(height: 48),
+            const _CompletedSessionCard(),
+            if (widget.onReviewTaDa != null) ...[
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: widget.onReviewTaDa,
+                icon: const Icon(LucideIcons.wallet_cards, size: 18),
+                label: const Text('Review TA / DA'),
+              ),
+            ],
+          ],
         ],
       ),
     );
   }
 
   static String _timeLabel(DateTime value) {
-    final hour = value.hour % 12 == 0
-        ? 12
-        : value.hour % 12;
+    final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
     final minute = value.minute.toString().padLeft(2, '0');
-    final suffix = value.hour >= 12 ? 'PM' : 'AM';
-
-    return '$hour:$minute $suffix';
+    return '$hour:$minute ${value.hour >= 12 ? 'PM' : 'AM'}';
   }
 
   static String _dateLabel(DateTime value) {
     const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December',
     ];
+    return '${value.day} ${months[value.month - 1]}';
+  }
+}
 
-    return '${months[value.month - 1]} ${value.day}, ${value.year}';
+class _Eyebrow extends StatelessWidget {
+  const _Eyebrow(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: const TextStyle(
+        color: AppDesign.muted,
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        letterSpacing: .24,
+      ),
+    );
   }
 }
 
 class _PhotoCapture extends StatelessWidget {
   const _PhotoCapture({
     required this.photoPath,
+    required this.completed,
     required this.onTap,
   });
 
   final String? photoPath;
+  final bool completed;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final hasPhoto =
-        photoPath != null && File(photoPath!).existsSync();
-
-    return Center(
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Material(
-            color: Colors.white,
-            shape: const CircleBorder(
-              side: BorderSide(
-                color: AppDesign.line,
-                width: 1.5,
-              ),
-            ),
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: onTap,
-              child: SizedBox(
-                width: 130,
-                height: 130,
-                child: hasPhoto
-                    ? ClipOval(
-                        child: Image.file(
-                          File(photoPath!),
-                          fit: BoxFit.cover,
-                        ),
-                      )
-                    : const Column(
-                        mainAxisAlignment:
-                            MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.camera_alt_outlined,
-                            size: 31,
-                          ),
-                          SizedBox(height: 7),
-                          Text(
-                            'Take photo',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
-            ),
-          ),
-          if (hasPhoto)
-            Positioned(
-              right: -1,
-              bottom: 7,
-              child: Container(
-                width: 34,
-                height: 34,
-                decoration: const BoxDecoration(
-                  color: AppDesign.green,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.check_rounded,
-                  color: Colors.white,
-                  size: 20,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ClockButton extends StatelessWidget {
-  const _ClockButton({
-    required this.label,
-    required this.checkedIn,
-    required this.completed,
-    required this.busy,
-    required this.onPressed,
-  });
-
-  final String label;
-  final bool checkedIn;
-  final bool completed;
-  final bool busy;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = completed
-        ? AppDesign.softGray
-        : checkedIn
-            ? AppDesign.red
-            : AppDesign.green;
-
-    final foreground =
-        completed ? AppDesign.muted : Colors.white;
+    final path = photoPath;
 
     return Material(
-      color: color,
-      shape: const CircleBorder(),
-      elevation: completed ? 0 : 2,
-      shadowColor: color.withValues(alpha: .22),
+      color: AppDesign.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppDesign.radius),
+        side: const BorderSide(color: AppDesign.line),
+      ),
       child: InkWell(
-        onTap: onPressed,
-        customBorder: const CircleBorder(),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppDesign.radius),
         child: SizedBox(
-          width: 142,
-          height: 142,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (busy)
-                SizedBox(
-                  width: 28,
-                  height: 28,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    color: foreground,
+          height: 248,
+          child: path != null && path.isNotEmpty
+              ? ClipRRect(
+                  borderRadius: BorderRadius.circular(AppDesign.radius - 1),
+                  child: Image.file(
+                    File(path),
+                    width: double.infinity,
+                    height: 248,
+                    fit: BoxFit.cover,
                   ),
                 )
-              else
-                Icon(
-                  checkedIn
-                      ? Icons.logout_rounded
-                      : Icons.fingerprint_rounded,
-                  color: foreground,
-                  size: 34,
+              : Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      completed ? LucideIcons.circle_check : LucideIcons.camera,
+                      size: 32,
+                      color: completed ? AppDesign.green : AppDesign.ink,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      completed ? 'Attendance complete' : 'Take face photo',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        color: AppDesign.ink,
+                      ),
+                    ),
+                    if (!completed) ...[
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Front camera',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: AppDesign.muted,
+                        ),
+                      ),
+                    ],
+                  ],
                 ),
-              const SizedBox(height: 10),
-              Text(
-                busy ? 'Saving...' : label,
-                style: TextStyle(
-                  color: foreground,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
   }
 }
 
-class _AttendanceFacts extends StatelessWidget {
-  const _AttendanceFacts({
-    required this.session,
-    required this.tracking,
-  });
-
-  final Map<String, Object?>? session;
-  final TrackingController tracking;
-
-  @override
-  Widget build(BuildContext context) {
-    final inTime = _clock(
-      session?['check_in_at']?.toString(),
-    );
-
-    final outTime = _clock(
-      session?['check_out_at']?.toString(),
-    );
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 10,
-          vertical: 16,
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: _Fact(
-                label: 'CLOCK IN',
-                value: inTime,
-              ),
-            ),
-            const _FactRule(),
-            Expanded(
-              child: _Fact(
-                label: 'CLOCK OUT',
-                value: outTime,
-              ),
-            ),
-            const _FactRule(),
-            Expanded(
-              child: AnimatedBuilder(
-                animation: tracking,
-                builder: (_, _) => _Fact(
-                  label: 'TRAVEL',
-                  value:
-                      '${tracking.distanceKm.toStringAsFixed(1)} km',
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static String _clock(String? raw) {
-    if (raw == null || raw.isEmpty) return '--';
-
-    try {
-      final dt = DateTime.parse(raw).toLocal();
-      final hour =
-          dt.hour % 12 == 0 ? 12 : dt.hour % 12;
-      final minute =
-          dt.minute.toString().padLeft(2, '0');
-      final suffix = dt.hour >= 12 ? 'PM' : 'AM';
-      return '$hour:$minute $suffix';
-    } catch (_) {
-      return '--';
-    }
-  }
-}
-
-class _Fact extends StatelessWidget {
-  const _Fact({
+class _EvidenceRow extends StatelessWidget {
+  const _EvidenceRow({
+    required this.icon,
     required this.label,
     required this.value,
   });
 
+  final IconData icon;
   final String label;
   final String value;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            color: AppDesign.muted,
-            fontSize: 9.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: .6,
-          ),
-        ),
-        const SizedBox(height: 6),
-        Text(
-          value,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
+        Icon(icon, size: 20, color: AppDesign.muted),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  letterSpacing: .24,
+                  color: AppDesign.muted,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppDesign.ink,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -642,70 +465,42 @@ class _Fact extends StatelessWidget {
   }
 }
 
-class _FactRule extends StatelessWidget {
-  const _FactRule();
+class _CompletedSessionCard extends StatelessWidget {
+  const _CompletedSessionCard();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 1,
-      height: 38,
-      color: AppDesign.line,
-    );
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  const _InfoRow({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppDesign.line),
+        color: AppDesign.softGreen,
+        borderRadius: BorderRadius.circular(AppDesign.radius),
+        border: Border.all(color: const Color(0xFFBBF7D0)),
       ),
-      child: Row(
+      child: const Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: AppDesign.softGray,
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Icon(icon, size: 18),
-          ),
-          const SizedBox(width: 11),
+          Icon(LucideIcons.circle_check, size: 20, color: AppDesign.green),
+          SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 13,
+                  'Day recorded',
+                  style: TextStyle(
+                    fontSize: 15,
                     fontWeight: FontWeight.w700,
+                    color: AppDesign.ink,
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 4),
                 Text(
-                  subtitle,
-                  style: const TextStyle(
+                  'Attendance is closed. Your travel evidence is ready for TA / DA review.',
+                  style: TextStyle(
+                    fontSize: 14,
+                    height: 1.5,
                     color: AppDesign.muted,
-                    fontSize: 11.5,
-                    height: 1.35,
                   ),
                 ),
               ],

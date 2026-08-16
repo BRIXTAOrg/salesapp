@@ -22,6 +22,7 @@ class AppSessionController extends ChangeNotifier {
       notifyListeners();
 
       if (value == ConnectivityStateValue.online && session != null) {
+        unawaited(refreshWorkspace());
         unawaited(syncGateway.syncNow());
       }
     });
@@ -30,6 +31,10 @@ class AppSessionController extends ChangeNotifier {
       syncSnapshot = value;
       notifyListeners();
     });
+
+    if (session != null) {
+      _startWorkspaceTimer();
+    }
   }
 
   final TenantConfig tenant;
@@ -43,9 +48,12 @@ class AppSessionController extends ChangeNotifier {
 
   StreamSubscription<ConnectivityStateValue>? _connectivitySub;
   StreamSubscription<SyncSnapshot>? _syncSub;
+  Timer? _workspaceTimer;
+  bool _refreshingWorkspace = false;
 
   bool get isOnline => connectivity == ConnectivityStateValue.online;
   bool get isOffline => !isOnline;
+  bool get refreshingWorkspace => _refreshingWorkspace;
 
   Future<void> login({
     required String identifier,
@@ -60,6 +68,8 @@ class AppSessionController extends ChangeNotifier {
         password: password,
       ),
     );
+
+    _startWorkspaceTimer();
     notifyListeners();
 
     if (isOnline) {
@@ -67,16 +77,49 @@ class AppSessionController extends ChangeNotifier {
     }
   }
 
+  Future<bool> refreshWorkspace() async {
+    final current = session;
+    if (current == null || isOffline || _refreshingWorkspace) return false;
+
+    _refreshingWorkspace = true;
+    notifyListeners();
+
+    try {
+      session = await authGateway.refresh(current);
+      notifyListeners();
+      return true;
+    } catch (_) {
+      // Cached workspace remains usable if refresh fails.
+      return false;
+    } finally {
+      _refreshingWorkspace = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> logout() async {
+    _workspaceTimer?.cancel();
     await authGateway.logout();
     session = null;
     notifyListeners();
   }
 
-  Future<void> syncNow() => syncGateway.syncNow();
+  Future<void> syncNow() async {
+    await refreshWorkspace();
+    await syncGateway.syncNow();
+  }
+
+  void _startWorkspaceTimer() {
+    _workspaceTimer?.cancel();
+    _workspaceTimer = Timer.periodic(
+      const Duration(seconds: 45),
+      (_) => unawaited(refreshWorkspace()),
+    );
+  }
 
   @override
   void dispose() {
+    _workspaceTimer?.cancel();
     _connectivitySub?.cancel();
     _syncSub?.cancel();
     super.dispose();

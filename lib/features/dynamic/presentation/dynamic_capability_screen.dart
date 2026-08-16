@@ -1,10 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_lucide/flutter_lucide.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/config/field_api.dart';
+import '../../../core/database/app_database.dart';
 import '../../../core/design/app_design.dart';
+import '../../../core/design/app_icons.dart';
 import '../../../core/models/mobile_capability.dart';
 import '../../../core/offline/offline_submission_queue.dart';
 import '../../../core/services/media/local_photo_store.dart';
@@ -25,12 +29,12 @@ class DynamicCapabilityScreen extends StatefulWidget {
       _DynamicCapabilityScreenState();
 }
 
-class _DynamicCapabilityScreenState
-    extends State<DynamicCapabilityScreen> {
+class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
   final _picker = ImagePicker();
   final Map<String, TextEditingController> _controllers = {};
   final Map<String, bool> _checks = {};
   final Map<String, String> _photos = {};
+  final Map<String, String> _selects = {};
 
   bool _submitting = false;
 
@@ -44,6 +48,10 @@ class _DynamicCapabilityScreenState
         .toList();
   }
 
+  bool get _isDealerVisit => widget.capability.key == 'dealer_visit';
+  bool get _isInspection =>
+      widget.capability.type.toLowerCase() == 'checklist';
+
   @override
   void dispose() {
     for (final controller in _controllers.values) {
@@ -53,33 +61,33 @@ class _DynamicCapabilityScreenState
   }
 
   TextEditingController _controllerFor(String key) =>
-      _controllers.putIfAbsent(
-        key,
-        TextEditingController.new,
-      );
+      _controllers.putIfAbsent(key, TextEditingController.new);
 
   Future<void> _capturePhoto(String key) async {
-    final picked = await _picker.pickImage(
-      source: ImageSource.camera,
-      imageQuality: 76,
-      maxWidth: 1440,
-    );
+    try {
+      final picked = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 76,
+        maxWidth: 1440,
+      );
 
-    if (picked == null) return;
+      if (picked == null) return;
 
-    final persisted = await LocalPhotoStore.persist(
-      picked,
-      prefix: 'form-$key',
-    );
+      final persisted = await LocalPhotoStore.persist(
+        picked,
+        prefix: 'responsibility-$key',
+      );
 
-    await LocalPhotoStore.delete(_photos[key]);
-
-    if (mounted) {
-      setState(() => _photos[key] = persisted);
+      await LocalPhotoStore.delete(_photos[key]);
+      if (mounted) setState(() => _photos[key] = persisted);
+    } catch (error) {
+      if (!mounted) return;
+      _message('Could not open camera: $error');
     }
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
     setState(() => _submitting = true);
 
     try {
@@ -87,50 +95,59 @@ class _DynamicCapabilityScreenState
 
       for (final field in fields) {
         final key = _fieldKey(field);
-        final type =
-            (field['type'] ?? 'text').toString().toLowerCase();
+        final type = (field['type'] ?? 'text').toString().toLowerCase();
+        final required = field['required'] == true;
 
         if (_isPhotoType(type)) {
           final path = _photos[key];
-
-          if (field['required'] == true &&
-              (path == null || path.isEmpty)) {
+          if (required && (path == null || path.isEmpty)) {
             _showRequired(field);
             return;
           }
-
           if (path != null && path.isNotEmpty) {
-            payload[key] = {
-              OfflineSubmissionQueue.localPhotoKey: path,
-            };
+            payload[key] = {OfflineSubmissionQueue.localPhotoKey: path};
           }
           continue;
         }
 
-        if (type == 'checkbox') {
+        if (type == 'checkbox' || type == 'boolean') {
           payload[key] = _checks[key] ?? false;
           continue;
         }
 
-        final value = _controllerFor(key).text.trim();
+        if (type == 'select' || type == 'choice' || type == 'dropdown') {
+          final value = _selects[key] ?? '';
+          if (required && value.isEmpty) {
+            _showRequired(field);
+            return;
+          }
+          payload[key] = value;
+          continue;
+        }
 
-        if (field['required'] == true && value.isEmpty) {
+        final value = _controllerFor(key).text.trim();
+        if (required && value.isEmpty) {
           _showRequired(field);
           return;
         }
-
         payload[key] = value;
+      }
+
+      // Session linkage stays invisible to the employee. The backend already
+      // stores arbitrary payload JSON, so no new form infrastructure is needed.
+      final localSession = await AppDatabase.instance.todayWorkSession(
+        widget.controller.session!.user.id,
+      );
+      if (localSession != null) {
+        payload['_workSessionId'] = localSession['id']?.toString();
+        payload['_workSessionStatus'] = localSession['status']?.toString();
       }
 
       final submission = <String, dynamic>{
         'capabilityId': widget.capability.id,
-        'clientMutationId':
-            '${widget.controller.session!.user.id}-'
-            '${widget.capability.id}-'
-            '${DateTime.now().microsecondsSinceEpoch}',
+        'clientMutationId': AppDatabase.instance.newId(),
         'status': 'submitted',
-        'clientCreatedAt':
-            DateTime.now().toUtc().toIso8601String(),
+        'clientCreatedAt': DateTime.now().toUtc().toIso8601String(),
         'payload': payload,
       };
 
@@ -141,19 +158,14 @@ class _DynamicCapabilityScreenState
         queued = true;
       } else {
         try {
-          final prepared =
-              await OfflineSubmissionQueue.prepareForUpload(
+          final prepared = await OfflineSubmissionQueue.prepareForUpload(
             widget.controller.session!.accessToken,
             submission,
           );
 
           await FieldApi(
-            accessToken:
-                widget.controller.session!.accessToken,
-          ).postJson(
-            '/api/salesApp/submissions',
-            prepared,
-          );
+            accessToken: widget.controller.session!.accessToken,
+          ).postJson('/api/salesApp/submissions', prepared);
 
           for (final path in _photos.values) {
             await LocalPhotoStore.delete(path);
@@ -164,59 +176,55 @@ class _DynamicCapabilityScreenState
         }
       }
 
+      await HapticFeedback.lightImpact();
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            queued
-                ? 'Saved offline. It will sync automatically.'
-                : 'Submitted.',
-          ),
-        ),
+      _message(
+        queued
+            ? 'Safe on this phone. We will send it when you are online.'
+            : 'Recorded. Office has it.',
       );
 
       Navigator.pop(context);
     } finally {
-      if (mounted) {
-        setState(() => _submitting = false);
-      }
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
   void _showRequired(Map<String, dynamic> field) {
+    final label = (field['label'] ?? _fieldKey(field)).toString();
+    _message('$label is required.');
+  }
+
+  void _message(String text) {
     if (!mounted) return;
-
-    final label =
-        (field['label'] ?? _fieldKey(field)).toString();
-
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('$label is required.')),
+      SnackBar(content: Text(text)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     final capability = widget.capability;
-    final isInspection =
-        capability.type.toLowerCase() == 'checklist';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(capability.title),
-      ),
+      appBar: AppBar(title: Text(capability.title)),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(18, 6, 18, 110),
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 112),
         children: [
-          _FormIntro(
-            capability: capability,
-            fieldCount: fields.length,
-          ),
-          const SizedBox(height: 18),
+          _ResponsibilityIntro(capability: capability, fieldCount: fields.length),
+          const SizedBox(height: 48),
           if (fields.isEmpty)
-            const _EmptyFields()
+            _EmptyResponsibility(capability: capability)
           else
-            ...fields.map(_buildField),
+            ...[
+              const _SectionLabel('WHAT YOU NEED TO RECORD'),
+              const SizedBox(height: 16),
+              for (var i = 0; i < fields.length; i++) ...[
+                _buildField(fields[i]),
+                if (i != fields.length - 1) const SizedBox(height: 24),
+              ],
+            ],
         ],
       ),
       bottomNavigationBar: fields.isEmpty
@@ -224,33 +232,28 @@ class _DynamicCapabilityScreenState
           : SafeArea(
               top: false,
               child: Container(
-                padding: const EdgeInsets.fromLTRB(
-                  18,
-                  10,
-                  18,
-                  12,
-                ),
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
                 decoration: const BoxDecoration(
-                  color: Colors.white,
-                  border: Border(
-                    top: BorderSide(color: AppDesign.line),
-                  ),
+                  color: AppDesign.surface,
+                  border: Border(top: BorderSide(color: AppDesign.line)),
                 ),
                 child: FilledButton(
                   onPressed: _submitting ? null : _submit,
                   child: _submitting
                       ? const SizedBox(
-                          width: 19,
-                          height: 19,
+                          width: 18,
+                          height: 18,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             color: Colors.white,
                           ),
                         )
                       : Text(
-                          isInspection
-                              ? 'SUBMIT INSPECTION'
-                              : 'SUBMIT FORM',
+                          _isDealerVisit
+                              ? 'Record visit'
+                              : _isInspection
+                                  ? 'Complete inspection'
+                                  : 'Record',
                         ),
                 ),
               ),
@@ -261,12 +264,11 @@ class _DynamicCapabilityScreenState
   Widget _buildField(Map<String, dynamic> field) {
     final label = (field['label'] ?? 'Field').toString();
     final key = _fieldKey(field);
-    final type =
-        (field['type'] ?? 'text').toString().toLowerCase();
+    final type = (field['type'] ?? 'text').toString().toLowerCase();
     final required = field['required'] == true;
 
     if (_isPhotoType(type)) {
-      return _PhotoFieldCard(
+      return _PhotoField(
         label: label,
         required: required,
         path: _photos[key],
@@ -274,81 +276,92 @@ class _DynamicCapabilityScreenState
       );
     }
 
-    if (type == 'checkbox') {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Card(
-          child: CheckboxListTile(
-            value: _checks[key] ?? false,
-            onChanged: (value) {
-              setState(() {
-                _checks[key] = value ?? false;
-              });
-            },
-            title: Text(
-              required ? '$label *' : label,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            controlAffinity:
-                ListTileControlAffinity.leading,
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: 12,
-              vertical: 3,
-            ),
+    if (type == 'checkbox' || type == 'boolean') {
+      return Container(
+        decoration: BoxDecoration(
+          color: AppDesign.surface,
+          border: Border.all(color: AppDesign.line),
+          borderRadius: BorderRadius.circular(AppDesign.radius),
+        ),
+        child: CheckboxListTile(
+          value: _checks[key] ?? false,
+          onChanged: (value) {
+            setState(() => _checks[key] = value ?? false);
+          },
+          title: Text(
+            required ? '$label *' : label,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
+          controlAffinity: ListTileControlAffinity.leading,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         ),
       );
     }
 
-    final isLongText =
-        type == 'textarea' ||
-        type == 'multiline' ||
-        type == 'notes';
+    if (type == 'select' || type == 'choice' || type == 'dropdown') {
+      final rawOptions = field['options'];
+      final options = rawOptions is List
+          ? rawOptions.map((value) => value.toString()).toList()
+          : <String>[];
 
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 13),
-      child: Column(
+      return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            required ? '$label *' : label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: AppDesign.ink,
-            ),
-          ),
-          const SizedBox(height: 7),
-          TextField(
-            controller: _controllerFor(key),
-            maxLines: isLongText ? 4 : 1,
-            keyboardType: type == 'number'
-                ? const TextInputType.numberWithOptions(
-                    decimal: true,
-                  )
-                : type == 'date'
-                    ? TextInputType.datetime
-                    : TextInputType.text,
-            decoration: InputDecoration(
-              hintText:
-                  (field['placeholder'] ?? 'Enter $label')
-                      .toString(),
-            ),
+          _FieldLabel(label: label, required: required),
+          const SizedBox(height: 8),
+          DropdownButtonFormField<String>(
+            initialValue: _selects[key],
+            isExpanded: true,
+            hint: const Text('Choose one'),
+            items: options
+                .map(
+                  (option) => DropdownMenuItem(
+                    value: option,
+                    child: Text(option),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) {
+              if (value != null) setState(() => _selects[key] = value);
+            },
           ),
         ],
-      ),
+      );
+    }
+
+    final isLongText =
+        type == 'textarea' || type == 'multiline' || type == 'notes';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FieldLabel(label: label, required: required),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _controllerFor(key),
+          maxLines: isLongText ? 4 : 1,
+          keyboardType: type == 'number'
+              ? const TextInputType.numberWithOptions(decimal: true)
+              : type == 'date'
+                  ? TextInputType.datetime
+                  : TextInputType.text,
+          decoration: InputDecoration(
+            hintText: (field['placeholder'] ?? _defaultHint(label)).toString(),
+          ),
+        ),
+      ],
     );
   }
 
+  String _defaultHint(String label) {
+    if (_isDealerVisit && label.toLowerCase().contains('note')) {
+      return 'Anything important?';
+    }
+    return 'Enter $label';
+  }
+
   static String _fieldKey(Map<String, dynamic> field) =>
-      (field['key'] ??
-              field['name'] ??
-              field['label'] ??
-              'field')
-          .toString();
+      (field['key'] ?? field['name'] ?? field['label'] ?? 'field').toString();
 
   static bool _isPhotoType(String type) =>
       type == 'photo' ||
@@ -357,83 +370,103 @@ class _DynamicCapabilityScreenState
       type == 'upload_photo';
 }
 
-class _FormIntro extends StatelessWidget {
-  const _FormIntro({
-    required this.capability,
-    required this.fieldCount,
-  });
+class _ResponsibilityIntro extends StatelessWidget {
+  const _ResponsibilityIntro({required this.capability, required this.fieldCount});
 
   final MobileCapability capability;
   final int fieldCount;
 
   @override
   Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: AppDesign.softGray,
+            borderRadius: BorderRadius.circular(AppDesign.radius),
+            border: Border.all(color: AppDesign.line),
+          ),
+          alignment: Alignment.center,
+          child: Icon(
+            AppIcons.forCapability(capability),
+            size: 20,
+            color: AppDesign.ink,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                capability.description?.trim().isNotEmpty == true
+                    ? capability.description!.trim()
+                    : _plainDescription(capability),
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                fieldCount == 0
+                    ? 'No steps configured yet'
+                    : '$fieldCount ${fieldCount == 1 ? 'step' : 'steps'} · saves offline',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  static String _plainDescription(MobileCapability capability) {
+    switch (capability.key) {
+      case 'dealer_visit':
+        return 'Record what happened during the visit. We add the employee and session context automatically.';
+      case 'leave':
+        return 'Send a simple leave request.';
+      default:
+        return 'Complete the responsibility with only the information the phone cannot know for you.';
+    }
+  }
+}
+
+class _EmptyResponsibility extends StatelessWidget {
+  const _EmptyResponsibility({required this.capability});
+  final MobileCapability capability;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(17),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        color: AppDesign.surface,
         border: Border.all(color: AppDesign.line),
+        borderRadius: BorderRadius.circular(AppDesign.radius),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: AppDesign.softBlue,
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: Icon(
-              capability.type == 'checklist'
-                  ? Icons.fact_check_outlined
-                  : Icons.description_outlined,
-              size: 21,
-            ),
-          ),
-          const SizedBox(width: 12),
+          const Icon(LucideIcons.settings_2, size: 20, color: AppDesign.muted),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  capability.type == 'checklist'
-                      ? 'Inspection'
-                      : 'Smart form',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppDesign.muted,
+                const Text(
+                  'This responsibility is not configured yet.',
+                  style: TextStyle(
+                    fontSize: 15,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: .4,
+                    color: AppDesign.ink,
                   ),
                 ),
-                const SizedBox(height: 3),
-                if (capability.description != null &&
-                    capability.description!.trim().isNotEmpty)
-                  Text(
-                    capability.description!,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      height: 1.35,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  )
-                else
-                  const Text(
-                    'Complete the fields below.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                const SizedBox(height: 5),
+                const SizedBox(height: 4),
                 Text(
-                  '$fieldCount field${fieldCount == 1 ? '' : 's'}',
-                  style: const TextStyle(
-                    color: AppDesign.muted,
-                    fontSize: 11,
-                  ),
+                  'When the administrator adds the required steps, they will appear here automatically.',
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ],
             ),
@@ -444,8 +477,8 @@ class _FormIntro extends StatelessWidget {
   }
 }
 
-class _PhotoFieldCard extends StatelessWidget {
-  const _PhotoFieldCard({
+class _PhotoField extends StatelessWidget {
+  const _PhotoField({
     required this.label,
     required this.required,
     required this.path,
@@ -459,135 +492,84 @@ class _PhotoFieldCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasPhoto =
-        path != null && File(path!).existsSync();
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 13),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            required ? '$label *' : label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _FieldLabel(label: label, required: required),
+        const SizedBox(height: 8),
+        Material(
+          color: AppDesign.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppDesign.radius),
+            side: const BorderSide(color: AppDesign.line),
           ),
-          const SizedBox(height: 7),
-          Material(
-            color: Colors.white,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: const BorderSide(color: AppDesign.line),
-            ),
-            child: InkWell(
-              onTap: onTap,
-              borderRadius: BorderRadius.circular(18),
-              child: SizedBox(
-                height: 155,
-                width: double.infinity,
-                child: hasPhoto
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(17),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            Image.file(
-                              File(path!),
-                              fit: BoxFit.cover,
-                            ),
-                            Positioned(
-                              right: 10,
-                              bottom: 10,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 7,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.black
-                                      .withValues(alpha: .72),
-                                  borderRadius:
-                                      BorderRadius.circular(999),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.refresh_rounded,
-                                      color: Colors.white,
-                                      size: 15,
-                                    ),
-                                    SizedBox(width: 5),
-                                    Text(
-                                      'Retake',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight:
-                                            FontWeight.w700,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(AppDesign.radius),
+            child: SizedBox(
+              height: 176,
+              width: double.infinity,
+              child: path != null && path!.isNotEmpty
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(AppDesign.radius - 1),
+                      child: Image.file(File(path!), fit: BoxFit.cover),
+                    )
+                  : const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(LucideIcons.camera, size: 28, color: AppDesign.ink),
+                        SizedBox(height: 8),
+                        Text(
+                          'Take photo',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppDesign.ink,
+                          ),
                         ),
-                      )
-                    : const Column(
-                        mainAxisAlignment:
-                            MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.add_a_photo_outlined,
-                            size: 30,
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Take photo',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          SizedBox(height: 3),
-                          Text(
-                            'Saved offline if needed',
-                            style: TextStyle(
-                              color: AppDesign.muted,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
+                      ],
+                    ),
             ),
           ),
-        ],
+        ),
+      ],
+    );
+  }
+}
+
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel({required this.label, required this.required});
+
+  final String label;
+  final bool required;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      required ? '${label.toUpperCase()} *' : label.toUpperCase(),
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        letterSpacing: .24,
+        color: AppDesign.muted,
       ),
     );
   }
 }
 
-class _EmptyFields extends StatelessWidget {
-  const _EmptyFields();
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+  final String text;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(17),
-      decoration: BoxDecoration(
-        color: AppDesign.softGray,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: const Text(
-        'No fields have been configured for this responsibility.',
-        style: TextStyle(
-          color: AppDesign.muted,
-          fontSize: 13,
-        ),
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w500,
+        letterSpacing: .24,
+        color: AppDesign.muted,
       ),
     );
   }

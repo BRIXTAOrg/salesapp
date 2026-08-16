@@ -16,6 +16,8 @@ dependencies:
   http: ^1.6.0
   geolocator: ^14.0.3
   image_picker: ^1.2.3
+  flutter_lucide: ^1.11.0
+  flutter_map: ^8.3.1
 
 dev_dependencies:
   flutter_test:

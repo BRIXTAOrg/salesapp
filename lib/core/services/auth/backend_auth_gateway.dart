@@ -47,18 +47,7 @@ class BackendAuthGateway implements AuthGateway {
       );
     }
 
-    final bootstrapResponse = await _client.get(
-      Uri.parse('${ApiConfig.baseUrl}/api/salesApp/bootstrap'),
-      headers: {'authorization': 'Bearer $token'},
-    );
-
-    final bootstrap = _decodeMap(bootstrapResponse.body);
-    if (bootstrapResponse.statusCode != 200 || bootstrap['success'] != true) {
-      throw AuthException(
-        (bootstrap['error'] ?? 'Unable to load workspace.').toString(),
-      );
-    }
-
+    final bootstrap = await _fetchBootstrap(token);
     final session = _buildSession(
       tenant: request.tenant,
       token: token,
@@ -66,11 +55,31 @@ class BackendAuthGateway implements AuthGateway {
       bootstrap: bootstrap,
     );
 
-    await _database.putCache(_cacheKey, {
-      'token': token,
-      'identifier': request.identifier.trim(),
-      'bootstrap': bootstrap,
-    });
+    await _cacheSession(
+      token: token,
+      identifier: request.identifier.trim(),
+      bootstrap: bootstrap,
+    );
+
+    return session;
+  }
+
+  @override
+  Future<AuthSession> refresh(AuthSession current) async {
+    final bootstrap = await _fetchBootstrap(current.accessToken);
+
+    final session = _buildSession(
+      tenant: current.tenant,
+      token: current.accessToken,
+      identifier: current.user.employeeCode,
+      bootstrap: bootstrap,
+    );
+
+    await _cacheSession(
+      token: current.accessToken,
+      identifier: current.user.employeeCode,
+      bootstrap: bootstrap,
+    );
 
     return session;
   }
@@ -101,6 +110,34 @@ class BackendAuthGateway implements AuthGateway {
     } catch (_) {
       return null;
     }
+  }
+
+  Future<Map<String, dynamic>> _fetchBootstrap(String token) async {
+    final response = await _client.get(
+      Uri.parse('${ApiConfig.baseUrl}/api/salesApp/bootstrap'),
+      headers: {'authorization': 'Bearer $token'},
+    );
+
+    final body = _decodeMap(response.body);
+    if (response.statusCode != 200 || body['success'] != true) {
+      throw AuthException(
+        (body['error'] ?? 'Unable to refresh workspace.').toString(),
+      );
+    }
+
+    return body;
+  }
+
+  Future<void> _cacheSession({
+    required String token,
+    required String identifier,
+    required Map<String, dynamic> bootstrap,
+  }) {
+    return _database.putCache(_cacheKey, {
+      'token': token,
+      'identifier': identifier,
+      'bootstrap': bootstrap,
+    });
   }
 
   AuthSession _buildSession({

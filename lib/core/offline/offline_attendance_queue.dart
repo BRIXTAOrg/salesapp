@@ -9,7 +9,6 @@ class OfflineAttendanceQueue {
 
   static Future<void> enqueue(Map<String, dynamic> event) async {
     final existing = await AppDatabase.instance.getCache(_cacheKey);
-
     final queue = <Map<String, dynamic>>[
       if (existing is List)
         ...existing.whereType<Map>().map(
@@ -53,26 +52,29 @@ class OfflineAttendanceQueue {
         }
 
         final kind = event['kind']?.toString();
+        final attendanceId = event['attendanceId']?.toString();
         final latitude = event['latitude'];
         final longitude = event['longitude'];
 
         if (kind == 'in') {
           await api.postJson('/api/salesApp/attendance/in', {
+            if (attendanceId != null && attendanceId.isNotEmpty)
+              'id': attendanceId,
             'locationName':
                 event['locationName']?.toString() ?? 'Field work',
             'inTimeLatitude': latitude,
             'inTimeLongitude': longitude,
             'inTimeImageUrl': photoUrl,
-            'inTimeImageCaptured':
-                photoUrl != null && photoUrl.isNotEmpty,
+            'inTimeImageCaptured': photoUrl != null && photoUrl.isNotEmpty,
           });
         } else if (kind == 'out') {
           await api.patchJson('/api/salesApp/attendance/out', {
+            if (attendanceId != null && attendanceId.isNotEmpty)
+              'id': attendanceId,
             'outTimeLatitude': latitude,
             'outTimeLongitude': longitude,
             'outTimeImageUrl': photoUrl,
-            'outTimeImageCaptured':
-                photoUrl != null && photoUrl.isNotEmpty,
+            'outTimeImageCaptured': photoUrl != null && photoUrl.isNotEmpty,
           });
         } else {
           continue;
