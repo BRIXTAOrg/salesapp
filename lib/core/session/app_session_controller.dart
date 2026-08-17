@@ -58,10 +58,15 @@ class AppSessionController extends ChangeNotifier {
   Future<void> login({
     required String identifier,
     required String password,
+    String? companyCode,
   }) async {
+    final effectiveTenant = (companyCode != null && companyCode.trim().isNotEmpty)
+        ? tenant.copyWith(code: companyCode.trim())
+        : tenant;
+
     session = await authGateway.login(
       LoginRequest(
-        tenant: tenant,
+        tenant: effectiveTenant,
         portalKey: 'employee',
         roleCode: 'EMPLOYEE',
         identifier: identifier,

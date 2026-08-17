@@ -18,6 +18,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
+  final _companyCodeController = TextEditingController();
   final _employeeController = TextEditingController();
   final _passwordController = TextEditingController();
 
@@ -26,7 +27,14 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _error;
 
   @override
+  void initState() {
+    super.initState();
+    _companyCodeController.text = widget.controller.tenant.code;
+  }
+
+  @override
   void dispose() {
+    _companyCodeController.dispose();
     _employeeController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -44,6 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
       await widget.controller.login(
         identifier: _employeeController.text,
         password: _passwordController.text,
+        companyCode: _companyCodeController.text,
       );
     } on AuthException catch (error) {
       if (mounted) setState(() => _error = error.message);
@@ -98,6 +107,21 @@ class _LoginScreenState extends State<LoginScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          TextFormField(
+                            controller: _companyCodeController,
+                            textInputAction: TextInputAction.next,
+                            autocorrect: false,
+                            decoration: InputDecoration(
+                              labelText: 'Company code',
+                              hintText: widget.controller.tenant.code,
+                              prefixIcon: const Icon(Icons.apartment_outlined),
+                            ),
+                            validator: (value) =>
+                                value == null || value.trim().isEmpty
+                                    ? 'Enter your company code'
+                                    : null,
+                          ),
+                          const SizedBox(height: 14),
                           TextFormField(
                             controller: _employeeController,
                             textInputAction: TextInputAction.next,
