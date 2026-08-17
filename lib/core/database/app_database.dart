@@ -19,7 +19,7 @@ class AppDatabase {
     if (_db != null) return;
 
     _db = await openDatabase(
-      'kamdhenu_field.db',
+      'salesapp.db',
       version: 3,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');

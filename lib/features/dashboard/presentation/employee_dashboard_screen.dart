@@ -725,7 +725,7 @@ class _PassiveNote extends StatelessWidget {
                 ? 'Keep working. Changes are safe on this phone and will sync automatically.'
                 : sessionActive
                     ? 'Your work session is active. Time, route and context are being recorded where needed.'
-                    : 'Do the work in the real world. Kamdhenu remembers the rest.',
+                    : 'Do the work in the real world. Salesapp remembers the rest.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ),

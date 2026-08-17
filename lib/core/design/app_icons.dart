@@ -16,7 +16,7 @@ abstract final class AppIcons {
   static final IconData profile =
       LucideIcons.user_round;
 
-  // Attendance is face/photo based in Kamdhenu.
+  // Attendance is face/photo based in Salesapp.
   static final IconData attendance =
       LucideIcons.scan_face;
 

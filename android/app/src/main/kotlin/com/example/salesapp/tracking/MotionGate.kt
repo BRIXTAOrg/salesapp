@@ -1,4 +1,4 @@
-package com.example.kamdhenu.tracking
+package com.example.salesapp.tracking
 
 import android.content.Context
 import android.hardware.Sensor

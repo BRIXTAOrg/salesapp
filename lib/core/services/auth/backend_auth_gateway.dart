@@ -28,6 +28,7 @@ class BackendAuthGateway implements AuthGateway {
       Uri.parse('${ApiConfig.baseUrl}/api/salesApp/auth/login'),
       headers: {'content-type': 'application/json'},
       body: jsonEncode({
+        'companyCode': request.tenant.code,
         'salesmanLoginId': request.identifier.trim(),
         'password': request.password,
       }),

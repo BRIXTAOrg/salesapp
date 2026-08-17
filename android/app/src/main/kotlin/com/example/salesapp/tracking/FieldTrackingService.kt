@@ -1,4 +1,4 @@
-package com.example.kamdhenu.tracking
+package com.example.salesapp.tracking
 
 import android.Manifest
 import android.app.NotificationChannel
@@ -34,22 +34,22 @@ class FieldTrackingService :
             Boolean = false
 
         private const val TAG =
-            "KamdhenuTravelMeter"
+            "SalesappTravelMeter"
 
         const val ACTION_START =
-            "com.example.kamdhenu.tracking.START"
+            "com.example.salesapp.tracking.START"
 
         const val ACTION_STOP =
-            "com.example.kamdhenu.tracking.STOP"
+            "com.example.salesapp.tracking.STOP"
 
         const val ACTION_LOCATE_NOW =
-            "com.example.kamdhenu.tracking.LOCATE_NOW"
+            "com.example.salesapp.tracking.LOCATE_NOW"
 
         const val EXTRA_EMPLOYEE_ID =
             "employeeId"
 
         const val PREFS =
-            "kamdhenu_tracking_state"
+            "salesapp_tracking_state"
 
         const val PREF_ACTIVE =
             "active"

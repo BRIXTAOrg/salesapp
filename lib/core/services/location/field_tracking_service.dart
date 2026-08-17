@@ -86,7 +86,7 @@ class FieldTrackingService extends ChangeNotifier {
             foregroundNotificationConfig: const ForegroundNotificationConfig(
               notificationTitle: 'Field tracking is on',
               notificationText:
-                  'Kamdhenu Field is recording your work route and travel distance.',
+                  'Salesapp is recording your work route and travel distance.',
               enableWakeLock: true,
             ),
           )

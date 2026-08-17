@@ -9,7 +9,7 @@ abstract final class LocalPhotoStore {
     String prefix = 'photo',
   }) async {
     final base = await getDatabasesPath();
-    final folder = Directory('$base/kamdhenu_photos');
+    final folder = Directory('$base/kamdhenu_photos'); //bucket name in db is kamdhenu_photos - DO NOT CHANGE
 
     if (!await folder.exists()) {
       await folder.create(recursive: true);

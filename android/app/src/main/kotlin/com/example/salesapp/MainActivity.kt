@@ -1,4 +1,4 @@
-package com.example.kamdhenu
+package com.example.salesapp
 
 import android.Manifest
 import android.content.Intent
@@ -7,8 +7,8 @@ import android.location.Location
 import android.location.LocationManager
 import android.os.Build
 import androidx.core.content.ContextCompat
-import com.example.kamdhenu.tracking.FieldTrackingService
-import com.example.kamdhenu.tracking.TrackingStore
+import com.example.salesapp.tracking.FieldTrackingService
+import com.example.salesapp.tracking.TrackingStore
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -19,7 +19,7 @@ import java.util.Locale
 class MainActivity : FlutterActivity() {
 
     companion object {
-        private const val CHANNEL = "kamdhenu/native_tracking"
+        private const val CHANNEL = "salesapp/native_tracking"
         private const val PERMISSION_REQUEST = 5101
     }
 

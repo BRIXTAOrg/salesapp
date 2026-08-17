@@ -1,6 +1,6 @@
 {
-    "name": "kamdhenu",
-    "short_name": "kamdhenu",
+    "name": "salesapp",
+    "short_name": "salesapp",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

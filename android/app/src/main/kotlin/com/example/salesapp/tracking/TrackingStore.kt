@@ -1,4 +1,4 @@
-package com.example.kamdhenu.tracking
+package com.example.salesapp.tracking
 
 import android.content.ContentValues
 import android.content.Context
@@ -14,7 +14,7 @@ import java.util.UUID
 class TrackingStore(context: Context) :
     SQLiteOpenHelper(
         context,
-        "kamdhenu_native_tracking.db",
+        "salesapp_native_tracking.db",
         null,
         2
     ) {

@@ -25,7 +25,7 @@ class TenantConfig {
 
   static const demo = TenantConfig(
     id: 'tenant-demo-cement',
-    code: 'DEMO_CEMENT',
+    code: 'kamdhenu',
     displayName: 'BRIXTA Cement',
     appName: 'BRIXTA Field',
     primaryColor: Color(0xFF2563EB),

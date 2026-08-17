@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 import '../domain/tracking_repository.dart';
 
 class NativeTrackingRepository implements TrackingRepository {
-  static const _channel = MethodChannel('kamdhenu/native_tracking');
+  static const _channel = MethodChannel('salesapp/native_tracking');
 
   @override
   Future<bool> requestPermission() async =>
