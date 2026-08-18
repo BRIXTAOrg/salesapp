@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "795953222069",
+    "project_id": "brixtaone",
+    "storage_bucket": "brixtaone.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:795953222069:android:657084d76dc2dfa23b09fc",
+        "android_client_info": {
+          "package_name": "com.brixta.salesapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAPMAU8f_DpewBp9R1algAO8m-bvl_tn1g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

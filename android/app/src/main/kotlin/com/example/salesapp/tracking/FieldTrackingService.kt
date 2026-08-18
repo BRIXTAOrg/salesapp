@@ -1,4 +1,4 @@
-package com.example.salesapp.tracking
+package com.brixta.salesapp.tracking
 
 import android.Manifest
 import android.app.NotificationChannel
@@ -37,13 +37,13 @@ class FieldTrackingService :
             "SalesappTravelMeter"
 
         const val ACTION_START =
-            "com.example.salesapp.tracking.START"
+            "com.brixta.salesapp.tracking.START"
 
         const val ACTION_STOP =
-            "com.example.salesapp.tracking.STOP"
+            "com.brixta.salesapp.tracking.STOP"
 
         const val ACTION_LOCATE_NOW =
-            "com.example.salesapp.tracking.LOCATE_NOW"
+            "com.brixta.salesapp.tracking.LOCATE_NOW"
 
         const val EXTRA_EMPLOYEE_ID =
             "employeeId"

@@ -1,4 +1,4 @@
-package com.example.salesapp.tracking
+package com.brixta.salesapp.tracking
 
 import android.content.Context
 import android.hardware.Sensor
