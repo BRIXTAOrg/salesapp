@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_lucide/flutter_lucide.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/config/field_api.dart';
@@ -10,10 +10,18 @@ import '../../../core/database/app_database.dart';
 import '../../../core/design/app_design.dart';
 import '../../../core/design/app_icons.dart';
 import '../../../core/models/mobile_capability.dart';
-import '../../../core/offline/offline_submission_queue.dart';
+import '../../../core/offline/offline_record_queue.dart';
 import '../../../core/services/media/local_photo_store.dart';
 import '../../../core/session/app_session_controller.dart';
 
+/// Generic Responsibility app renderer.
+///
+/// The CMS defines:
+///   definition.input.fields  -> data schema / primitive renderers
+///   definition.app.actions   -> employee buttons + visibility + CRUD operation
+///   definition.output        -> office-side projection
+///
+/// No business name (Attendance, Visit, Inspection, etc.) is special here.
 class DynamicCapabilityScreen extends StatefulWidget {
   const DynamicCapabilityScreen({
     super.key,
@@ -35,22 +43,77 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
   final Map<String, bool> _checks = {};
   final Map<String, String> _photos = {};
   final Map<String, String> _selects = {};
+  final Map<String, Set<String>> _multiSelects = {};
+  final Map<String, Map<String, dynamic>> _manualLocations = {};
 
-  bool _submitting = false;
+  List<Map<String, dynamic>> _records = const [];
+  bool _loading = true;
+  String? _submittingActionKey;
 
-  List<Map<String, dynamic>> get fields {
-    final raw = widget.capability.config['fields'];
-    if (raw is! List) return const [];
+  /// Resolve the live Responsibility from the refreshed workspace so an
+  /// administrator can publish a changed app definition without requiring an
+  /// APK release or a new login. The screen updates after the normal workspace
+  /// refresh (or the refresh button) and falls back to the object it opened with.
+  MobileCapability get _capability {
+    final modules =
+        widget.controller.session?.modules ?? const <MobileCapability>[];
 
-    return raw
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList();
+    for (final item in modules) {
+      if (item.key == widget.capability.key) return item;
+    }
+
+    return widget.capability;
   }
 
-  bool get _isDealerVisit => widget.capability.key == 'dealer_visit';
-  bool get _isInspection =>
-      widget.capability.type.toLowerCase() == 'checklist';
+  String get _cacheKey =>
+      'responsibility_records:${widget.controller.session!.user.id}:${_capability.key}';
+
+  List<Map<String, dynamic>> get fields => _capability.fields;
+
+  List<Map<String, dynamic>> get actions {
+    final app = _capability.appDefinition;
+    final raw = app['actions'];
+
+    if (raw is List && raw.isNotEmpty) {
+      return raw
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList();
+    }
+
+    // Backward-compatible default: an old Responsibility with fields but no
+    // app definition behaves like one simple Create form.
+    return [
+      {
+        'key': 'submit',
+        'label': 'Record',
+        'operation': 'create',
+        'status': 'submitted',
+        'style': 'primary',
+        'fieldKeys': visibleFields.map(_fieldKey).toList(),
+        'requiredFieldKeys': visibleFields
+            .where((field) => field['required'] == true)
+            .map(_fieldKey)
+            .toList(),
+        'visibility': {'mode': 'always'},
+        'successMessage': 'Recorded.',
+      },
+    ];
+  }
+
+  List<Map<String, dynamic>> get visibleFields => fields.where((field) {
+        final config = _config(field);
+        return config['hidden'] != true;
+      }).toList();
+
+  String? get latestStatus =>
+      _records.isEmpty ? null : _records.first['status']?.toString();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecords();
+  }
 
   @override
   void dispose() {
@@ -62,6 +125,52 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
 
   TextEditingController _controllerFor(String key) =>
       _controllers.putIfAbsent(key, TextEditingController.new);
+
+  Future<void> _loadRecords() async {
+    final session = widget.controller.session;
+    if (session == null) return;
+
+    if (mounted) setState(() => _loading = true);
+
+    try {
+      if (widget.controller.isOnline) {
+        await OfflineRecordQueue.flush(session.accessToken);
+
+        final body = await FieldApi(accessToken: session.accessToken).getJson(
+          '/api/salesApp/records/${Uri.encodeComponent(_capability.key)}?limit=50',
+        );
+
+        final raw = body['records'];
+        final records = raw is List
+            ? raw
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList()
+            : <Map<String, dynamic>>[];
+
+        await AppDatabase.instance.putCache(_cacheKey, records);
+        if (mounted) setState(() => _records = records);
+      } else {
+        await _loadCachedRecords();
+      }
+    } catch (_) {
+      await _loadCachedRecords();
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadCachedRecords() async {
+    final cached = await AppDatabase.instance.getCache(_cacheKey);
+    if (cached is List && mounted) {
+      setState(() {
+        _records = cached
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+      });
+    }
+  }
 
   Future<void> _capturePhoto(String key) async {
     try {
@@ -75,125 +184,382 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
 
       final persisted = await LocalPhotoStore.persist(
         picked,
-        prefix: 'responsibility-$key',
+        prefix: '${_capability.key}-$key',
       );
 
       await LocalPhotoStore.delete(_photos[key]);
       if (mounted) setState(() => _photos[key] = persisted);
     } catch (error) {
-      if (!mounted) return;
-      _message('Could not open camera: $error');
+      if (mounted) _message('Could not open camera: $error');
     }
   }
 
-  Future<void> _submit() async {
-    if (_submitting) return;
-    setState(() => _submitting = true);
+  Future<Map<String, dynamic>?> _currentLocation({
+    bool required = false,
+  }) async {
+    try {
+      final services = await Geolocator.isLocationServiceEnabled();
+      if (!services) {
+        if (required) _message('Turn on location services to continue.');
+        return null;
+      }
+
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        if (required) _message('Location permission is required for this action.');
+        return null;
+      }
+
+      final fix = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 15),
+        ),
+      );
+
+      return {
+        'lat': fix.latitude,
+        'lng': fix.longitude,
+        'accuracy': fix.accuracy,
+        'capturedAt': DateTime.now().toUtc().toIso8601String(),
+      };
+    } catch (error) {
+      if (required) _message('Could not capture location: $error');
+      return null;
+    }
+  }
+
+  Future<void> _captureManualLocation(String key) async {
+    final value = await _currentLocation(required: true);
+    if (value != null && mounted) {
+      setState(() => _manualLocations[key] = value);
+    }
+  }
+
+  bool _actionVisible(Map<String, dynamic> action) {
+    final visibilityRaw = action['visibility'];
+    final visibility = visibilityRaw is Map
+        ? Map<String, dynamic>.from(visibilityRaw)
+        : <String, dynamic>{};
+
+    final mode = (visibility['mode'] ?? 'always').toString();
+    final expected = visibility['status']?.toString();
+    final latest = latestStatus;
+
+    switch (mode) {
+      case 'no_record':
+        return _records.isEmpty;
+      case 'latest_status_is':
+        return expected != null && latest == expected;
+      case 'latest_status_is_not':
+        return expected != null && latest != expected;
+      default:
+        return true;
+    }
+  }
+
+  Map<String, dynamic>? _targetRecord(Map<String, dynamic> action) {
+    final targetRaw = action['target'];
+    final target = targetRaw is Map
+        ? Map<String, dynamic>.from(targetRaw)
+        : <String, dynamic>{};
+
+    final expectedStatus = target['status']?.toString();
+    if (expectedStatus != null && expectedStatus.isNotEmpty) {
+      for (final record in _records) {
+        if (record['status']?.toString() == expectedStatus) return record;
+      }
+      return null;
+    }
+
+    return _records.isEmpty ? null : _records.first;
+  }
+
+  Future<void> _runAction(Map<String, dynamic> action) async {
+    final actionKey = (action['key'] ?? 'action').toString();
+    if (_submittingActionKey != null) return;
+
+    setState(() => _submittingActionKey = actionKey);
 
     try {
+      final selectedKeys = _stringList(action['fieldKeys']);
+      final requiredKeys = _stringList(action['requiredFieldKeys']).toSet();
+      final selectedFields = fields.where(
+        (field) => selectedKeys.contains(_fieldKey(field)),
+      );
+
       final payload = <String, dynamic>{};
+      final localPhotoPaths = <String>[];
 
-      for (final field in fields) {
+      for (final field in selectedFields) {
         final key = _fieldKey(field);
-        final type = (field['type'] ?? 'text').toString().toLowerCase();
-        final required = field['required'] == true;
+        final type = _fieldType(field);
+        final required = requiredKeys.contains(key) || field['required'] == true;
+        final value = _valueForField(field);
 
-        if (_isPhotoType(type)) {
-          final path = _photos[key];
-          if (required && (path == null || path.isEmpty)) {
-            _showRequired(field);
+        if (_isEmptyValue(value)) {
+          if (required) {
+            _message('${_fieldLabel(field)} is required.');
             return;
           }
-          if (path != null && path.isNotEmpty) {
-            payload[key] = {OfflineSubmissionQueue.localPhotoKey: path};
-          }
           continue;
         }
 
-        if (type == 'checkbox' || type == 'boolean') {
-          payload[key] = _checks[key] ?? false;
-          continue;
+        if (_isPhotoType(type) && value is Map) {
+          final path = value[OfflineRecordQueue.localPhotoKey]?.toString();
+          if (path != null && path.isNotEmpty) localPhotoPaths.add(path);
         }
 
-        if (type == 'select' || type == 'choice' || type == 'dropdown') {
-          final value = _selects[key] ?? '';
-          if (required && value.isEmpty) {
-            _showRequired(field);
-            return;
-          }
-          payload[key] = value;
-          continue;
-        }
-
-        final value = _controllerFor(key).text.trim();
-        if (required && value.isEmpty) {
-          _showRequired(field);
-          return;
-        }
         payload[key] = value;
       }
 
-      // Session linkage stays invisible to the employee. The backend already
-      // stores arbitrary payload JSON, so no new form infrastructure is needed.
-      final localSession = await AppDatabase.instance.todayWorkSession(
-        widget.controller.session!.user.id,
-      );
-      if (localSession != null) {
-        payload['_workSessionId'] = localSession['id']?.toString();
-        payload['_workSessionStatus'] = localSession['status']?.toString();
-      }
+      final captureRaw = action['capture'];
+      final capture = captureRaw is Map
+          ? Map<String, dynamic>.from(captureRaw)
+          : <String, dynamic>{};
+      final locationRaw = capture['location'];
 
-      final submission = <String, dynamic>{
-        'capabilityId': widget.capability.id,
-        'clientMutationId': AppDatabase.instance.newId(),
-        'status': 'submitted',
-        'clientCreatedAt': DateTime.now().toUtc().toIso8601String(),
-        'payload': payload,
-      };
+      if (locationRaw is Map) {
+        final location = Map<String, dynamic>.from(locationRaw);
+        final fieldKey = location['fieldKey']?.toString();
+        final required = location['required'] == true;
 
-      var queued = false;
-
-      if (widget.controller.isOffline) {
-        await OfflineSubmissionQueue.enqueue(submission);
-        queued = true;
-      } else {
-        try {
-          final prepared = await OfflineSubmissionQueue.prepareForUpload(
-            widget.controller.session!.accessToken,
-            submission,
-          );
-
-          await FieldApi(
-            accessToken: widget.controller.session!.accessToken,
-          ).postJson('/api/salesApp/submissions', prepared);
-
-          for (final path in _photos.values) {
-            await LocalPhotoStore.delete(path);
-          }
-        } catch (_) {
-          await OfflineSubmissionQueue.enqueue(submission);
-          queued = true;
+        if (fieldKey != null && fieldKey.isNotEmpty) {
+          final fix = await _currentLocation(required: required);
+          if (fix == null && required) return;
+          if (fix != null) payload[fieldKey] = fix;
         }
       }
+
+      final operation = (action['operation'] ?? 'create').toString();
+      final status = (action['status'] ?? 'submitted').toString();
+      final now = DateTime.now().toUtc().toIso8601String();
+      final api = FieldApi(
+        accessToken: widget.controller.session!.accessToken,
+      );
+
+      String method;
+      String path;
+      Map<String, dynamic> body;
+
+      if (operation == 'update') {
+        final target = _targetRecord(action);
+        if (target == null || target['id'] == null) {
+          _message('There is no matching record to update yet.');
+          return;
+        }
+
+        method = 'PATCH';
+        path =
+            '/api/salesApp/records/${Uri.encodeComponent(_capability.key)}/${Uri.encodeComponent(target['id'].toString())}';
+        body = {
+          'payload': payload,
+          'status': status,
+          'appActionKey': actionKey,
+        };
+      } else {
+        method = 'POST';
+        path =
+            '/api/salesApp/records/${Uri.encodeComponent(_capability.key)}';
+        body = {
+          'clientMutationId': AppDatabase.instance.newId(),
+          'clientCreatedAt': now,
+          'payload': payload,
+          'status': status,
+          'appActionKey': actionKey,
+        };
+      }
+
+      Map<String, dynamic>? response;
+
+      if (widget.controller.isOffline) {
+        await OfflineRecordQueue.enqueue(
+          method: method,
+          path: path,
+          body: body,
+        );
+        _applyOptimisticRecord(
+          operation: operation,
+          target: operation == 'update' ? _targetRecord(action) : null,
+          body: body,
+          now: now,
+        );
+      } else {
+        try {
+          final prepared = await OfflineRecordQueue.prepareBodyForUpload(
+            widget.controller.session!.accessToken,
+            body,
+          );
+          response = method == 'PATCH'
+              ? await api.patchJson(path, prepared)
+              : await api.postJson(path, prepared);
+
+          for (final localPath in localPhotoPaths) {
+            await LocalPhotoStore.delete(localPath);
+          }
+        } catch (error) {
+          // CREATE mutations are safe to queue because clientMutationId makes
+          // them idempotent. UPDATE is also queued when it targets a known
+          // server record ID from the local record cache.
+          await OfflineRecordQueue.enqueue(
+            method: method,
+            path: path,
+            body: body,
+          );
+          _applyOptimisticRecord(
+            operation: operation,
+            target: operation == 'update' ? _targetRecord(action) : null,
+            body: body,
+            now: now,
+          );
+        }
+      }
+
+      if (response != null && response['record'] is Map) {
+        final record = Map<String, dynamic>.from(response['record'] as Map);
+        _mergeServerRecord(record);
+      }
+
+      _clearActionFields(selectedKeys);
+      await AppDatabase.instance.putCache(_cacheKey, _records);
 
       await HapticFeedback.lightImpact();
       if (!mounted) return;
 
       _message(
-        queued
-            ? 'Safe on this phone. We will send it when you are online.'
-            : 'Recorded. Office has it.',
+        (action['successMessage'] ??
+                (widget.controller.isOffline
+                    ? 'Safe on this phone. It will sync automatically.'
+                    : 'Recorded.'))
+            .toString(),
       );
 
-      Navigator.pop(context);
+      if (widget.controller.isOnline) {
+        await _loadRecords();
+      }
     } finally {
-      if (mounted) setState(() => _submitting = false);
+      if (mounted) setState(() => _submittingActionKey = null);
     }
   }
 
-  void _showRequired(Map<String, dynamic> field) {
-    final label = (field['label'] ?? _fieldKey(field)).toString();
-    _message('$label is required.');
+  void _applyOptimisticRecord({
+    required String operation,
+    required Map<String, dynamic>? target,
+    required Map<String, dynamic> body,
+    required String now,
+  }) {
+    final payload = body['payload'] is Map
+        ? Map<String, dynamic>.from(body['payload'] as Map)
+        : <String, dynamic>{};
+    final status = body['status']?.toString() ?? 'submitted';
+
+    setState(() {
+      if (operation == 'update' && target != null) {
+        final id = target['id']?.toString();
+        _records = _records.map((record) {
+          if (record['id']?.toString() != id) return record;
+          final existingPayload = record['payload'] is Map
+              ? Map<String, dynamic>.from(record['payload'] as Map)
+              : <String, dynamic>{};
+          return {
+            ...record,
+            'status': status,
+            'payload': {...existingPayload, ...payload},
+            'updatedAt': now,
+          };
+        }).toList();
+      } else {
+        _records = [
+          {
+            'id': body['clientMutationId'] ?? AppDatabase.instance.newId(),
+            'status': status,
+            'payload': payload,
+            'createdAt': now,
+            'updatedAt': now,
+            '_optimistic': true,
+          },
+          ..._records,
+        ];
+      }
+    });
+  }
+
+  void _mergeServerRecord(Map<String, dynamic> record) {
+    final id = record['id']?.toString();
+    if (id == null) return;
+
+    setState(() {
+      final withoutSame = _records
+          .where((item) => item['id']?.toString() != id)
+          .toList();
+      _records = [record, ...withoutSame];
+    });
+  }
+
+  void _clearActionFields(List<String> fieldKeys) {
+    setState(() {
+      for (final key in fieldKeys) {
+        _controllers[key]?.clear();
+        _checks.remove(key);
+        _selects.remove(key);
+        _multiSelects.remove(key);
+        _manualLocations.remove(key);
+        _photos.remove(key);
+      }
+    });
+  }
+
+  dynamic _valueForField(Map<String, dynamic> field) {
+    final key = _fieldKey(field);
+    final type = _fieldType(field);
+
+    if (_isPhotoType(type)) {
+      final path = _photos[key];
+      return path == null || path.isEmpty
+          ? null
+          : {OfflineRecordQueue.localPhotoKey: path};
+    }
+
+    if (type == 'checkbox' || type == 'toggle' || type == 'boolean') {
+      return _checks[key] ?? false;
+    }
+
+    if (type == 'select' || type == 'choice' || type == 'dropdown') {
+      return _selects[key];
+    }
+
+    if (type == 'multi_select') {
+      return (_multiSelects[key] ?? <String>{}).toList();
+    }
+
+    if (type == 'location_point') {
+      return _manualLocations[key];
+    }
+
+    final text = _controllerFor(key).text.trim();
+    if (text.isEmpty) return null;
+
+    if (type == 'number' || type == 'currency') {
+      return double.tryParse(text);
+    }
+    if (type == 'integer') {
+      return int.tryParse(text);
+    }
+
+    return text;
+  }
+
+  bool _isEmptyValue(dynamic value) {
+    if (value == null) return true;
+    if (value is String) return value.trim().isEmpty;
+    if (value is List) return value.isEmpty;
+    if (value is Map) return value.isEmpty;
+    return false;
   }
 
   void _message(String text) {
@@ -205,78 +571,85 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final capability = widget.capability;
+    final capability = _capability;
+    final visibleActions = actions.where(_actionVisible).toList();
 
     return Scaffold(
-      appBar: AppBar(title: Text(capability.title)),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 112),
-        children: [
-          _ResponsibilityIntro(capability: capability, fieldCount: fields.length),
-          const SizedBox(height: 48),
-          if (fields.isEmpty)
-            _EmptyResponsibility(capability: capability)
-          else
-            ...[
-              const _SectionLabel('WHAT YOU NEED TO RECORD'),
-              const SizedBox(height: 16),
-              for (var i = 0; i < fields.length; i++) ...[
-                _buildField(fields[i]),
-                if (i != fields.length - 1) const SizedBox(height: 24),
-              ],
-            ],
+      appBar: AppBar(
+        title: Text(capability.title),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh app definition and records',
+            onPressed: _loading
+                ? null
+                : () async {
+                    await widget.controller.refreshWorkspace();
+                    await _loadRecords();
+                  },
+            icon: const Icon(Icons.refresh),
+          ),
         ],
       ),
-      bottomNavigationBar: fields.isEmpty
-          ? null
-          : SafeArea(
-              top: false,
-              child: Container(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
-                decoration: const BoxDecoration(
-                  color: AppDesign.surface,
-                  border: Border(top: BorderSide(color: AppDesign.line)),
-                ),
-                child: FilledButton(
-                  onPressed: _submitting ? null : _submit,
-                  child: _submitting
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : Text(
-                          _isDealerVisit
-                              ? 'Record visit'
-                              : _isInspection
-                                  ? 'Complete inspection'
-                                  : 'Record',
-                        ),
-                ),
-              ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await widget.controller.refreshWorkspace();
+          await _loadRecords();
+        },
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 48),
+          children: [
+            _ResponsibilityIntro(
+              capability: capability,
+              actionCount: actions.length,
+              latestStatus: latestStatus,
             ),
+            const SizedBox(height: 32),
+            if (_loading)
+              const LinearProgressIndicator(minHeight: 2)
+            else if (visibleActions.isEmpty)
+              const _QuietState()
+            else
+              for (var i = 0; i < visibleActions.length; i++) ...[
+                _ActionCard(
+                  action: visibleActions[i],
+                  fields: fields,
+                  submitting:
+                      _submittingActionKey == visibleActions[i]['key']?.toString(),
+                  buildField: _buildField,
+                  onRun: () => _runAction(visibleActions[i]),
+                ),
+                if (i != visibleActions.length - 1) const SizedBox(height: 20),
+              ],
+            if (_records.isNotEmpty) ...[
+              const SizedBox(height: 40),
+              const _SectionLabel('RECENT'),
+              const SizedBox(height: 12),
+              for (final record in _records.take(5))
+                _RecordRow(record: record),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
   Widget _buildField(Map<String, dynamic> field) {
-    final label = (field['label'] ?? 'Field').toString();
+    final label = _fieldLabel(field);
     final key = _fieldKey(field);
-    final type = (field['type'] ?? 'text').toString().toLowerCase();
-    final required = field['required'] == true;
+    final type = _fieldType(field);
+    final config = _config(field);
+    final helpText = config['helpText']?.toString();
 
     if (_isPhotoType(type)) {
       return _PhotoField(
         label: label,
-        required: required,
         path: _photos[key],
+        helpText: helpText,
         onTap: () => _capturePhoto(key),
       );
     }
 
-    if (type == 'checkbox' || type == 'boolean') {
+    if (type == 'checkbox' || type == 'toggle' || type == 'boolean') {
       return Container(
         decoration: BoxDecoration(
           color: AppDesign.surface,
@@ -289,9 +662,10 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
             setState(() => _checks[key] = value ?? false);
           },
           title: Text(
-            required ? '$label *' : label,
+            label,
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           ),
+          subtitle: helpText == null ? null : Text(helpText),
           controlAffinity: ListTileControlAffinity.leading,
           contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         ),
@@ -299,20 +673,16 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     }
 
     if (type == 'select' || type == 'choice' || type == 'dropdown') {
-      final rawOptions = field['options'];
-      final options = rawOptions is List
-          ? rawOptions.map((value) => value.toString()).toList()
-          : <String>[];
-
+      final options = _stringList(config['options']);
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _FieldLabel(label: label, required: required),
+          _FieldLabel(label: label),
           const SizedBox(height: 8),
           DropdownButtonFormField<String>(
             initialValue: _selects[key],
             isExpanded: true,
-            hint: const Text('Choose one'),
+            hint: Text(config['placeholder']?.toString() ?? 'Choose one'),
             items: options
                 .map(
                   (option) => DropdownMenuItem(
@@ -325,6 +695,63 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
               if (value != null) setState(() => _selects[key] = value);
             },
           ),
+          if (helpText != null) ...[
+            const SizedBox(height: 6),
+            Text(helpText, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ],
+      );
+    }
+
+    if (type == 'multi_select') {
+      final options = _stringList(config['options']);
+      final selected = _multiSelects.putIfAbsent(key, () => <String>{});
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _FieldLabel(label: label),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: options
+                .map(
+                  (option) => FilterChip(
+                    label: Text(option),
+                    selected: selected.contains(option),
+                    onSelected: (value) {
+                      setState(() {
+                        if (value) {
+                          selected.add(option);
+                        } else {
+                          selected.remove(option);
+                        }
+                      });
+                    },
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+      );
+    }
+
+    if (type == 'location_point') {
+      final location = _manualLocations[key];
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _FieldLabel(label: label),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => _captureManualLocation(key),
+            icon: const Icon(Icons.location_on_outlined),
+            label: Text(
+              location == null
+                  ? 'Use current location'
+                  : '${location['lat']}, ${location['lng']}',
+            ),
+          ),
         ],
       );
     }
@@ -335,46 +762,155 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _FieldLabel(label: label, required: required),
+        _FieldLabel(label: label),
         const SizedBox(height: 8),
         TextField(
           controller: _controllerFor(key),
           maxLines: isLongText ? 4 : 1,
-          keyboardType: type == 'number'
+          keyboardType: type == 'number' || type == 'currency' || type == 'integer'
               ? const TextInputType.numberWithOptions(decimal: true)
-              : type == 'date'
+              : type == 'date' || type == 'datetime'
                   ? TextInputType.datetime
                   : TextInputType.text,
           decoration: InputDecoration(
-            hintText: (field['placeholder'] ?? _defaultHint(label)).toString(),
+            hintText: config['placeholder']?.toString() ?? 'Enter $label',
           ),
         ),
+        if (helpText != null) ...[
+          const SizedBox(height: 6),
+          Text(helpText, style: Theme.of(context).textTheme.bodySmall),
+        ],
       ],
     );
   }
 
-  String _defaultHint(String label) {
-    if (_isDealerVisit && label.toLowerCase().contains('note')) {
-      return 'Anything important?';
-    }
-    return 'Enter $label';
+  static Map<String, dynamic> _config(Map<String, dynamic> field) {
+    final raw = field['config'];
+    return raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
   }
 
   static String _fieldKey(Map<String, dynamic> field) =>
       (field['key'] ?? field['name'] ?? field['label'] ?? 'field').toString();
+
+  static String _fieldLabel(Map<String, dynamic> field) =>
+      (field['label'] ?? _fieldKey(field)).toString();
+
+  static String _fieldType(Map<String, dynamic> field) =>
+      (field['inputType'] ?? field['type'] ?? 'text').toString().toLowerCase();
 
   static bool _isPhotoType(String type) =>
       type == 'photo' ||
       type == 'image' ||
       type == 'camera' ||
       type == 'upload_photo';
+
+  static List<String> _stringList(dynamic value) =>
+      value is List ? value.map((item) => item.toString()).toList() : <String>[];
+}
+
+class _ActionCard extends StatelessWidget {
+  const _ActionCard({
+    required this.action,
+    required this.fields,
+    required this.submitting,
+    required this.buildField,
+    required this.onRun,
+  });
+
+  final Map<String, dynamic> action;
+  final List<Map<String, dynamic>> fields;
+  final bool submitting;
+  final Widget Function(Map<String, dynamic>) buildField;
+  final VoidCallback onRun;
+
+  @override
+  Widget build(BuildContext context) {
+    final fieldKeys = action['fieldKeys'] is List
+        ? (action['fieldKeys'] as List).map((item) => item.toString()).toSet()
+        : <String>{};
+    final selected = fields.where(
+      (field) => fieldKeys.contains(
+        (field['key'] ?? field['name'] ?? field['label']).toString(),
+      ),
+    );
+    final label = (action['label'] ?? 'Record').toString();
+    final style = (action['style'] ?? 'primary').toString();
+    final capture = action['capture'];
+    final hasAutoLocation = capture is Map && capture['location'] is Map;
+
+    final ButtonStyle? buttonStyle = style == 'danger'
+        ? FilledButton.styleFrom(backgroundColor: AppDesign.red)
+        : null;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppDesign.surface,
+        border: Border.all(color: AppDesign.line),
+        borderRadius: BorderRadius.circular(AppDesign.radius),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: Theme.of(context).textTheme.titleLarge),
+          if (selected.isNotEmpty) ...[
+            const SizedBox(height: 20),
+            for (final field in selected) ...[
+              buildField(field),
+              const SizedBox(height: 18),
+            ],
+          ],
+          if (hasAutoLocation) ...[
+            Row(
+              children: [
+                const Icon(Icons.location_on_outlined, size: 16, color: AppDesign.muted),
+                const SizedBox(width: 8),
+                Text(
+                  'Current location will be attached automatically',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+          SizedBox(
+            width: double.infinity,
+            child: style == 'secondary'
+                ? OutlinedButton(
+                    onPressed: submitting ? null : onRun,
+                    child: submitting ? _spinner() : Text(label),
+                  )
+                : FilledButton(
+                    style: buttonStyle,
+                    onPressed: submitting ? null : onRun,
+                    child: submitting ? _spinner() : Text(label),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Widget _spinner() => const SizedBox(
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: Colors.white,
+        ),
+      );
 }
 
 class _ResponsibilityIntro extends StatelessWidget {
-  const _ResponsibilityIntro({required this.capability, required this.fieldCount});
+  const _ResponsibilityIntro({
+    required this.capability,
+    required this.actionCount,
+    required this.latestStatus,
+  });
 
   final MobileCapability capability;
-  final int fieldCount;
+  final int actionCount;
+  final String? latestStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -404,14 +940,13 @@ class _ResponsibilityIntro extends StatelessWidget {
               Text(
                 capability.description?.trim().isNotEmpty == true
                     ? capability.description!.trim()
-                    : _plainDescription(capability),
+                    : 'Complete the actions configured by your administrator.',
                 style: Theme.of(context).textTheme.bodyLarge,
               ),
               const SizedBox(height: 8),
               Text(
-                fieldCount == 0
-                    ? 'No steps configured yet'
-                    : '$fieldCount ${fieldCount == 1 ? 'step' : 'steps'} · saves offline',
+                '$actionCount ${actionCount == 1 ? 'action' : 'actions'}'
+                '${latestStatus == null ? '' : ' · latest: $latestStatus'}',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ],
@@ -420,27 +955,15 @@ class _ResponsibilityIntro extends StatelessWidget {
       ],
     );
   }
-
-  static String _plainDescription(MobileCapability capability) {
-    switch (capability.key) {
-      case 'dealer_visit':
-        return 'Record what happened during the visit. We add the employee and session context automatically.';
-      case 'leave':
-        return 'Send a simple leave request.';
-      default:
-        return 'Complete the responsibility with only the information the phone cannot know for you.';
-    }
-  }
 }
 
-class _EmptyResponsibility extends StatelessWidget {
-  const _EmptyResponsibility({required this.capability});
-  final MobileCapability capability;
+class _QuietState extends StatelessWidget {
+  const _QuietState();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppDesign.surface,
         border: Border.all(color: AppDesign.line),
@@ -449,26 +972,12 @@ class _EmptyResponsibility extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(LucideIcons.settings_2, size: 20, color: AppDesign.muted),
-          const SizedBox(width: 16),
+          const Icon(Icons.check_circle_outline, color: AppDesign.muted),
+          const SizedBox(width: 12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'This responsibility is not configured yet.',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: AppDesign.ink,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'When the administrator adds the required steps, they will appear here automatically.',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-              ],
+            child: Text(
+              'There is no action available in the current record state.',
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
           ),
         ],
@@ -477,25 +986,76 @@ class _EmptyResponsibility extends StatelessWidget {
   }
 }
 
+class _RecordRow extends StatelessWidget {
+  const _RecordRow({required this.record});
+
+  final Map<String, dynamic> record;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = record['status']?.toString() ?? 'recorded';
+    final when = record['updatedAt'] ?? record['createdAt'];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppDesign.surface,
+        border: Border.all(color: AppDesign.line),
+        borderRadius: BorderRadius.circular(AppDesign.radius),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.storage_outlined, size: 16, color: AppDesign.muted),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              status.replaceAll('_', ' '),
+              style: const TextStyle(fontWeight: FontWeight.w600),
+            ),
+          ),
+          if (when != null)
+            Text(
+              _shortTime(when.toString()),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+        ],
+      ),
+    );
+  }
+
+  static String _shortTime(String raw) {
+    final value = DateTime.tryParse(raw)?.toLocal();
+    if (value == null) return '';
+    final hour = value.hour.toString().padLeft(2, '0');
+    final minute = value.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+}
+
 class _PhotoField extends StatelessWidget {
   const _PhotoField({
     required this.label,
-    required this.required,
     required this.path,
     required this.onTap,
+    this.helpText,
   });
 
   final String label;
-  final bool required;
   final String? path;
   final VoidCallback onTap;
+  final String? helpText;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _FieldLabel(label: label, required: required),
+        _FieldLabel(label: label),
+        if (helpText != null) ...[
+          const SizedBox(height: 4),
+          Text(helpText!, style: Theme.of(context).textTheme.bodySmall),
+        ],
         const SizedBox(height: 8),
         Material(
           color: AppDesign.surface,
@@ -507,7 +1067,7 @@ class _PhotoField extends StatelessWidget {
             onTap: onTap,
             borderRadius: BorderRadius.circular(AppDesign.radius),
             child: SizedBox(
-              height: 176,
+              height: 170,
               width: double.infinity,
               child: path != null && path!.isNotEmpty
                   ? ClipRRect(
@@ -517,7 +1077,7 @@ class _PhotoField extends StatelessWidget {
                   : const Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(LucideIcons.camera, size: 28, color: AppDesign.ink),
+                        Icon(Icons.camera_alt_outlined, size: 28, color: AppDesign.ink),
                         SizedBox(height: 8),
                         Text(
                           'Take photo',
@@ -538,20 +1098,17 @@ class _PhotoField extends StatelessWidget {
 }
 
 class _FieldLabel extends StatelessWidget {
-  const _FieldLabel({required this.label, required this.required});
-
+  const _FieldLabel({required this.label});
   final String label;
-  final bool required;
 
   @override
   Widget build(BuildContext context) {
     return Text(
-      required ? '${label.toUpperCase()} *' : label.toUpperCase(),
+      label,
       style: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w500,
-        letterSpacing: .24,
-        color: AppDesign.muted,
+        fontSize: 13,
+        fontWeight: FontWeight.w600,
+        color: AppDesign.ink,
       ),
     );
   }
@@ -566,10 +1123,10 @@ class _SectionLabel extends StatelessWidget {
     return Text(
       text,
       style: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w500,
-        letterSpacing: .24,
         color: AppDesign.muted,
+        fontSize: 11,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 1.2,
       ),
     );
   }

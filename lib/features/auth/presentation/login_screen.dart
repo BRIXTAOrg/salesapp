@@ -5,10 +5,7 @@ import '../../../core/session/app_session_controller.dart';
 import '../../../core/widgets/tenant_logo.dart';
 
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({
-    super.key,
-    required this.controller,
-  });
+  const LoginScreen({super.key, required this.controller});
 
   final AppSessionController controller;
 
@@ -58,7 +55,10 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) setState(() => _error = error.message);
     } catch (_) {
       if (mounted) {
-        setState(() => _error = 'Unable to sign in. Check your connection and try again.');
+        setState(
+          () => _error =
+              'Unable to sign in. Check your connection and try again.',
+        );
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -118,8 +118,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             validator: (value) =>
                                 value == null || value.trim().isEmpty
-                                    ? 'Enter your company code'
-                                    : null,
+                                ? 'Enter your company code'
+                                : null,
                           ),
                           const SizedBox(height: 14),
                           TextFormField(
@@ -131,8 +131,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                             validator: (value) =>
                                 value == null || value.trim().isEmpty
-                                    ? 'Enter your employee ID'
-                                    : null,
+                                ? 'Enter your employee ID'
+                                : null,
                           ),
                           const SizedBox(height: 14),
                           TextFormField(
@@ -141,9 +141,12 @@ class _LoginScreenState extends State<LoginScreen> {
                             onFieldSubmitted: (_) => _login(),
                             decoration: InputDecoration(
                               labelText: 'Password',
-                              prefixIcon: const Icon(Icons.lock_outline_rounded),
+                              prefixIcon: const Icon(
+                                Icons.lock_outline_rounded,
+                              ),
                               suffixIcon: IconButton(
-                                onPressed: () => setState(() => _obscure = !_obscure),
+                                onPressed: () =>
+                                    setState(() => _obscure = !_obscure),
                                 icon: Icon(
                                   _obscure
                                       ? Icons.visibility_outlined
@@ -151,10 +154,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                             ),
-                            validator: (value) =>
-                                value == null || value.isEmpty
-                                    ? 'Enter your password'
-                                    : null,
+                            validator: (value) => value == null || value.isEmpty
+                                ? 'Enter your password'
+                                : null,
                           ),
                           if (_error != null) ...[
                             const SizedBox(height: 14),

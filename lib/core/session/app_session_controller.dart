@@ -15,8 +15,8 @@ class AppSessionController extends ChangeNotifier {
     required this.connectivityGateway,
     required this.syncGateway,
     this.session,
-  })  : connectivity = connectivityGateway.current,
-        syncSnapshot = syncGateway.current {
+  }) : connectivity = connectivityGateway.current,
+       syncSnapshot = syncGateway.current {
     _connectivitySub = connectivityGateway.changes.listen((value) {
       connectivity = value;
       notifyListeners();
@@ -60,7 +60,8 @@ class AppSessionController extends ChangeNotifier {
     required String password,
     String? companyCode,
   }) async {
-    final effectiveTenant = (companyCode != null && companyCode.trim().isNotEmpty)
+    final effectiveTenant =
+        (companyCode != null && companyCode.trim().isNotEmpty)
         ? tenant.copyWith(code: companyCode.trim())
         : tenant;
 

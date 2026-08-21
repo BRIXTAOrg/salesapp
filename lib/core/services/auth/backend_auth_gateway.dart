@@ -155,8 +155,32 @@ class BackendAuthGateway implements AuthGateway {
     }
 
     final user = Map<String, dynamic>.from(rawUser);
-    final modulesRaw = bootstrap['modules'];
+
+    // Platform Core renamed business modules to Responsibilities. Keep the
+    // modules fallback so already-cached sessions from an older server can
+    // still restore during rollout.
+    final responsibilitiesRaw =
+        bootstrap['responsibilities'] ?? bootstrap['modules'];
     final permissionsRaw = bootstrap['permissions'];
+
+    final permissions = <String>{
+      if (permissionsRaw is List)
+        ...permissionsRaw.map((item) => item.toString()),
+    };
+
+    // The workflow bootstrap already exposes ready action keys. Treat them as
+    // runtime permissions for presentation purposes; the backend remains the
+    // authoritative enforcement point.
+    final readyActions = bootstrap['readyActions'];
+    if (readyActions is List) {
+      for (final item in readyActions) {
+        if (item is String) {
+          permissions.add(item);
+        } else if (item is Map && item['actionKey'] != null) {
+          permissions.add(item['actionKey'].toString());
+        }
+      }
+    }
 
     return AuthSession(
       accessToken: token,
@@ -174,13 +198,10 @@ class BackendAuthGateway implements AuthGateway {
           if (user['role'] is String) user['role'] as String,
         ],
       ),
-      permissions: {
-        if (permissionsRaw is List)
-          ...permissionsRaw.map((item) => item.toString()),
-      },
+      permissions: permissions,
       modules: [
-        if (modulesRaw is List)
-          ...modulesRaw.whereType<Map>().map(
+        if (responsibilitiesRaw is List)
+          ...responsibilitiesRaw.whereType<Map>().map(
                 (item) => MobileCapability.fromJson(
                   Map<String, dynamic>.from(item),
                 ),
