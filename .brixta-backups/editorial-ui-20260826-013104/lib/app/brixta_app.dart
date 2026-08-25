@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../core/session/app_session_controller.dart';
 import '../core/theme/tenant_theme.dart';
-import '../core/widgets/editorial_backdrop.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/dashboard/presentation/employee_dashboard_screen.dart';
 
@@ -18,15 +17,8 @@ class BrixtaApp extends StatelessWidget {
       builder: (context, _) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-
           title: controller.tenant.appName,
-
           theme: TenantTheme.build(controller.tenant),
-
-          builder: (context, child) {
-            return EditorialBackdrop(child: child ?? const SizedBox.shrink());
-          },
-
           home: controller.session == null
               ? LoginScreen(controller: controller)
               : EmployeeDashboardScreen(controller: controller),

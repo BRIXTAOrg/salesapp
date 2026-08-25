@@ -57,8 +57,7 @@ class _EmployeeProfileTabState extends State<EmployeeProfileTab> {
   Widget build(BuildContext context) {
     final session = widget.controller.session!;
     final devices = _mapList(_runtime?['devices']);
-    final currentDeviceId =
-        _runtime?['currentDeviceId']?.toString() ??
+    final currentDeviceId = _runtime?['currentDeviceId']?.toString() ??
         AppDeviceIdentity.instance.deviceId;
 
     return SafeArea(
@@ -89,11 +88,7 @@ class _EmployeeProfileTabState extends State<EmployeeProfileTab> {
                       borderRadius: BorderRadius.circular(AppDesign.radius),
                     ),
                     alignment: Alignment.center,
-                    child: Icon(
-                      AppIcons.profile,
-                      color: AppDesign.green,
-                      size: 23,
-                    ),
+                    child: Icon(AppIcons.profile, color: AppDesign.green, size: 23),
                   ),
                   const SizedBox(width: 14),
                   Expanded(
@@ -112,15 +107,11 @@ class _EmployeeProfileTabState extends State<EmployeeProfileTab> {
                           '${session.user.designation} · ${session.user.employeeCode}',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
-                        if (session.user.department?.trim().isNotEmpty ==
-                            true) ...[
+                        if (session.user.department?.trim().isNotEmpty == true) ...[
                           const SizedBox(height: 2),
                           Text(
                             session.user.department!,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppDesign.muted,
-                            ),
+                            style: const TextStyle(fontSize: 12, color: AppDesign.muted),
                           ),
                         ],
                       ],
@@ -192,8 +183,7 @@ class _EmployeeProfileTabState extends State<EmployeeProfileTab> {
               for (var i = 0; i < devices.length; i++) ...[
                 _DeviceCard(
                   device: devices[i],
-                  current:
-                      devices[i]['deviceId']?.toString() == currentDeviceId,
+                  current: devices[i]['deviceId']?.toString() == currentDeviceId,
                 ),
                 if (i != devices.length - 1) const SizedBox(height: 10),
               ],
@@ -283,21 +273,9 @@ class _DeviceCard extends StatelessWidget {
                   spacing: 14,
                   runSpacing: 4,
                   children: [
-                    Text(
-                      'Seen $seen',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppDesign.muted,
-                      ),
-                    ),
+                    Text('Seen $seen', style: const TextStyle(fontSize: 11, color: AppDesign.muted)),
                     if (device['lastSyncAt'] != null)
-                      Text(
-                        'Synced $synced',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppDesign.muted,
-                        ),
-                      ),
+                      Text('Synced $synced', style: const TextStyle(fontSize: 11, color: AppDesign.muted)),
                   ],
                 ),
               ],
@@ -310,11 +288,7 @@ class _DeviceCard extends StatelessWidget {
 }
 
 class _FactRow extends StatelessWidget {
-  const _FactRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+  const _FactRow({required this.icon, required this.label, required this.value});
   final IconData icon;
   final String label;
   final String value;
@@ -325,12 +299,7 @@ class _FactRow extends StatelessWidget {
       children: [
         Icon(icon, size: 19, color: AppDesign.muted),
         const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            label,
-            style: const TextStyle(color: AppDesign.muted, fontSize: 13),
-          ),
-        ),
+        Expanded(child: Text(label, style: const TextStyle(color: AppDesign.muted, fontSize: 13))),
         const SizedBox(width: 12),
         Flexible(
           child: Text(
@@ -371,7 +340,7 @@ class _Pill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: tone.withValues(alpha: .08),
-        borderRadius: BorderRadius.circular(AppDesign.radius),
+        borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label,
@@ -404,14 +373,12 @@ class _SectionLabel extends StatelessWidget {
 }
 
 List<Map<String, dynamic>> _mapList(dynamic value) => value is List
-    ? value
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList()
+    ? value.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
     : <Map<String, dynamic>>[];
 
-Map<String, dynamic> _map(dynamic value) =>
-    value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+Map<String, dynamic> _map(dynamic value) => value is Map
+    ? Map<String, dynamic>.from(value)
+    : <String, dynamic>{};
 
 String _relativeTime(dynamic raw) {
   final parsed = DateTime.tryParse(raw?.toString() ?? '')?.toLocal();

@@ -5,11 +5,10 @@ import '../design/app_design.dart';
 
 abstract final class TenantTheme {
   static ThemeData build(TenantConfig tenant) {
-    final base = AppDesign.theme();
-    return base.copyWith(
-      colorScheme: base.colorScheme.copyWith(
-        primary: tenant.primaryColor,
-      ),
-    );
+    // Tenant identity remains available to logos/content.
+    //
+    // The runtime UI itself deliberately uses the BRIXTA editorial
+    // system so every company gets one coherent professional product.
+    return AppDesign.theme();
   }
 }

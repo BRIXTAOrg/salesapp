@@ -1,10 +1,11 @@
 # Graph Report - kamdhenu  (2026-08-26)
 
 ## Corpus Check
-- cluster-only mode — file stats not available
+- 91 files · ~55,281 words
+- Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1553 nodes · 2109 edges · 72 communities (66 shown, 6 thin omitted)
+- 1553 nodes · 2109 edges · 70 communities (64 shown, 6 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 18 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
@@ -79,37 +80,35 @@
 - State
 - FieldTrackingService.kt
 - _ReferencePickerSheet
-- List
-- sync_transport.dart
 
 ## God Nodes (most connected - your core abstractions)
-1. `Win32Window` - 24 edges
-2. `FieldTrackingService` - 24 edges
+1. `FieldTrackingService` - 24 edges
+2. `Win32Window` - 24 edges
 3. `TrackingStore` - 16 edges
 4. `AppSessionController` - 15 edges
 5. `MessageHandler` - 12 edges
 6. `MotionGate` - 11 edges
-7. `FlutterWindow` - 10 edges
-8. `MainActivity` - 10 edges
-9. `Create` - 10 edges
-10. `WndProc` - 10 edges
+7. `MainActivity` - 10 edges
+8. `TrackingController` - 10 edges
+9. `FlutterWindow` - 10 edges
+10. `Create` - 10 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Win32Window::Win32Window()` --calls--> `Destroy`  [INFERRED]
-  windows/runner/win32_window.cpp → windows/runner/win32_window.h
 - `wWinMain()` --calls--> `CreateAndAttachConsole()`  [INFERRED]
   windows/runner/main.cpp → windows/runner/utils.cpp
+- `Win32Window::Win32Window()` --calls--> `Destroy`  [INFERRED]
+  windows/runner/win32_window.cpp → windows/runner/win32_window.h
 - `FieldTrackingService` --references--> `MotionGate`  [EXTRACTED]
   android/app/src/main/kotlin/com/example/salesapp/tracking/FieldTrackingService.kt → android/app/src/main/kotlin/com/example/salesapp/tracking/MotionGate.kt
 - `FieldTrackingService` --references--> `TrackingStore`  [EXTRACTED]
   android/app/src/main/kotlin/com/example/salesapp/tracking/FieldTrackingService.kt → android/app/src/main/kotlin/com/example/salesapp/tracking/TrackingStore.kt
-- `OnCreate` --calls--> `RegisterPlugins()`  [INFERRED]
-  windows/runner/flutter_window.h → windows/flutter/generated_plugin_registrant.cc
+- `my_application_activate()` --calls--> `fl_register_plugins()`  [INFERRED]
+  linux/runner/my_application.cc → linux/flutter/generated_plugin_registrant.cc
 
 ## Import Cycles
 - None detected.
 
-## Communities (72 total, 6 thin omitted)
+## Communities (70 total, 6 thin omitted)
 
 ### Community 0 - "Win32Window"
 Cohesion: 0.05
@@ -117,11 +116,11 @@ Nodes (57): PluginRegistry, RECT, unique_ptr, RegisterPlugins(), DartProject, HW
 
 ### Community 2 - "allowances_screen.dart"
 Cohesion: 0.03
-Nodes (64): active, _addReceipt, AllowancesScreen, _AllowancesScreenState, border, build, busy, claim (+56 more)
+Nodes (71): active, _addReceipt, border, build, busy, claim, _ClaimDraft, _ClaimFact (+63 more)
 
 ### Community 3 - "lib/features/dashboard/presentation/employee_dashboard_screen.dart"
 Cohesion: 0.03
-Nodes (68): employee_profile_tab.dart, approvalCount, _approvals, _blockedWork, build, capability, _capabilityHint, _capabilityNeedsTracking (+60 more)
+Nodes (67): ../../dynamic/presentation/dynamic_capability_screen.dart, approvalCount, _approvals, _blockedWork, build, capability, _capabilityHint, _capabilityNeedsTracking (+59 more)
 
 ### Community 4 - "lib/features/dynamic/presentation/dynamic_capability_screen.dart"
 Cohesion: 0.03
@@ -153,15 +152,15 @@ Nodes (30): accuracy, accuracyM, acknowledge, active, currentLocation, CurrentLo
 
 ### Community 11 - "StatelessWidget"
 Cohesion: 0.04
-Nodes (57): _CapabilityList, _CapabilityRow, _Header, _HomeTab, _LiveOverview, _NextCard, _QuickResponsibilityGrid, _QuietState (+49 more)
+Nodes (47): _CapabilityList, _CapabilityRow, _Header, _HomeTab, _LiveOverview, _NextCard, _QuickResponsibilityGrid, _QuietState (+39 more)
 
 ### Community 12 - "my_application.cc"
 Cohesion: 0.09
 Nodes (22): FlPluginRegistry, FlView, GApplication, gboolean, gchar, GObject, GtkApplication, fl_register_plugins() (+14 more)
 
 ### Community 13 - "auth_session.dart"
-Cohesion: 0.11
-Nodes (18): app_user.dart, accessToken, AuthSession, blockedActions, can, deviceRuntime, generatedAt, modules (+10 more)
+Cohesion: 0.06
+Nodes (30): app_user.dart, AppUser, department, designation, roles, accessToken, AuthSession, blockedActions (+22 more)
 
 ### Community 14 - "field_tracking_service.dart"
 Cohesion: 0.09
@@ -216,8 +215,8 @@ Cohesion: 0.12
 Nodes (16): Client, _buildSession, _cacheKey, _cacheSession, _client, _database, _decodeMap, _fetchBootstrap (+8 more)
 
 ### Community 27 - "StatefulWidget"
-Cohesion: 0.29
-Nodes (7): EmployeeDashboardScreen, DynamicCapabilityScreen, EmployeeDashboardScreen, EmployeeDashboardScreen, DynamicCapabilityScreen, KernelResponsibilityScreen, StatefulWidget
+Cohesion: 0.18
+Nodes (11): EmployeeDashboardScreen, DynamicCapabilityScreen, EmployeeDashboardScreen, AllowancesScreen, _AllowancesScreenState, _ClaimSheet, _ClaimSheetState, EmployeeDashboardScreen (+3 more)
 
 ### Community 28 - "MotionGate"
 Cohesion: 0.24
@@ -249,7 +248,7 @@ Nodes (11): LocalSyncGateway, changes, clean, conflictCount, current, isSyncing,
 
 ### Community 35 - "mobile_capability.dart"
 Cohesion: 0.11
-Nodes (18): int get, config, definition, _extractKernel, fromJson, icon, id, kernelAvailable (+10 more)
+Nodes (17): int get, config, definition, _extractKernel, fromJson, icon, id, kernelAvailable (+9 more)
 
 ### Community 36 - "mock_auth_gateway.dart"
 Cohesion: 0.20
@@ -347,16 +346,8 @@ Nodes (10): _EmployeeDashboardScreenState, _DynamicCapabilityScreenState, _Emplo
 Cohesion: 0.33
 Nodes (5): IBinder, Intent, LocationListener, LocationManager, Service
 
-### Community 70 - "List"
-Cohesion: 0.29
-Nodes (6): AppUser, department, designation, roles, List, String id, employeeCode, name,
-
-### Community 71 - "sync_transport.dart"
-Cohesion: 0.40
-Nodes (5): acknowledgedEventIds, push, SyncPushResult, SyncTransport, UnconfiguredSyncTransport
-
 ## Knowledge Gaps
-- **1021 isolated node(s):** `flutter_controller_`, `project_`, `x`, `y`, `height` (+1016 more)
+- **1021 isolated node(s):** `controller`, `tracker`, `_readyWork`, `_blockedWork`, `_approvals` (+1016 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **6 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -364,16 +355,16 @@ Nodes (5): acknowledgedEventIds, push, SyncPushResult, SyncTransport, Unconfigur
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `AppSessionController` connect `AppSessionController` to `allowances_screen.dart`, `lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `lib/features/dynamic/presentation/dynamic_capability_screen.dart`, `attendance_screen.dart`, `brixta_app.dart`, `app_session_controller.dart`, `login_screen.dart`, `runtime_connection_banner.dart`, `main.dart`, `kernel_responsibility_screen.dart`, `employee_profile_tab.dart`, `cms-sovereignty-20260825-231628/lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `cms-sovereignty-finish-20260825-231953/employee_dashboard_screen.dart`, `cms-sovereignty-20260825-231628/lib/features/dynamic/presentation/dynamic_capability_screen.dart`?**
-  _High betweenness centrality (0.042) - this node is a cross-community bridge._
+  _High betweenness centrality (0.039) - this node is a cross-community bridge._
 - **Why does `TrackingController` connect `AppSessionController` to `allowances_screen.dart`, `lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `attendance_screen.dart`, `tracking_controller.dart`, `tracking_screen.dart`, `kernel_responsibility_screen.dart`, `employee_profile_tab.dart`, `cms-sovereignty-20260825-231628/lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `cms-sovereignty-finish-20260825-231953/employee_dashboard_screen.dart`?**
-  _High betweenness centrality (0.013) - this node is a cross-community bridge._
+  _High betweenness centrality (0.014) - this node is a cross-community bridge._
 - **Why does `MobileCapability` connect `mobile_capability.dart` to `lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `lib/features/dynamic/presentation/dynamic_capability_screen.dart`, `kernel_responsibility_screen.dart`, `cms-sovereignty-20260825-231628/lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `cms-sovereignty-finish-20260825-231953/employee_dashboard_screen.dart`, `cms-sovereignty-20260825-231628/lib/features/dynamic/presentation/dynamic_capability_screen.dart`?**
-  _High betweenness centrality (0.010) - this node is a cross-community bridge._
-- **What connects `flutter_controller_`, `project_`, `x` to the rest of the system?**
+  _High betweenness centrality (0.006) - this node is a cross-community bridge._
+- **What connects `controller`, `tracker`, `_readyWork` to the rest of the system?**
   _1021 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Win32Window` be split into smaller, more focused modules?**
   _Cohesion score 0.05311676909569798 - nodes in this community are weakly interconnected._
 - **Should `allowances_screen.dart` be split into smaller, more focused modules?**
-  _Cohesion score 0.03173076923076923 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.027777777777777776 - nodes in this community are weakly interconnected._
 - **Should `lib/features/dashboard/presentation/employee_dashboard_screen.dart` be split into smaller, more focused modules?**
-  _Cohesion score 0.028985507246376812 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.029411764705882353 - nodes in this community are weakly interconnected._

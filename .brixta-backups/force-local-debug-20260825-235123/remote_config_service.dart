@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
 
 import '../config/api_config.dart';
@@ -16,17 +15,6 @@ abstract final class RemoteConfigService {
   static const _baseUrlKey = 'SALESAPP_API_BASE_URL';
 
   static Future<void> initialize() async {
-    // Development builds must talk to the backend selected by ApiConfig
-    // (Android emulator default: http://10.0.2.2:8000).
-    //
-    // Firebase Remote Config is production infrastructure and must not
-    // silently redirect a local emulator to another backend while debugging
-    // CMS/runtime propagation.
-    if (kDebugMode) {
-      debugPrint('BRIXTA DEBUG API: ${ApiConfig.baseUrl}');
-      return;
-    }
-
     final remoteConfig = FirebaseRemoteConfig.instance;
 
     try {
@@ -42,7 +30,9 @@ abstract final class RemoteConfigService {
         ),
       );
 
-      await remoteConfig.setDefaults({_baseUrlKey: ApiConfig.baseUrl});
+      await remoteConfig.setDefaults({
+        _baseUrlKey: ApiConfig.baseUrl,
+      });
 
       await remoteConfig.fetchAndActivate();
     } catch (_) {

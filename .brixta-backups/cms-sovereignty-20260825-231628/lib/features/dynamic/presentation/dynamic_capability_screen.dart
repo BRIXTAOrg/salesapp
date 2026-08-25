@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -50,7 +49,6 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
   List<Map<String, dynamic>> _records = const [];
   bool _loading = true;
   String? _submittingActionKey;
-  String _lastWorkspaceRevision = '';
 
   /// Resolve the live Responsibility from the refreshed workspace so an
   /// administrator can publish a changed app definition without requiring an
@@ -104,9 +102,9 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
   }
 
   List<Map<String, dynamic>> get visibleFields => fields.where((field) {
-    final config = _config(field);
-    return config['hidden'] != true;
-  }).toList();
+        final config = _config(field);
+        return config['hidden'] != true;
+      }).toList();
 
   String? get latestStatus =>
       _records.isEmpty ? null : _records.first['status']?.toString();
@@ -114,45 +112,19 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
   @override
   void initState() {
     super.initState();
-
-    _lastWorkspaceRevision = widget.controller.workspaceRevision;
-
-    widget.controller.addListener(_onWorkspaceChanged);
-
     _loadRecords();
   }
 
   @override
   void dispose() {
-    widget.controller.removeListener(_onWorkspaceChanged);
-
     for (final controller in _controllers.values) {
       controller.dispose();
     }
-
     super.dispose();
   }
 
   TextEditingController _controllerFor(String key) =>
       _controllers.putIfAbsent(key, TextEditingController.new);
-
-  void _onWorkspaceChanged() {
-    if (!mounted) return;
-
-    final revision = widget.controller.workspaceRevision;
-
-    if (revision.isEmpty || revision == _lastWorkspaceRevision) {
-      return;
-    }
-
-    _lastWorkspaceRevision = revision;
-
-    // _capability resolves against the refreshed session.modules,
-    // so the currently-open screen immediately sees the CMS definition.
-    setState(() {});
-
-    unawaited(_loadRecords());
-  }
 
   Future<void> _loadRecords() async {
     final session = widget.controller.session;
@@ -171,9 +143,9 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
         final raw = body['records'];
         final records = raw is List
             ? raw
-                  .whereType<Map>()
-                  .map((item) => Map<String, dynamic>.from(item))
-                  .toList()
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList()
             : <Map<String, dynamic>>[];
 
         await AppDatabase.instance.putCache(_cacheKey, records);
@@ -239,9 +211,7 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
 
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        if (required) {
-          _message('Location permission is required for this action.');
-        }
+        if (required) _message('Location permission is required for this action.');
         return null;
       }
 
@@ -329,8 +299,7 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
       for (final field in selectedFields) {
         final key = _fieldKey(field);
         final type = _fieldType(field);
-        final required =
-            requiredKeys.contains(key) || field['required'] == true;
+        final required = requiredKeys.contains(key) || field['required'] == true;
         final value = _valueForField(field);
 
         if (_isEmptyValue(value)) {
@@ -370,7 +339,9 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
       final operation = (action['operation'] ?? 'create').toString();
       final status = (action['status'] ?? 'submitted').toString();
       final now = DateTime.now().toUtc().toIso8601String();
-      final api = FieldApi(accessToken: widget.controller.session!.accessToken);
+      final api = FieldApi(
+        accessToken: widget.controller.session!.accessToken,
+      );
 
       String method;
       String path;
@@ -393,7 +364,8 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
         };
       } else {
         method = 'POST';
-        path = '/api/salesApp/records/${Uri.encodeComponent(_capability.key)}';
+        path =
+            '/api/salesApp/records/${Uri.encodeComponent(_capability.key)}';
         body = {
           'clientMutationId': AppDatabase.instance.newId(),
           'clientCreatedAt': now,
@@ -592,7 +564,9 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
 
   void _message(String text) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text)),
+    );
   }
 
   @override
@@ -640,8 +614,7 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
                   action: visibleActions[i],
                   fields: fields,
                   submitting:
-                      _submittingActionKey ==
-                      visibleActions[i]['key']?.toString(),
+                      _submittingActionKey == visibleActions[i]['key']?.toString(),
                   buildField: _buildField,
                   onRun: () => _runAction(visibleActions[i]),
                 ),
@@ -651,7 +624,8 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
               const SizedBox(height: 40),
               const _SectionLabel('RECENT'),
               const SizedBox(height: 12),
-              for (final record in _records.take(5)) _RecordRow(record: record),
+              for (final record in _records.take(5))
+                _RecordRow(record: record),
             ],
           ],
         ),
@@ -693,10 +667,7 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
           ),
           subtitle: helpText == null ? null : Text(helpText),
           controlAffinity: ListTileControlAffinity.leading,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 8,
-            vertical: 4,
-          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         ),
       );
     }
@@ -714,8 +685,10 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
             hint: Text(config['placeholder']?.toString() ?? 'Choose one'),
             items: options
                 .map(
-                  (option) =>
-                      DropdownMenuItem(value: option, child: Text(option)),
+                  (option) => DropdownMenuItem(
+                    value: option,
+                    child: Text(option),
+                  ),
                 )
                 .toList(),
             onChanged: (value) {
@@ -794,12 +767,11 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
         TextField(
           controller: _controllerFor(key),
           maxLines: isLongText ? 4 : 1,
-          keyboardType:
-              type == 'number' || type == 'currency' || type == 'integer'
+          keyboardType: type == 'number' || type == 'currency' || type == 'integer'
               ? const TextInputType.numberWithOptions(decimal: true)
               : type == 'date' || type == 'datetime'
-              ? TextInputType.datetime
-              : TextInputType.text,
+                  ? TextInputType.datetime
+                  : TextInputType.text,
           decoration: InputDecoration(
             hintText: config['placeholder']?.toString() ?? 'Enter $label',
           ),
@@ -832,9 +804,8 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
       type == 'camera' ||
       type == 'upload_photo';
 
-  static List<String> _stringList(dynamic value) => value is List
-      ? value.map((item) => item.toString()).toList()
-      : <String>[];
+  static List<String> _stringList(dynamic value) =>
+      value is List ? value.map((item) => item.toString()).toList() : <String>[];
 }
 
 class _ActionCard extends StatelessWidget {
@@ -892,11 +863,7 @@ class _ActionCard extends StatelessWidget {
           if (hasAutoLocation) ...[
             Row(
               children: [
-                const Icon(
-                  Icons.location_on_outlined,
-                  size: 16,
-                  color: AppDesign.muted,
-                ),
+                const Icon(Icons.location_on_outlined, size: 16, color: AppDesign.muted),
                 const SizedBox(width: 8),
                 Text(
                   'Current location will be attached automatically',
@@ -925,10 +892,13 @@ class _ActionCard extends StatelessWidget {
   }
 
   static Widget _spinner() => const SizedBox(
-    width: 18,
-    height: 18,
-    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-  );
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: Colors.white,
+        ),
+      );
 }
 
 class _ResponsibilityIntro extends StatelessWidget {
@@ -1107,11 +1077,7 @@ class _PhotoField extends StatelessWidget {
                   : const Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
-                          Icons.camera_alt_outlined,
-                          size: 28,
-                          color: AppDesign.ink,
-                        ),
+                        Icon(Icons.camera_alt_outlined, size: 28, color: AppDesign.ink),
                         SizedBox(height: 8),
                         Text(
                           'Take photo',

@@ -3,12 +3,8 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 
 import '../design/app_design.dart';
 import '../session/app_session_controller.dart';
+import 'editorial_backdrop.dart';
 
-/// Prominent, reusable ONLINE/OFFLINE surface.
-///
-/// This is intentionally not a tiny status icon. Field users should always
-/// understand whether changes are going directly to the company or are being
-/// held safely on the phone.
 class RuntimeConnectionBanner extends StatelessWidget {
   const RuntimeConnectionBanner({
     super.key,
@@ -17,107 +13,136 @@ class RuntimeConnectionBanner extends StatelessWidget {
   });
 
   final AppSessionController controller;
+
   final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
       listenable: controller,
+
       builder: (context, _) {
         final online = controller.isOnline;
+
         final syncing = controller.isActivelySyncing;
+
         final pending = controller.pendingChanges;
 
-        final tone = online ? AppDesign.green : AppDesign.amber;
-        final background = online ? AppDesign.softGreen : AppDesign.softAmber;
+        final tone = online ? AppDesign.primary : AppDesign.amber;
+
         final icon = online ? LucideIcons.wifi : LucideIcons.wifi_off;
 
         final title = syncing
-            ? 'SYNCING WITH COMPANY'
+            ? 'SYNCING / COMPANY'
             : online
-                ? 'ONLINE · LIVE WITH COMPANY'
-                : 'OFFLINE · WORKING FROM THIS PHONE';
+            ? 'LIVE / COMPANY'
+            : 'OFFLINE / DEVICE';
 
         final detail = syncing
             ? pending > 0
-                ? 'Sending $pending saved change${pending == 1 ? '' : 's'} and checking for company updates.'
-                : 'Checking for newly published work and workflow changes.'
+                  ? 'Transmitting $pending queued change${pending == 1 ? '' : 's'} and resolving workspace state.'
+                  : 'Resolving the latest published workspace.'
             : online
-                ? pending > 0
-                    ? '$pending change${pending == 1 ? '' : 's'} waiting to sync.'
-                    : controller.lastSyncLabel
-                : pending > 0
-                    ? '$pending change${pending == 1 ? '' : 's'} safe on this phone. They will send automatically.'
-                    : 'You can keep working. New entries stay on this phone until the connection returns.';
+            ? pending > 0
+                  ? '$pending change${pending == 1 ? '' : 's'} queued for transmission.'
+                  : controller.lastSyncLabel
+            : pending > 0
+            ? '$pending change${pending == 1 ? '' : 's'} secured locally. Automatic transmission resumes when online.'
+            : 'Work continues locally. New records remain secured on this device.';
 
         return AnimatedContainer(
-          duration: const Duration(milliseconds: 220),
-          padding: EdgeInsets.symmetric(
-            horizontal: compact ? 12 : 16,
-            vertical: compact ? 10 : 14,
-          ),
+          duration: AppDesign.editorialDuration,
+
+          curve: AppDesign.editorialCurve,
+
           decoration: BoxDecoration(
-            color: background,
+            color: AppDesign.surface.withValues(alpha: .82),
+            border: Border.all(color: AppDesign.line, width: 1),
             borderRadius: BorderRadius.circular(AppDesign.radius),
-            border: Border.all(color: tone.withValues(alpha: .28)),
           ),
-          child: Row(
+
+          child: Column(
             children: [
-              Container(
-                width: compact ? 34 : 40,
-                height: compact ? 34 : 40,
-                decoration: BoxDecoration(
-                  color: AppDesign.surface,
-                  borderRadius: BorderRadius.circular(AppDesign.controlRadius),
-                  border: Border.all(color: tone.withValues(alpha: .24)),
+              Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: compact ? 12 : 16,
+                  vertical: compact ? 10 : 14,
                 ),
-                alignment: Alignment.center,
-                child: syncing
-                    ? SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: tone,
-                        ),
-                      )
-                    : Icon(icon, size: 19, color: tone),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+
+                child: Row(
                   children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        color: tone,
-                        fontSize: compact ? 11 : 12,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: .35,
+                    Container(
+                      width: compact ? 32 : 38,
+                      height: compact ? 32 : 38,
+                      decoration: BoxDecoration(
+                        color: Colors.transparent,
+                        border: Border.all(color: AppDesign.line),
+                        borderRadius: BorderRadius.circular(AppDesign.radius),
+                      ),
+                      alignment: Alignment.center,
+                      child: syncing
+                          ? SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.5,
+                                color: tone,
+                              ),
+                            )
+                          : Icon(icon, size: 17, color: tone),
+                    ),
+
+                    const SizedBox(width: 14),
+
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(width: 6, height: 6, color: tone),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  title,
+                                  style: AppDesign.mono(
+                                    size: 9,
+                                    color: tone,
+                                    weight: FontWeight.w600,
+                                    letterSpacing: 1.8,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+
+                          if (!compact) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              detail,
+                              style: AppDesign.sans(
+                                size: 12,
+                                color: AppDesign.muted,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                    if (!compact) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        detail,
-                        style: const TextStyle(
-                          color: AppDesign.muted,
-                          fontSize: 12.5,
-                          height: 1.35,
-                        ),
+
+                    if (online && !syncing) ...[
+                      const SizedBox(width: 8),
+                      TextButton(
+                        onPressed: controller.syncNow,
+                        child: const Text('SYNC'),
                       ),
                     ],
                   ],
                 ),
               ),
-              if (online && !syncing) ...[
-                const SizedBox(width: 8),
-                TextButton(
-                  onPressed: controller.syncNow,
-                  child: const Text('Sync'),
-                ),
-              ],
+
+              if (syncing) const EditorialScanLine(),
             ],
           ),
         );

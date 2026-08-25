@@ -17,7 +17,6 @@ dependencies:
   geolocator: ^14.0.3
   image_picker: ^1.2.3
   flutter_lucide: ^1.11.0
-  google_fonts: ^6.2.1
   flutter_map: ^8.3.1
   latlong2: ^0.10.1
   firebase_core: ^4.13.0

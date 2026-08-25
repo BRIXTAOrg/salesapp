@@ -20,7 +20,10 @@ import '../../tracking/presentation/tracking_controller.dart';
 import 'employee_profile_tab.dart';
 
 class EmployeeDashboardScreen extends StatefulWidget {
-  const EmployeeDashboardScreen({super.key, required this.controller});
+  const EmployeeDashboardScreen({
+    super.key,
+    required this.controller,
+  });
 
   final AppSessionController controller;
 
@@ -45,7 +48,9 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
   List<MobileCapability> get _modules =>
       widget.controller.session?.modules ?? const [];
 
-  bool get _needsTravelCapability => _modules.any(_capabilityNeedsTracking);
+
+  bool get _needsTravelCapability =>
+      _modules.any(_capabilityNeedsTracking);
 
   @override
   void initState() {
@@ -91,12 +96,13 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
 
   Future<void> _refreshAll({bool refreshWorkspace = false}) async {
     if (refreshWorkspace && widget.controller.isOnline) {
-      await widget.controller.checkWorkspaceRevision(
-        forceRefreshIfUnknown: true,
-      );
+      await widget.controller.checkWorkspaceRevision(forceRefreshIfUnknown: true);
     }
 
-    await Future.wait([_loadWork(), _loadWorkSession()]);
+    await Future.wait([
+      _loadWork(),
+      _loadWorkSession(),
+    ]);
 
     await _reconcileTracking();
   }
@@ -117,9 +123,7 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
 
     _reconciling = true;
     try {
-      final local = await AppDatabase.instance.todayWorkSession(
-        session.user.id,
-      );
+      final local = await AppDatabase.instance.todayWorkSession(session.user.id);
       if (mounted) setState(() => _workSession = local);
 
       final shouldRun = local?['status'] == 'active' && _needsTravelCapability;
@@ -173,18 +177,14 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
     } catch (_) {
       // Compatibility fallback while backend rollout finishes.
       try {
-        final response = await FieldApi(
-          accessToken: session.accessToken,
-        ).getJson('/api/salesApp/work-items');
+        final response = await FieldApi(accessToken: session.accessToken)
+            .getJson('/api/salesApp/work-items');
         final raw = response['workItems'];
         if (raw is List && mounted) {
           setState(() {
             _readyWork = _mapList(raw)
-                .where(
-                  (item) =>
-                      item['status'] != 'completed' &&
-                      item['status'] != 'cancelled',
-                )
+                .where((item) =>
+                    item['status'] != 'completed' && item['status'] != 'cancelled')
                 .toList();
           });
         }
@@ -199,9 +199,7 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
   Future<void> _loadCachedWork() async {
     final session = widget.controller.session;
     if (session == null) return;
-    final cached = await AppDatabase.instance.getCache(
-      'my_work:${_workScope(session)}',
-    );
+    final cached = await AppDatabase.instance.getCache('my_work:${_workScope(session)}');
     if (cached is Map && mounted) {
       final map = Map<String, dynamic>.from(cached);
       setState(() {
@@ -218,17 +216,17 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
       NavigationDestination(
         icon: Icon(AppIcons.home),
         selectedIcon: Icon(AppIcons.home, color: AppDesign.green),
-        label: 'HOME',
+        label: 'Home',
       ),
       NavigationDestination(
         icon: Icon(AppIcons.work),
         selectedIcon: Icon(AppIcons.work, color: AppDesign.green),
-        label: 'WORK',
+        label: 'Work',
       ),
       NavigationDestination(
         icon: Icon(AppIcons.profile),
         selectedIcon: Icon(AppIcons.profile, color: AppDesign.green),
-        label: 'ME',
+        label: 'Me',
       ),
     ];
 
@@ -286,6 +284,8 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
     String? workflowInstanceId,
     String? recordId,
   }) {
+    late final Widget screen;
+
     // CMS IS AUTHORITATIVE FOR BUSINESS UI.
     //
     // Attendance / TA-DA / Tracking / Visit / Inspection etc. are not
@@ -320,11 +320,9 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
   }
 
   void _openReadyWork(Map<String, dynamic> item) {
-    final capabilityId =
-        item['capabilityId']?.toString() ??
+    final capabilityId = item['capabilityId']?.toString() ??
         _map(item['responsibility'])['id']?.toString();
-    final responsibilityKey =
-        _map(item['responsibility'])['key']?.toString() ??
+    final responsibilityKey = _map(item['responsibility'])['key']?.toString() ??
         _responsibilityKeyFromAction(item['actionKey']?.toString());
 
     MobileCapability? capability;
@@ -427,16 +425,14 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () =>
-                              Navigator.pop(sheetContext, 'rejected'),
+                          onPressed: () => Navigator.pop(sheetContext, 'rejected'),
                           child: const Text('Reject'),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: FilledButton(
-                          onPressed: () =>
-                              Navigator.pop(sheetContext, 'approved'),
+                          onPressed: () => Navigator.pop(sheetContext, 'approved'),
                           child: const Text('Approve'),
                         ),
                       ),
@@ -455,26 +451,32 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
         accessToken: widget.controller.session!.accessToken,
       ).postJson(
         '/api/salesApp/workflow/approvals/${Uri.encodeComponent(approvalId)}/decision',
-        {'decision': decision, 'note': noteController.text.trim()},
+        {
+          'decision': decision,
+          'note': noteController.text.trim(),
+        },
       );
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(decision == 'approved' ? 'Approved.' : 'Rejected.'),
+          content: Text(
+            decision == 'approved' ? 'Approved.' : 'Rejected.',
+          ),
         ),
       );
       await widget.controller.syncNow();
       await _loadWork();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.toString())));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
     } finally {
       noteController.dispose();
     }
   }
+
 }
 
 class _HomeTab extends StatelessWidget {
@@ -533,10 +535,7 @@ class _HomeTab extends StatelessWidget {
               children: [
                 const Expanded(child: _SectionLabel('NEXT FOR YOU')),
                 if (readyWork.isNotEmpty)
-                  TextButton(
-                    onPressed: onOpenWork,
-                    child: const Text('View all'),
-                  ),
+                  TextButton(onPressed: onOpenWork, child: const Text('View all')),
               ],
             ),
             const SizedBox(height: 12),
@@ -544,9 +543,7 @@ class _HomeTab extends StatelessWidget {
               const LinearProgressIndicator(minHeight: 2)
             else if (approvals.isNotEmpty)
               _NextCard(
-                title:
-                    approvals.first['title']?.toString() ??
-                    'Approval needs your attention',
+                title: approvals.first['title']?.toString() ?? 'Approval needs your attention',
                 description: 'Open Work to review and decide.',
                 icon: LucideIcons.shield_check,
                 tone: AppDesign.green,
@@ -660,9 +657,7 @@ class _WorkTab extends StatelessWidget {
                   child: _WorkNotice(
                     icon: LucideIcons.lock_keyhole,
                     title: item['title']?.toString() ?? _workActionLabel(item),
-                    subtitle:
-                        item['reason']?.toString() ??
-                        'Waiting for an earlier step',
+                    subtitle: item['reason']?.toString() ?? 'Waiting for an earlier step',
                     tone: AppDesign.muted,
                   ),
                 ),
@@ -675,11 +670,7 @@ class _WorkTab extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({
-    required this.name,
-    required this.designation,
-    required this.refreshing,
-  });
+  const _Header({required this.name, required this.designation, required this.refreshing});
   final String name;
   final String designation;
   final bool refreshing;
@@ -703,10 +694,7 @@ class _Header extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
-                'Good ${_dayPart()}, $name',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
+              Text('Good ${_dayPart()}, $name', style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 4),
               Text(designation, style: Theme.of(context).textTheme.bodyMedium),
             ],
@@ -715,11 +703,7 @@ class _Header extends StatelessWidget {
         if (refreshing)
           const Padding(
             padding: EdgeInsets.only(top: 8),
-            child: SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
+            child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
           ),
       ],
     );
@@ -733,29 +717,8 @@ class _Header extends StatelessWidget {
   }
 
   static String _dateLabel() {
-    const weekdays = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday',
-    ];
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
+    const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     final now = DateTime.now();
     return '${weekdays[now.weekday - 1]}, ${now.day} ${months[now.month - 1]}';
   }
@@ -788,24 +751,15 @@ class _LiveOverview extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Right now',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-          ),
+          const Text('Right now', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
           const SizedBox(height: 14),
           Row(
             children: [
-              Expanded(
-                child: _Metric(value: '$readyCount', label: 'Ready'),
-              ),
+              Expanded(child: _Metric(value: '$readyCount', label: 'Ready')),
               const SizedBox(width: 10),
-              Expanded(
-                child: _Metric(value: '$approvalCount', label: 'Approvals'),
-              ),
+              Expanded(child: _Metric(value: '$approvalCount', label: 'Approvals')),
               const SizedBox(width: 10),
-              Expanded(
-                child: _Metric(value: '$responsibilityCount', label: 'Tools'),
-              ),
+              Expanded(child: _Metric(value: '$responsibilityCount', label: 'Tools')),
             ],
           ),
           if (sessionStatus == 'active' || tracker.active) ...[
@@ -827,10 +781,7 @@ class _LiveOverview extends StatelessWidget {
                         tracker.active
                             ? 'Field session active · ${tracker.distanceKm.toStringAsFixed(1)} km recorded'
                             : 'Work session active',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
                       ),
                     ),
                   ),
@@ -858,23 +809,9 @@ class _Metric extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: AppDesign.greenDark,
-            ),
-          ),
+          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppDesign.greenDark)),
           const SizedBox(height: 3),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: AppDesign.muted,
-            ),
-          ),
+          Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppDesign.muted)),
         ],
       ),
     );
@@ -909,28 +846,12 @@ class _QuickResponsibilityGrid extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          AppIcons.forCapability(module),
-                          color: AppDesign.green,
-                          size: 21,
-                        ),
+                        Icon(AppIcons.forCapability(module), color: AppDesign.green, size: 21),
                         const SizedBox(height: 12),
-                        Text(
-                          module.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(fontWeight: FontWeight.w800),
-                        ),
+                        Text(module.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
                         if (module.kernelAvailable) ...[
                           const SizedBox(height: 6),
-                          Text(
-                            'Live v${module.manifestVersion}',
-                            style: const TextStyle(
-                              color: AppDesign.green,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                          Text('Live v${module.manifestVersion}', style: const TextStyle(color: AppDesign.green, fontSize: 10, fontWeight: FontWeight.w700)),
                         ],
                       ],
                     ),
@@ -960,10 +881,7 @@ class _CapabilityList extends StatelessWidget {
       child: Column(
         children: [
           for (var i = 0; i < modules.length; i++) ...[
-            _CapabilityRow(
-              capability: modules[i],
-              onTap: () => onTap(modules[i]),
-            ),
+            _CapabilityRow(capability: modules[i], onTap: () => onTap(modules[i])),
             if (i != modules.length - 1) const Divider(indent: 56),
           ],
         ],
@@ -991,18 +909,14 @@ class _CapabilityRow extends StatelessWidget {
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: capability.kernelAvailable
-                      ? AppDesign.softGreen
-                      : AppDesign.softGray,
+                  color: capability.kernelAvailable ? AppDesign.softGreen : AppDesign.softGray,
                   borderRadius: BorderRadius.circular(AppDesign.controlRadius),
                 ),
                 alignment: Alignment.center,
                 child: Icon(
                   AppIcons.forCapability(capability),
                   size: 19,
-                  color: capability.kernelAvailable
-                      ? AppDesign.green
-                      : AppDesign.ink,
+                  color: capability.kernelAvailable ? AppDesign.green : AppDesign.ink,
                 ),
               ),
               const SizedBox(width: 13),
@@ -1010,22 +924,13 @@ class _CapabilityRow extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      capability.title,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+                    Text(capability.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 4),
                     Text(
                       _capabilityHint(capability),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12.5,
-                        color: AppDesign.muted,
-                      ),
+                      style: const TextStyle(fontSize: 12.5, color: AppDesign.muted),
                     ),
                   ],
                 ),
@@ -1033,21 +938,14 @@ class _CapabilityRow extends StatelessWidget {
               if (capability.kernelAvailable)
                 Container(
                   margin: const EdgeInsets.only(right: 8),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 4,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
                   decoration: BoxDecoration(
                     color: AppDesign.softGreen,
-                    borderRadius: BorderRadius.circular(AppDesign.radius),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
                     'v${capability.manifestVersion}',
-                    style: const TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w800,
-                      color: AppDesign.greenDark,
-                    ),
+                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppDesign.greenDark),
                   ),
                 ),
               Icon(AppIcons.chevronRight, size: 18, color: AppDesign.muted),
@@ -1068,10 +966,7 @@ class _NextCard extends StatelessWidget {
     required this.onTap,
   });
 
-  factory _NextCard.fromWork(
-    Map<String, dynamic> item, {
-    required VoidCallback onTap,
-  }) {
+  factory _NextCard.fromWork(Map<String, dynamic> item, {required VoidCallback onTap}) {
     return _NextCard(
       title: item['title']?.toString() ?? _workActionLabel(item),
       description: _workSubtitle(item),
@@ -1116,17 +1011,9 @@ class _NextCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      title,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
-                    ),
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
                     const SizedBox(height: 4),
-                    Text(
-                      description,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                    Text(description, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
                   ],
                 ),
               ),
@@ -1167,34 +1054,25 @@ class _WorkNotice extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(14),
           child: Row(
-            children: [
-              Icon(icon, size: 19, color: tone),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: AppDesign.muted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (onTap != null) ...[
-                const SizedBox(width: 8),
-                Icon(AppIcons.chevronRight, size: 17, color: AppDesign.muted),
+        children: [
+          Icon(icon, size: 19, color: tone),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 3),
+                Text(subtitle, style: const TextStyle(fontSize: 12, color: AppDesign.muted)),
               ],
-            ],
+            ),
           ),
+          if (onTap != null) ...[
+            const SizedBox(width: 8),
+            Icon(AppIcons.chevronRight, size: 17, color: AppDesign.muted),
+          ],
+        ],
+      ),
         ),
       ),
     );
@@ -1245,11 +1123,14 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-bool _capabilityNeedsTracking(MobileCapability capability) {
+bool _capabilityNeedsTracking(
+  MobileCapability capability,
+) {
   for (final field in capability.fields) {
-    final type = (field['inputType'] ?? field['type'] ?? '')
-        .toString()
-        .toLowerCase();
+    final type =
+        (field['inputType'] ?? field['type'] ?? '')
+            .toString()
+            .toLowerCase();
 
     if (type == 'location_route' ||
         type == 'route' ||
@@ -1270,38 +1151,42 @@ bool _kernelNeedsTracking(MobileCapability capability) {
     final capture = item['capture'];
     if (capture is Map) {
       final kind = capture['kind']?.toString().toLowerCase() ?? '';
-      if (kind.contains('route') ||
-          kind.contains('movement') ||
-          kind.contains('distance')) {
-        return true;
-      }
+      if (kind.contains('route') || kind.contains('movement') || kind.contains('distance')) return true;
     }
   }
   return false;
 }
 
 String _capabilityHint(MobileCapability capability) {
-  final description = capability.description?.trim() ?? '';
-
-  if (description.isNotEmpty) {
-    return description;
+  if (capability.description?.trim().isNotEmpty == true) return capability.description!.trim();
+  if (capability.kernelAvailable) return 'Company-built live Responsibility';
+  switch (capability.key) {
+    case 'attendance':
+      return 'Check in / check out';
+    case 'dealer_visit':
+      return 'Record a dealer visit';
+    case 'journey_plan':
+      return 'Today’s assigned route';
+    case 'leave':
+      return 'Request time off';
+    case 'live_location':
+      return 'View your field route';
+    case 'ta_da':
+      return 'Travel, expenses and claims';
+    default:
+      return 'Record work';
   }
-
-  return 'Company Responsibility';
 }
 
 String? _responsibilityKeyFromAction(String? actionKey) {
-  if (actionKey == null || !actionKey.startsWith('responsibility.')) {
-    return null;
-  }
+  if (actionKey == null || !actionKey.startsWith('responsibility.')) return null;
   final parts = actionKey.split('.');
   if (parts.length < 3) return null;
   return parts.sublist(1, parts.length - 1).join('.');
 }
 
 String _workActionLabel(Map<String, dynamic> item) {
-  return (item['label'] ?? item['actionKey'] ?? item['kind'] ?? 'Work item')
-      .toString();
+  return (item['label'] ?? item['actionKey'] ?? item['kind'] ?? 'Work item').toString();
 }
 
 String _workSubtitle(Map<String, dynamic> item) {
@@ -1312,15 +1197,12 @@ String _workSubtitle(Map<String, dynamic> item) {
       'Ready to continue';
 }
 
-String _workScope(dynamic session) =>
-    '${session.tenant.code}:${session.user.id}';
+String _workScope(dynamic session) => '${session.tenant.code}:${session.user.id}';
 
-Map<String, dynamic> _map(dynamic value) =>
-    value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+Map<String, dynamic> _map(dynamic value) => value is Map
+    ? Map<String, dynamic>.from(value)
+    : <String, dynamic>{};
 
 List<Map<String, dynamic>> _mapList(dynamic value) => value is List
-    ? value
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList()
+    ? value.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
     : <Map<String, dynamic>>[];

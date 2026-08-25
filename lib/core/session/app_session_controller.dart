@@ -20,8 +20,8 @@ class AppSessionController extends ChangeNotifier {
     required this.connectivityGateway,
     required this.syncGateway,
     this.session,
-  })  : connectivity = connectivityGateway.current,
-        syncSnapshot = syncGateway.current {
+  }) : connectivity = connectivityGateway.current,
+       syncSnapshot = syncGateway.current {
     _connectivitySub = connectivityGateway.changes.listen((value) {
       final wasOffline = isOffline;
       connectivity = value;
@@ -122,8 +122,8 @@ class AppSessionController extends ChangeNotifier {
   }) async {
     final effectiveTenant =
         (companyCode != null && companyCode.trim().isNotEmpty)
-            ? tenant.copyWith(code: companyCode.trim())
-            : tenant;
+        ? tenant.copyWith(code: companyCode.trim())
+        : tenant;
 
     session = await authGateway.login(
       LoginRequest(
@@ -185,20 +185,22 @@ class AppSessionController extends ChangeNotifier {
     _checkingRevision = true;
     try {
       final encoded = Uri.encodeQueryComponent(_workspaceRevision);
-      final body = await FieldApi(accessToken: current.accessToken).getJson(
-        '/api/salesApp/sync/state?since=$encoded',
-      );
+      final body = await FieldApi(
+        accessToken: current.accessToken,
+      ).getJson('/api/salesApp/sync/state?since=$encoded');
 
       final revision = body['revision']?.toString() ?? '';
-      final changed = body['changed'] == true ||
+      final changed =
+          body['changed'] == true ||
           (_workspaceRevision.isNotEmpty &&
               revision.isNotEmpty &&
               revision != _workspaceRevision);
 
       if (revision.isNotEmpty) _workspaceRevision = revision;
 
-      if (changed || (forceRefreshIfUnknown && current.workspaceRevision.isEmpty)) {
-        return refreshWorkspace();
+      if (changed ||
+          (forceRefreshIfUnknown && current.workspaceRevision.isEmpty)) {
+        return await refreshWorkspace();
       }
 
       _lastSyncAt = DateTime.now();
@@ -273,10 +275,12 @@ class AppSessionController extends ChangeNotifier {
     // Keep the existing specialized queues working during the Kernel rollout.
     // New CMS-built Responsibilities use OfflineRecordQueue; legacy Attendance
     // and Submission screens are still safe and sync automatically too.
-    final submissionRemaining =
-        await OfflineSubmissionQueue.flush(current.accessToken);
-    final attendanceRemaining =
-        await OfflineAttendanceQueue.flush(current.accessToken);
+    final submissionRemaining = await OfflineSubmissionQueue.flush(
+      current.accessToken,
+    );
+    final attendanceRemaining = await OfflineAttendanceQueue.flush(
+      current.accessToken,
+    );
     _compatQueuePending = submissionRemaining + attendanceRemaining;
   }
 
@@ -290,9 +294,7 @@ class AppSessionController extends ChangeNotifier {
   void _bindOfflineScope() {
     final current = session;
     if (current == null) return;
-    OfflineRecordQueue.useScope(
-      '${current.tenant.code}:${current.user.id}',
-    );
+    OfflineRecordQueue.useScope('${current.tenant.code}:${current.user.id}');
   }
 
   Future<void> _registerDevice() async {
@@ -319,10 +321,7 @@ class AppSessionController extends ChangeNotifier {
     try {
       await FieldApi(accessToken: current.accessToken).postJson(
         '/api/salesApp/devices/heartbeat',
-        {
-          ...AppDeviceIdentity.instance.registrationPayload,
-          'synced': synced,
-        },
+        {...AppDeviceIdentity.instance.registrationPayload, 'synced': synced},
       );
     } catch (_) {}
   }

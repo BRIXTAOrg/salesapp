@@ -218,17 +218,17 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
       NavigationDestination(
         icon: Icon(AppIcons.home),
         selectedIcon: Icon(AppIcons.home, color: AppDesign.green),
-        label: 'HOME',
+        label: 'Home',
       ),
       NavigationDestination(
         icon: Icon(AppIcons.work),
         selectedIcon: Icon(AppIcons.work, color: AppDesign.green),
-        label: 'WORK',
+        label: 'Work',
       ),
       NavigationDestination(
         icon: Icon(AppIcons.profile),
         selectedIcon: Icon(AppIcons.profile, color: AppDesign.green),
-        label: 'ME',
+        label: 'Me',
       ),
     ];
 
@@ -1039,7 +1039,7 @@ class _CapabilityRow extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: AppDesign.softGreen,
-                    borderRadius: BorderRadius.circular(AppDesign.radius),
+                    borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
                     'v${capability.manifestVersion}',

@@ -2284,127 +2284,6 @@
       "source_location": null
     },
     {
-      "id": "lib_features_allowances_presentation_allowances_screen_claimfact",
-      "label": "_ClaimFact",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "StatelessWidget",
-      "file_type": "code",
-      "norm_label": "_claimfact",
-      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_features_allowances_presentation_allowances_screen_claimreadiness",
-      "label": "_ClaimReadiness",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "StatelessWidget",
-      "file_type": "code",
-      "norm_label": "_claimreadiness",
-      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_features_allowances_presentation_allowances_screen_claimrow",
-      "label": "_ClaimRow",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "StatelessWidget",
-      "file_type": "code",
-      "norm_label": "_claimrow",
-      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_features_allowances_presentation_allowances_screen_lockedevidence",
-      "label": "_LockedEvidence",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "StatelessWidget",
-      "file_type": "code",
-      "norm_label": "_lockedevidence",
-      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_features_allowances_presentation_allowances_screen_moneyfield",
-      "label": "_MoneyField",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "StatelessWidget",
-      "file_type": "code",
-      "norm_label": "_moneyfield",
-      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_features_allowances_presentation_allowances_screen_noclaims",
-      "label": "_NoClaims",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "StatelessWidget",
-      "file_type": "code",
-      "norm_label": "_noclaims",
-      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_features_allowances_presentation_allowances_screen_routeevidencecard",
-      "label": "_RouteEvidenceCard",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "StatelessWidget",
-      "file_type": "code",
-      "norm_label": "_routeevidencecard",
-      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_features_allowances_presentation_allowances_screen_routemarker",
-      "label": "_RouteMarker",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "StatelessWidget",
-      "file_type": "code",
-      "norm_label": "_routemarker",
-      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_features_allowances_presentation_allowances_screen_sectionlabel",
-      "label": "_SectionLabel",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "StatelessWidget",
-      "file_type": "code",
-      "norm_label": "_sectionlabel",
-      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_features_allowances_presentation_allowances_screen_statustag",
-      "label": "_StatusTag",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "StatelessWidget",
-      "file_type": "code",
-      "norm_label": "_statustag",
-      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_features_allowances_presentation_allowances_screen_travelsummary",
-      "label": "_TravelSummary",
-      "_origin": "ast",
-      "community": 11,
-      "community_name": "StatelessWidget",
-      "file_type": "code",
-      "norm_label": "_travelsummary",
-      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
-      "source_location": null
-    },
-    {
       "id": "lib_features_dashboard_presentation_employee_dashboard_screen_capabilitylist",
       "label": "_CapabilityList",
       "_origin": "ast",
@@ -2478,6 +2357,17 @@
       "community_name": "StatelessWidget",
       "file_type": "code",
       "norm_label": "_nextcard",
+      "source_file": "lib/features/dashboard/presentation/employee_dashboard_screen.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_features_dashboard_presentation_employee_dashboard_screen_quickresponsibilitygrid",
+      "label": "_QuickResponsibilityGrid",
+      "_origin": "ast",
+      "community": 11,
+      "community_name": "StatelessWidget",
+      "file_type": "code",
+      "norm_label": "_quickresponsibilitygrid",
       "source_file": "lib/features/dashboard/presentation/employee_dashboard_screen.dart",
       "source_location": null
     },
@@ -2834,6 +2724,61 @@
       "source_location": null
     },
     {
+      "id": "lib_core_models_app_user",
+      "label": "app_user.dart",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "auth_session.dart",
+      "file_type": "code",
+      "norm_label": "app_user.dart",
+      "source_file": "lib/core/models/app_user.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_core_models_app_user_appuser",
+      "label": "AppUser",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "auth_session.dart",
+      "file_type": "code",
+      "norm_label": "appuser",
+      "source_file": "lib/core/models/app_user.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_core_models_app_user_department",
+      "label": "department",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "auth_session.dart",
+      "file_type": "code",
+      "norm_label": "department",
+      "source_file": "lib/core/models/app_user.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_core_models_app_user_designation",
+      "label": "designation",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "auth_session.dart",
+      "file_type": "code",
+      "norm_label": "designation",
+      "source_file": "lib/core/models/app_user.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_core_models_app_user_roles",
+      "label": "roles",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "auth_session.dart",
+      "file_type": "code",
+      "norm_label": "roles",
+      "source_file": "lib/core/models/app_user.dart",
+      "source_location": null
+    },
+    {
       "id": "lib_core_models_auth_session",
       "label": "auth_session.dart",
       "_origin": "ast",
@@ -3010,6 +2955,94 @@
       "source_location": null
     },
     {
+      "id": "lib_core_services_sync_sync_transport",
+      "label": "sync_transport.dart",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "auth_session.dart",
+      "file_type": "code",
+      "norm_label": "sync_transport.dart",
+      "source_file": "lib/core/services/sync/sync_transport.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_core_services_sync_sync_transport_acknowledgedeventids",
+      "label": "acknowledgedEventIds",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "auth_session.dart",
+      "file_type": "code",
+      "norm_label": "acknowledgedeventids",
+      "source_file": "lib/core/services/sync/sync_transport.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_core_services_sync_sync_transport_push",
+      "label": "push",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "auth_session.dart",
+      "file_type": "code",
+      "norm_label": "push",
+      "source_file": "lib/core/services/sync/sync_transport.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_core_services_sync_sync_transport_syncpushresult",
+      "label": "SyncPushResult",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "auth_session.dart",
+      "file_type": "code",
+      "norm_label": "syncpushresult",
+      "source_file": "lib/core/services/sync/sync_transport.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_core_services_sync_sync_transport_synctransport",
+      "label": "SyncTransport",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "auth_session.dart",
+      "file_type": "code",
+      "norm_label": "synctransport",
+      "source_file": "lib/core/services/sync/sync_transport.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_core_services_sync_sync_transport_unconfiguredsynctransport",
+      "label": "UnconfiguredSyncTransport",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "auth_session.dart",
+      "file_type": "code",
+      "norm_label": "unconfiguredsynctransport",
+      "source_file": "lib/core/services/sync/sync_transport.dart",
+      "source_location": null
+    },
+    {
+      "id": "list",
+      "label": "List",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "auth_session.dart",
+      "file_type": "code",
+      "norm_label": "list",
+      "source_file": null,
+      "source_location": null
+    },
+    {
+      "id": "map",
+      "label": "Map",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "auth_session.dart",
+      "file_type": "code",
+      "norm_label": "map",
+      "source_file": null,
+      "source_location": null
+    },
+    {
       "id": "mobile_capability_dart",
       "label": "mobile_capability.dart",
       "_origin": "ast",
@@ -3028,6 +3061,17 @@
       "community_name": "auth_session.dart",
       "file_type": "code",
       "norm_label": "set",
+      "source_file": null,
+      "source_location": null
+    },
+    {
+      "id": "string_id_employeecode_name",
+      "label": "String id, employeeCode, name,",
+      "_origin": "ast",
+      "community": 13,
+      "community_name": "auth_session.dart",
+      "file_type": "code",
+      "norm_label": "string id, employeecode, name,",
       "source_file": null,
       "source_location": null
     },
@@ -4704,28 +4748,6 @@
       "source_location": null
     },
     {
-      "id": "lib_features_allowances_presentation_allowances_screen_allowancesscreen",
-      "label": "AllowancesScreen",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "allowances_screen.dart",
-      "file_type": "code",
-      "norm_label": "allowancesscreen",
-      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_features_allowances_presentation_allowances_screen_allowancesscreenstate",
-      "label": "_AllowancesScreenState",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "allowances_screen.dart",
-      "file_type": "code",
-      "norm_label": "_allowancesscreenstate",
-      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
-      "source_location": null
-    },
-    {
       "id": "lib_features_allowances_presentation_allowances_screen_border",
       "label": "border",
       "_origin": "ast",
@@ -4781,6 +4803,39 @@
       "source_location": null
     },
     {
+      "id": "lib_features_allowances_presentation_allowances_screen_claimfact",
+      "label": "_ClaimFact",
+      "_origin": "ast",
+      "community": 2,
+      "community_name": "allowances_screen.dart",
+      "file_type": "code",
+      "norm_label": "_claimfact",
+      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_features_allowances_presentation_allowances_screen_claimreadiness",
+      "label": "_ClaimReadiness",
+      "_origin": "ast",
+      "community": 2,
+      "community_name": "allowances_screen.dart",
+      "file_type": "code",
+      "norm_label": "_claimreadiness",
+      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_features_allowances_presentation_allowances_screen_claimrow",
+      "label": "_ClaimRow",
+      "_origin": "ast",
+      "community": 2,
+      "community_name": "allowances_screen.dart",
+      "file_type": "code",
+      "norm_label": "_claimrow",
+      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
+      "source_location": null
+    },
+    {
       "id": "lib_features_allowances_presentation_allowances_screen_claims",
       "label": "_claims",
       "_origin": "ast",
@@ -4788,28 +4843,6 @@
       "community_name": "allowances_screen.dart",
       "file_type": "code",
       "norm_label": "_claims",
-      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_features_allowances_presentation_allowances_screen_claimsheet",
-      "label": "_ClaimSheet",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "allowances_screen.dart",
-      "file_type": "code",
-      "norm_label": "_claimsheet",
-      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_features_allowances_presentation_allowances_screen_claimsheetstate",
-      "label": "_ClaimSheetState",
-      "_origin": "ast",
-      "community": 2,
-      "community_name": "allowances_screen.dart",
-      "file_type": "code",
-      "norm_label": "_claimsheetstate",
       "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
       "source_location": null
     },
@@ -5012,6 +5045,17 @@
       "source_location": null
     },
     {
+      "id": "lib_features_allowances_presentation_allowances_screen_lockedevidence",
+      "label": "_LockedEvidence",
+      "_origin": "ast",
+      "community": 2,
+      "community_name": "allowances_screen.dart",
+      "file_type": "code",
+      "norm_label": "_lockedevidence",
+      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
+      "source_location": null
+    },
+    {
       "id": "lib_features_allowances_presentation_allowances_screen_lodging",
       "label": "lodging",
       "_origin": "ast",
@@ -5041,6 +5085,28 @@
       "community_name": "allowances_screen.dart",
       "file_type": "code",
       "norm_label": "_message",
+      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_features_allowances_presentation_allowances_screen_moneyfield",
+      "label": "_MoneyField",
+      "_origin": "ast",
+      "community": 2,
+      "community_name": "allowances_screen.dart",
+      "file_type": "code",
+      "norm_label": "_moneyfield",
+      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_features_allowances_presentation_allowances_screen_noclaims",
+      "label": "_NoClaims",
+      "_origin": "ast",
+      "community": 2,
+      "community_name": "allowances_screen.dart",
+      "file_type": "code",
+      "norm_label": "_noclaims",
       "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
       "source_location": null
     },
@@ -5177,6 +5243,28 @@
       "source_location": null
     },
     {
+      "id": "lib_features_allowances_presentation_allowances_screen_routeevidencecard",
+      "label": "_RouteEvidenceCard",
+      "_origin": "ast",
+      "community": 2,
+      "community_name": "allowances_screen.dart",
+      "file_type": "code",
+      "norm_label": "_routeevidencecard",
+      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_features_allowances_presentation_allowances_screen_routemarker",
+      "label": "_RouteMarker",
+      "_origin": "ast",
+      "community": 2,
+      "community_name": "allowances_screen.dart",
+      "file_type": "code",
+      "norm_label": "_routemarker",
+      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
+      "source_location": null
+    },
+    {
       "id": "lib_features_allowances_presentation_allowances_screen_routepointcount",
       "label": "routePointCount",
       "_origin": "ast",
@@ -5184,6 +5272,17 @@
       "community_name": "allowances_screen.dart",
       "file_type": "code",
       "norm_label": "routepointcount",
+      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_features_allowances_presentation_allowances_screen_sectionlabel",
+      "label": "_SectionLabel",
+      "_origin": "ast",
+      "community": 2,
+      "community_name": "allowances_screen.dart",
+      "file_type": "code",
+      "norm_label": "_sectionlabel",
       "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
       "source_location": null
     },
@@ -5206,6 +5305,17 @@
       "community_name": "allowances_screen.dart",
       "file_type": "code",
       "norm_label": "_sessionclosed",
+      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_features_allowances_presentation_allowances_screen_statustag",
+      "label": "_StatusTag",
+      "_origin": "ast",
+      "community": 2,
+      "community_name": "allowances_screen.dart",
+      "file_type": "code",
+      "norm_label": "_statustag",
       "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
       "source_location": null
     },
@@ -5316,6 +5426,17 @@
       "community_name": "allowances_screen.dart",
       "file_type": "code",
       "norm_label": "transportfare",
+      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_features_allowances_presentation_allowances_screen_travelsummary",
+      "label": "_TravelSummary",
+      "_origin": "ast",
+      "community": 2,
+      "community_name": "allowances_screen.dart",
+      "file_type": "code",
+      "norm_label": "_travelsummary",
       "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
       "source_location": null
     },
@@ -7773,6 +7894,50 @@
       "source_location": null
     },
     {
+      "id": "lib_features_allowances_presentation_allowances_screen_allowancesscreen",
+      "label": "AllowancesScreen",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "StatefulWidget",
+      "file_type": "code",
+      "norm_label": "allowancesscreen",
+      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_features_allowances_presentation_allowances_screen_allowancesscreenstate",
+      "label": "_AllowancesScreenState",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "StatefulWidget",
+      "file_type": "code",
+      "norm_label": "_allowancesscreenstate",
+      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_features_allowances_presentation_allowances_screen_claimsheet",
+      "label": "_ClaimSheet",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "StatefulWidget",
+      "file_type": "code",
+      "norm_label": "_claimsheet",
+      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
+      "source_location": null
+    },
+    {
+      "id": "lib_features_allowances_presentation_allowances_screen_claimsheetstate",
+      "label": "_ClaimSheetState",
+      "_origin": "ast",
+      "community": 27,
+      "community_name": "StatefulWidget",
+      "file_type": "code",
+      "norm_label": "_claimsheetstate",
+      "source_file": "lib/features/allowances/presentation/allowances_screen.dart",
+      "source_location": null
+    },
+    {
       "id": "lib_features_dashboard_presentation_employee_dashboard_screen_employeedashboardscreen",
       "label": "EmployeeDashboardScreen",
       "_origin": "ast",
@@ -7982,13 +8147,13 @@
       "source_location": null
     },
     {
-      "id": "employee_profile_tab_dart",
-      "label": "employee_profile_tab.dart",
+      "id": "dynamic_presentation_dynamic_capability_screen_dart",
+      "label": "../../dynamic/presentation/dynamic_capability_screen.dart",
       "_origin": "ast",
       "community": 3,
       "community_name": "lib/features/dashboard/presentation/employee_dashboard_screen.dart",
       "file_type": "code",
-      "norm_label": "employee_profile_tab.dart",
+      "norm_label": "../../dynamic/presentation/dynamic_capability_screen.dart",
       "source_file": null,
       "source_location": null
     },
@@ -8466,17 +8631,6 @@
       "source_location": null
     },
     {
-      "id": "lib_features_dashboard_presentation_employee_dashboard_screen_quickresponsibilitygrid",
-      "label": "_QuickResponsibilityGrid",
-      "_origin": "ast",
-      "community": 3,
-      "community_name": "lib/features/dashboard/presentation/employee_dashboard_screen.dart",
-      "file_type": "code",
-      "norm_label": "_quickresponsibilitygrid",
-      "source_file": "lib/features/dashboard/presentation/employee_dashboard_screen.dart",
-      "source_location": null
-    },
-    {
       "id": "lib_features_dashboard_presentation_employee_dashboard_screen_readycount",
       "label": "readyCount",
       "_origin": "ast",
@@ -8730,13 +8884,13 @@
       "source_location": null
     },
     {
-      "id": "return",
-      "label": "return",
+      "id": "tracking_data_native_tracking_repository_dart",
+      "label": "../../tracking/data/native_tracking_repository.dart",
       "_origin": "ast",
       "community": 3,
       "community_name": "lib/features/dashboard/presentation/employee_dashboard_screen.dart",
       "file_type": "code",
-      "norm_label": "return",
+      "norm_label": "../../tracking/data/native_tracking_repository.dart",
       "source_file": null,
       "source_location": null
     },
@@ -9618,17 +9772,6 @@
       "file_type": "code",
       "norm_label": "type",
       "source_file": "lib/core/models/mobile_capability.dart",
-      "source_location": null
-    },
-    {
-      "id": "map",
-      "label": "Map",
-      "_origin": "ast",
-      "community": 35,
-      "community_name": "mobile_capability.dart",
-      "file_type": "code",
-      "norm_label": "map",
-      "source_file": null,
       "source_location": null
     },
     {
@@ -14554,24 +14697,24 @@
       "source_location": null
     },
     {
-      "id": "dynamic_presentation_dynamic_capability_screen_dart",
-      "label": "../../dynamic/presentation/dynamic_capability_screen.dart",
+      "id": "employee_profile_tab_dart",
+      "label": "employee_profile_tab.dart",
       "_origin": "ast",
       "community": 60,
       "community_name": "cms-sovereignty-finish-20260825-231953/employee_dashboard_screen.dart",
       "file_type": "code",
-      "norm_label": "../../dynamic/presentation/dynamic_capability_screen.dart",
+      "norm_label": "employee_profile_tab.dart",
       "source_file": null,
       "source_location": null
     },
     {
-      "id": "tracking_data_native_tracking_repository_dart",
-      "label": "../../tracking/data/native_tracking_repository.dart",
+      "id": "return",
+      "label": "return",
       "_origin": "ast",
       "community": 60,
       "community_name": "cms-sovereignty-finish-20260825-231953/employee_dashboard_screen.dart",
       "file_type": "code",
-      "norm_label": "../../tracking/data/native_tracking_repository.dart",
+      "norm_label": "return",
       "source_file": null,
       "source_location": null
     },
@@ -16225,149 +16368,6 @@
       "file_type": "code",
       "norm_label": "../../tracking/domain/tracking_repository.dart",
       "source_file": null,
-      "source_location": null
-    },
-    {
-      "id": "lib_core_models_app_user",
-      "label": "app_user.dart",
-      "_origin": "ast",
-      "community": 70,
-      "community_name": "List",
-      "file_type": "code",
-      "norm_label": "app_user.dart",
-      "source_file": "lib/core/models/app_user.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_core_models_app_user_appuser",
-      "label": "AppUser",
-      "_origin": "ast",
-      "community": 70,
-      "community_name": "List",
-      "file_type": "code",
-      "norm_label": "appuser",
-      "source_file": "lib/core/models/app_user.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_core_models_app_user_department",
-      "label": "department",
-      "_origin": "ast",
-      "community": 70,
-      "community_name": "List",
-      "file_type": "code",
-      "norm_label": "department",
-      "source_file": "lib/core/models/app_user.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_core_models_app_user_designation",
-      "label": "designation",
-      "_origin": "ast",
-      "community": 70,
-      "community_name": "List",
-      "file_type": "code",
-      "norm_label": "designation",
-      "source_file": "lib/core/models/app_user.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_core_models_app_user_roles",
-      "label": "roles",
-      "_origin": "ast",
-      "community": 70,
-      "community_name": "List",
-      "file_type": "code",
-      "norm_label": "roles",
-      "source_file": "lib/core/models/app_user.dart",
-      "source_location": null
-    },
-    {
-      "id": "list",
-      "label": "List",
-      "_origin": "ast",
-      "community": 70,
-      "community_name": "List",
-      "file_type": "code",
-      "norm_label": "list",
-      "source_file": null,
-      "source_location": null
-    },
-    {
-      "id": "string_id_employeecode_name",
-      "label": "String id, employeeCode, name,",
-      "_origin": "ast",
-      "community": 70,
-      "community_name": "List",
-      "file_type": "code",
-      "norm_label": "string id, employeecode, name,",
-      "source_file": null,
-      "source_location": null
-    },
-    {
-      "id": "lib_core_services_sync_sync_transport",
-      "label": "sync_transport.dart",
-      "_origin": "ast",
-      "community": 71,
-      "community_name": "sync_transport.dart",
-      "file_type": "code",
-      "norm_label": "sync_transport.dart",
-      "source_file": "lib/core/services/sync/sync_transport.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_core_services_sync_sync_transport_acknowledgedeventids",
-      "label": "acknowledgedEventIds",
-      "_origin": "ast",
-      "community": 71,
-      "community_name": "sync_transport.dart",
-      "file_type": "code",
-      "norm_label": "acknowledgedeventids",
-      "source_file": "lib/core/services/sync/sync_transport.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_core_services_sync_sync_transport_push",
-      "label": "push",
-      "_origin": "ast",
-      "community": 71,
-      "community_name": "sync_transport.dart",
-      "file_type": "code",
-      "norm_label": "push",
-      "source_file": "lib/core/services/sync/sync_transport.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_core_services_sync_sync_transport_syncpushresult",
-      "label": "SyncPushResult",
-      "_origin": "ast",
-      "community": 71,
-      "community_name": "sync_transport.dart",
-      "file_type": "code",
-      "norm_label": "syncpushresult",
-      "source_file": "lib/core/services/sync/sync_transport.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_core_services_sync_sync_transport_synctransport",
-      "label": "SyncTransport",
-      "_origin": "ast",
-      "community": 71,
-      "community_name": "sync_transport.dart",
-      "file_type": "code",
-      "norm_label": "synctransport",
-      "source_file": "lib/core/services/sync/sync_transport.dart",
-      "source_location": null
-    },
-    {
-      "id": "lib_core_services_sync_sync_transport_unconfiguredsynctransport",
-      "label": "UnconfiguredSyncTransport",
-      "_origin": "ast",
-      "community": 71,
-      "community_name": "sync_transport.dart",
-      "file_type": "code",
-      "norm_label": "unconfiguredsynctransport",
-      "source_file": "lib/core/services/sync/sync_transport.dart",
       "source_location": null
     },
     {
