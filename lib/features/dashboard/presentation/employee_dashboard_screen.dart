@@ -9,14 +9,19 @@ import '../../../core/design/app_design.dart';
 import '../../../core/design/app_icons.dart';
 import '../../../core/models/mobile_capability.dart';
 import '../../../core/offline/offline_attendance_queue.dart';
+import '../../../core/offline/offline_record_queue.dart';
 import '../../../core/offline/offline_submission_queue.dart';
+import '../../../core/services/runtime/responsibility_runtime_api.dart';
 import '../../../core/session/app_session_controller.dart';
+import '../../../core/widgets/runtime_connection_banner.dart';
 import '../../allowances/presentation/allowances_screen.dart';
 import '../../attendance/presentation/attendance_screen.dart';
 import '../../dynamic/presentation/dynamic_capability_screen.dart';
+import '../../dynamic/presentation/kernel_responsibility_screen.dart';
 import '../../tracking/data/native_tracking_repository.dart';
 import '../../tracking/presentation/tracking_controller.dart';
 import '../../tracking/presentation/tracking_screen.dart';
+import 'employee_profile_tab.dart';
 
 class EmployeeDashboardScreen extends StatefulWidget {
   const EmployeeDashboardScreen({
@@ -35,51 +40,41 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
     with WidgetsBindingObserver {
   late final TrackingController tracker;
 
-  List<Map<String, dynamic>> _workItems = const [];
+  List<Map<String, dynamic>> _readyWork = const [];
+  List<Map<String, dynamic>> _blockedWork = const [];
+  List<Map<String, dynamic>> _approvals = const [];
   Map<String, Object?>? _workSession;
   bool _loadingWork = true;
   int _tab = 0;
   bool _reconciling = false;
+  String _lastRevision = '';
 
   List<MobileCapability> get _modules =>
       widget.controller.session?.modules ?? const [];
 
-  bool get _hasTaDa => _modules.any((m) => m.key == 'ta_da');
+  bool get _hasTaDa =>
+      _modules.any((m) => m.key == 'ta_da' && !m.kernelAvailable);
 
   bool get _needsTravelCapability => _modules.any(
         (m) =>
             m.key == 'ta_da' ||
             m.key == 'live_location' ||
-            m.key == 'journey_plan',
+            m.key == 'journey_plan' ||
+            _kernelNeedsTracking(m),
       );
-
-  // bool get _sessionActive => _workSession?['status'] == 'active';
-  // bool get _sessionCompleted => _workSession?['status'] == 'completed';
-
-  List<Map<String, dynamic>> get _visibleWorkItems {
-    final activeCapabilityIds = _modules.map((m) => m.id.toString()).toSet();
-    return _workItems.where((item) {
-      final capabilityId = item['capabilityId'] ?? item['capability_id'];
-      if (capabilityId == null) return true;
-      return activeCapabilityIds.contains(capabilityId.toString());
-    }).toList();
-  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.controller.addListener(_onControllerChanged);
+    _lastRevision = widget.controller.workspaceRevision;
 
-    tracker = TrackingController(
-      repository: NativeTrackingRepository(),
-    );
+    tracker = TrackingController(repository: NativeTrackingRepository());
 
     unawaited(
       tracker
-          .initialize(
-            accessToken: widget.controller.session!.accessToken,
-          )
+          .initialize(accessToken: widget.controller.session!.accessToken)
           .then((_) => _refreshAll(refreshWorkspace: true)),
     );
   }
@@ -101,13 +96,18 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
 
   void _onControllerChanged() {
     if (!mounted) return;
+    final revision = widget.controller.workspaceRevision;
+    if (revision.isNotEmpty && revision != _lastRevision) {
+      _lastRevision = revision;
+      unawaited(_loadWork());
+    }
     setState(() {});
     unawaited(_reconcileTracking());
   }
 
   Future<void> _refreshAll({bool refreshWorkspace = false}) async {
-    if (refreshWorkspace) {
-      await widget.controller.refreshWorkspace();
+    if (refreshWorkspace && widget.controller.isOnline) {
+      await widget.controller.checkWorkspaceRevision(forceRefreshIfUnknown: true);
     }
 
     await Future.wait([
@@ -138,7 +138,6 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
       if (mounted) setState(() => _workSession = local);
 
       final shouldRun = local?['status'] == 'active' && _needsTravelCapability;
-
       if (shouldRun) {
         await tracker.ensureAutomatic(session.user.id);
       } else if (tracker.active) {
@@ -152,44 +151,73 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
   Future<void> _loadWork() async {
     final session = widget.controller.session;
     if (session == null) return;
-
-    final token = session.accessToken;
+    if (mounted) setState(() => _loadingWork = true);
 
     try {
-      await OfflineSubmissionQueue.flush(token);
-      await OfflineAttendanceQueue.flush(token);
+      if (widget.controller.isOnline) {
+        await OfflineRecordQueue.flush(session.accessToken);
+        await OfflineSubmissionQueue.flush(session.accessToken);
+        await OfflineAttendanceQueue.flush(session.accessToken);
+        await widget.controller.markLocalMutationQueued();
 
-      final response = await FieldApi(
-        accessToken: token,
-      ).getJson('/api/salesApp/work-items');
+        final response = await ResponsibilityRuntimeApi(
+          accessToken: session.accessToken,
+        ).myWork();
 
-      final raw = response['workItems'];
-      if (raw is List) {
-        final fresh = raw
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .where(
-              (e) =>
-                  e['status'] != 'completed' &&
-                  e['status'] != 'cancelled',
-            )
-            .toList();
+        final work = _map(response['work']);
+        final ready = _mapList(work['ready']);
+        final blocked = _mapList(work['blocked']);
+        final approvals = _mapList(work['approvals']);
 
-        await AppDatabase.instance.putCache('work_items', fresh);
-        if (mounted) setState(() => _workItems = fresh);
+        await AppDatabase.instance.putCache('my_work:${_workScope(session)}', {
+          'ready': ready,
+          'blocked': blocked,
+          'approvals': approvals,
+        });
+
+        if (mounted) {
+          setState(() {
+            _readyWork = ready;
+            _blockedWork = blocked;
+            _approvals = approvals;
+          });
+        }
+      } else {
+        await _loadCachedWork();
       }
     } catch (_) {
-      final cached = await AppDatabase.instance.getCache('work_items');
-      if (cached is List && mounted) {
-        setState(() {
-          _workItems = cached
-              .whereType<Map>()
-              .map((e) => Map<String, dynamic>.from(e))
-              .toList();
-        });
+      // Compatibility fallback while backend rollout finishes.
+      try {
+        final response = await FieldApi(accessToken: session.accessToken)
+            .getJson('/api/salesApp/work-items');
+        final raw = response['workItems'];
+        if (raw is List && mounted) {
+          setState(() {
+            _readyWork = _mapList(raw)
+                .where((item) =>
+                    item['status'] != 'completed' && item['status'] != 'cancelled')
+                .toList();
+          });
+        }
+      } catch (_) {
+        await _loadCachedWork();
       }
     } finally {
       if (mounted) setState(() => _loadingWork = false);
+    }
+  }
+
+  Future<void> _loadCachedWork() async {
+    final session = widget.controller.session;
+    if (session == null) return;
+    final cached = await AppDatabase.instance.getCache('my_work:${_workScope(session)}');
+    if (cached is Map && mounted) {
+      final map = Map<String, dynamic>.from(cached);
+      setState(() {
+        _readyWork = _mapList(map['ready']);
+        _blockedWork = _mapList(map['blocked']);
+        _approvals = _mapList(map['approvals']);
+      });
     }
   }
 
@@ -198,23 +226,23 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
     final destinations = <NavigationDestination>[
       NavigationDestination(
         icon: Icon(AppIcons.home),
-        selectedIcon: Icon(AppIcons.home, color: AppDesign.primary),
+        selectedIcon: Icon(AppIcons.home, color: AppDesign.green),
         label: 'Home',
       ),
       NavigationDestination(
         icon: Icon(AppIcons.work),
-        selectedIcon: Icon(AppIcons.work, color: AppDesign.primary),
+        selectedIcon: Icon(AppIcons.work, color: AppDesign.green),
         label: 'Work',
       ),
       if (_hasTaDa)
         NavigationDestination(
           icon: Icon(AppIcons.wallet),
-          selectedIcon: Icon(AppIcons.wallet, color: AppDesign.primary),
+          selectedIcon: Icon(AppIcons.wallet, color: AppDesign.green),
           label: 'TA / DA',
         ),
       NavigationDestination(
         icon: Icon(AppIcons.profile),
-        selectedIcon: Icon(AppIcons.profile, color: AppDesign.primary),
+        selectedIcon: Icon(AppIcons.profile, color: AppDesign.green),
         label: 'Me',
       ),
     ];
@@ -224,23 +252,31 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
         controller: widget.controller,
         tracker: tracker,
         workSession: _workSession,
-        workItems: _visibleWorkItems,
+        readyWork: _readyWork,
+        approvals: _approvals,
+        modules: _modules,
         loadingWork: _loadingWork,
         onRefresh: () => _refreshAll(refreshWorkspace: true),
         onOpenWork: () => setState(() => _tab = 1),
         onCapabilityTap: _openCapability,
       ),
       _WorkTab(
+        controller: widget.controller,
         modules: _modules,
+        readyWork: _readyWork,
+        blockedWork: _blockedWork,
+        approvals: _approvals,
         onRefresh: () => _refreshAll(refreshWorkspace: true),
         onCapabilityTap: _openCapability,
+        onReadyTap: _openReadyWork,
+        onApprovalTap: _reviewApproval,
       ),
       if (_hasTaDa)
         AllowancesScreen(
           controller: widget.controller,
           trackingController: tracker,
         ),
-      _ProfileTab(
+      EmployeeProfileTab(
         controller: widget.controller,
         tracker: tracker,
         workSession: _workSession,
@@ -265,49 +301,240 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
     );
   }
 
-  void _openCapability(MobileCapability capability) {
+  void _openCapability(
+    MobileCapability capability, {
+    String? workflowInstanceId,
+    String? recordId,
+  }) {
     late final Widget screen;
 
-    switch (capability.key) {
-      case 'attendance':
-        screen = AttendanceScreen(
-          controller: widget.controller,
-          trackingController: tracker,
-          onReviewTaDa: _hasTaDa
-              ? () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => AllowancesScreen(
-                        controller: widget.controller,
-                        trackingController: tracker,
+    // CMS-published Kernel Responsibilities always use the generic renderer.
+    // Legacy hand-built modules keep their specialized screens during rollout.
+    if (capability.kernelAvailable) {
+      screen = KernelResponsibilityScreen(
+        controller: widget.controller,
+        capability: capability,
+        trackingController: tracker,
+        workflowInstanceId: workflowInstanceId,
+        initialRecordId: recordId,
+      );
+    } else {
+      switch (capability.key) {
+        case 'attendance':
+          screen = AttendanceScreen(
+            controller: widget.controller,
+            trackingController: tracker,
+            onReviewTaDa: _hasTaDa
+                ? () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => AllowancesScreen(
+                          controller: widget.controller,
+                          trackingController: tracker,
+                        ),
                       ),
-                    ),
-                  );
-                }
-              : null,
-        );
-        break;
-      case 'ta_da':
-        screen = AllowancesScreen(
-          controller: widget.controller,
-          trackingController: tracker,
-        );
-        break;
-      case 'live_location':
-        screen = TrackingScreen(controller: tracker);
-        break;
-      default:
-        screen = DynamicCapabilityScreen(
-          controller: widget.controller,
-          capability: capability,
-        );
-        break;
+                    );
+                  }
+                : null,
+          );
+          break;
+        case 'ta_da':
+          screen = AllowancesScreen(
+            controller: widget.controller,
+            trackingController: tracker,
+          );
+          break;
+        case 'live_location':
+          screen = TrackingScreen(controller: tracker);
+          break;
+        default:
+          screen = DynamicCapabilityScreen(
+            controller: widget.controller,
+            capability: capability,
+          );
+          break;
+      }
+    }
+
+    if (widget.controller.isOnline) {
+      unawaited(
+        ResponsibilityRuntimeApi(
+          accessToken: widget.controller.session!.accessToken,
+        ).usage(
+          'responsibility.open',
+          entityType: 'responsibility',
+          entityId: capability.key,
+          metadata: {
+            'kernel': capability.kernelAvailable,
+            'manifestVersion': capability.manifestVersion,
+          },
+        ),
+      );
     }
 
     Navigator.of(context)
         .push(MaterialPageRoute(builder: (_) => screen))
         .then((_) => _refreshAll());
   }
+
+  void _openReadyWork(Map<String, dynamic> item) {
+    final capabilityId = item['capabilityId']?.toString() ??
+        _map(item['responsibility'])['id']?.toString();
+    final responsibilityKey = _map(item['responsibility'])['key']?.toString() ??
+        _responsibilityKeyFromAction(item['actionKey']?.toString());
+
+    MobileCapability? capability;
+    for (final module in _modules) {
+      if ((capabilityId != null && module.id.toString() == capabilityId) ||
+          (responsibilityKey != null && module.key == responsibilityKey)) {
+        capability = module;
+        break;
+      }
+    }
+
+    if (capability == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('This work item is not available on this device yet.'),
+        ),
+      );
+      return;
+    }
+
+    _openCapability(
+      capability,
+      workflowInstanceId: item['workflowInstanceId']?.toString(),
+      recordId: item['sourceId']?.toString() ?? item['contextId']?.toString(),
+    );
+  }
+
+  Future<void> _reviewApproval(Map<String, dynamic> approval) async {
+    if (widget.controller.isOffline) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Approval decisions need a connection. Your offline work remains safe on this phone.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final approvalId = approval['id']?.toString();
+    if (approvalId == null || approvalId.isEmpty) return;
+
+    final noteController = TextEditingController();
+    String? decision;
+
+    try {
+      decision = await showModalBottomSheet<String>(
+        context: context,
+        isScrollControlled: true,
+        builder: (sheetContext) {
+          final title = approval['title']?.toString() ?? 'Approval';
+          final workflowName = approval['workflowName']?.toString();
+          final requester = approval['requesterUserId']?.toString();
+
+          return SafeArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                24,
+                8,
+                24,
+                24 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SizedBox(height: 4),
+                  Text(
+                    title,
+                    style: Theme.of(sheetContext).textTheme.titleLarge,
+                  ),
+                  if (workflowName != null && workflowName.isNotEmpty) ...[
+                    const SizedBox(height: 5),
+                    Text(
+                      workflowName,
+                      style: Theme.of(sheetContext).textTheme.bodyMedium,
+                    ),
+                  ],
+                  if (requester != null && requester.isNotEmpty) ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'Requested by employee #$requester',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppDesign.muted,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: noteController,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Decision note',
+                      hintText: 'Optional note for the employee',
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(sheetContext, 'rejected'),
+                          child: const Text('Reject'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () => Navigator.pop(sheetContext, 'approved'),
+                          child: const Text('Approve'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+
+      if (decision == null || !mounted) return;
+
+      await FieldApi(
+        accessToken: widget.controller.session!.accessToken,
+      ).postJson(
+        '/api/salesApp/workflow/approvals/${Uri.encodeComponent(approvalId)}/decision',
+        {
+          'decision': decision,
+          'note': noteController.text.trim(),
+        },
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            decision == 'approved' ? 'Approved.' : 'Rejected.',
+          ),
+        ),
+      );
+      await widget.controller.syncNow();
+      await _loadWork();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString())),
+      );
+    } finally {
+      noteController.dispose();
+    }
+  }
+
 }
 
 class _HomeTab extends StatelessWidget {
@@ -315,7 +542,9 @@ class _HomeTab extends StatelessWidget {
     required this.controller,
     required this.tracker,
     required this.workSession,
-    required this.workItems,
+    required this.readyWork,
+    required this.approvals,
+    required this.modules,
     required this.loadingWork,
     required this.onRefresh,
     required this.onOpenWork,
@@ -325,7 +554,9 @@ class _HomeTab extends StatelessWidget {
   final AppSessionController controller;
   final TrackingController tracker;
   final Map<String, Object?>? workSession;
-  final List<Map<String, dynamic>> workItems;
+  final List<Map<String, dynamic>> readyWork;
+  final List<Map<String, dynamic>> approvals;
+  final List<MobileCapability> modules;
   final bool loadingWork;
   final Future<void> Function() onRefresh;
   final VoidCallback onOpenWork;
@@ -334,10 +565,7 @@ class _HomeTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final session = controller.session!;
-    final modules = session.modules;
-    final attendance = _findCapability(modules, 'attendance');
     final status = workSession?['status']?.toString();
-    final checkIn = _parseDate(workSession?['check_in_at']);
 
     return SafeArea(
       child: RefreshIndicator(
@@ -350,42 +578,148 @@ class _HomeTab extends StatelessWidget {
               designation: session.user.designation,
               refreshing: controller.refreshingWorkspace,
             ),
-            const SizedBox(height: 48),
-            const _SectionLabel('TODAY'),
-            const SizedBox(height: 16),
-            _TodayPanel(
-              attendanceStatus: status,
-              checkIn: checkIn,
-              openWork: workItems.length,
+            const SizedBox(height: 22),
+            RuntimeConnectionBanner(controller: controller),
+            const SizedBox(height: 24),
+            _LiveOverview(
+              readyCount: readyWork.length,
+              approvalCount: approvals.length,
+              responsibilityCount: modules.length,
               tracker: tracker,
-              offline: controller.isOffline,
-              onAttendance: attendance == null
-                  ? null
-                  : () => onCapabilityTap(attendance),
+              sessionStatus: status,
             ),
-            const SizedBox(height: 48),
+            const SizedBox(height: 32),
             Row(
               children: [
-                const Expanded(child: _SectionLabel('NEXT')),
-                if (workItems.isNotEmpty)
-                  TextButton(
-                    onPressed: onOpenWork,
-                    child: const Text('View work'),
-                  ),
+                const Expanded(child: _SectionLabel('NEXT FOR YOU')),
+                if (readyWork.isNotEmpty)
+                  TextButton(onPressed: onOpenWork, child: const Text('View all')),
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             if (loadingWork)
               const LinearProgressIndicator(minHeight: 2)
-            else if (workItems.isEmpty)
+            else if (approvals.isNotEmpty)
+              _NextCard(
+                title: approvals.first['title']?.toString() ?? 'Approval needs your attention',
+                description: 'Open Work to review and decide.',
+                icon: LucideIcons.shield_check,
+                tone: AppDesign.green,
+                onTap: onOpenWork,
+              )
+            else if (readyWork.isNotEmpty)
+              _NextCard.fromWork(readyWork.first, onTap: onOpenWork)
+            else
+              const _QuietState(),
+            if (modules.isNotEmpty) ...[
+              const SizedBox(height: 32),
+              const _SectionLabel('YOUR RESPONSIBILITIES'),
+              const SizedBox(height: 12),
+              _QuickResponsibilityGrid(
+                modules: modules.take(4).toList(),
+                onTap: onCapabilityTap,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WorkTab extends StatelessWidget {
+  const _WorkTab({
+    required this.controller,
+    required this.modules,
+    required this.readyWork,
+    required this.blockedWork,
+    required this.approvals,
+    required this.onRefresh,
+    required this.onCapabilityTap,
+    required this.onReadyTap,
+    required this.onApprovalTap,
+  });
+
+  final AppSessionController controller;
+  final List<MobileCapability> modules;
+  final List<Map<String, dynamic>> readyWork;
+  final List<Map<String, dynamic>> blockedWork;
+  final List<Map<String, dynamic>> approvals;
+  final Future<void> Function() onRefresh;
+  final ValueChanged<MobileCapability> onCapabilityTap;
+  final ValueChanged<Map<String, dynamic>> onReadyTap;
+  final ValueChanged<Map<String, dynamic>> onApprovalTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: RefreshIndicator(
+        onRefresh: onRefresh,
+        child: ListView(
+          padding: AppDesign.pageInset,
+          children: [
+            Text('Work', style: Theme.of(context).textTheme.headlineLarge),
+            const SizedBox(height: 8),
+            Text(
+              'Your company controls what appears here. Published changes arrive automatically when you are online.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 20),
+            RuntimeConnectionBanner(controller: controller, compact: false),
+            if (approvals.isNotEmpty) ...[
+              const SizedBox(height: 30),
+              const _SectionLabel('NEEDS YOUR DECISION'),
+              const SizedBox(height: 12),
+              for (final approval in approvals.take(5))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _WorkNotice(
+                    icon: LucideIcons.shield_check,
+                    title: approval['title']?.toString() ?? 'Approval',
+                    subtitle: 'Tap to review and decide',
+                    tone: AppDesign.green,
+                    onTap: () => onApprovalTap(approval),
+                  ),
+                ),
+            ],
+            if (readyWork.isNotEmpty) ...[
+              const SizedBox(height: 30),
+              const _SectionLabel('READY NOW'),
+              const SizedBox(height: 12),
+              for (final item in readyWork.take(8))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _WorkNotice(
+                    icon: LucideIcons.circle_play,
+                    title: item['title']?.toString() ?? _workActionLabel(item),
+                    subtitle: _workSubtitle(item),
+                    tone: AppDesign.green,
+                    onTap: () => onReadyTap(item),
+                  ),
+                ),
+            ],
+            const SizedBox(height: 30),
+            const _SectionLabel('RESPONSIBILITIES'),
+            const SizedBox(height: 12),
+            if (modules.isEmpty)
               const _QuietState()
             else
-              _NextWorkCard(item: workItems.first, onTap: onOpenWork),
-            const SizedBox(height: 48),
-            _PassiveNote(
-              offline: controller.isOffline,
-              sessionActive: status == 'active',
-            ),
+              _CapabilityList(modules: modules, onTap: onCapabilityTap),
+            if (blockedWork.isNotEmpty) ...[
+              const SizedBox(height: 30),
+              const _SectionLabel('WAITING'),
+              const SizedBox(height: 12),
+              for (final item in blockedWork.take(6))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _WorkNotice(
+                    icon: LucideIcons.lock_keyhole,
+                    title: item['title']?.toString() ?? _workActionLabel(item),
+                    subtitle: item['reason']?.toString() ?? 'Waiting for an earlier step',
+                    tone: AppDesign.muted,
+                  ),
+                ),
+            ],
           ],
         ),
       ),
@@ -394,12 +728,7 @@ class _HomeTab extends StatelessWidget {
 }
 
 class _Header extends StatelessWidget {
-  const _Header({
-    required this.name,
-    required this.designation,
-    required this.refreshing,
-  });
-
+  const _Header({required this.name, required this.designation, required this.refreshing});
   final String name;
   final String designation;
   final bool refreshing;
@@ -418,31 +747,21 @@ class _Header extends StatelessWidget {
                 style: const TextStyle(
                   color: AppDesign.muted,
                   fontSize: 12,
-                  fontWeight: FontWeight.w500,
+                  fontWeight: FontWeight.w600,
                   letterSpacing: .24,
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
-                'Good ${_dayPart()}, $name',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
+              Text('Good ${_dayPart()}, $name', style: Theme.of(context).textTheme.headlineMedium),
               const SizedBox(height: 4),
-              Text(
-                designation,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
+              Text(designation, style: Theme.of(context).textTheme.bodyMedium),
             ],
           ),
         ),
         if (refreshing)
           const Padding(
             padding: EdgeInsets.only(top: 8),
-            child: SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
+            child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
           ),
       ],
     );
@@ -456,329 +775,156 @@ class _Header extends StatelessWidget {
   }
 
   static String _dateLabel() {
-    const weekdays = [
-      'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
-    ];
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
-    ];
+    const weekdays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     final now = DateTime.now();
     return '${weekdays[now.weekday - 1]}, ${now.day} ${months[now.month - 1]}';
   }
 }
 
-class _TodayPanel extends StatelessWidget {
-  const _TodayPanel({
-    required this.attendanceStatus,
-    required this.checkIn,
-    required this.openWork,
+class _LiveOverview extends StatelessWidget {
+  const _LiveOverview({
+    required this.readyCount,
+    required this.approvalCount,
+    required this.responsibilityCount,
     required this.tracker,
-    required this.offline,
-    required this.onAttendance,
+    required this.sessionStatus,
   });
 
-  final String? attendanceStatus;
-  final DateTime? checkIn;
-  final int openWork;
+  final int readyCount;
+  final int approvalCount;
+  final int responsibilityCount;
   final TrackingController tracker;
-  final bool offline;
-  final VoidCallback? onAttendance;
+  final String? sessionStatus;
 
   @override
   Widget build(BuildContext context) {
-    final isActive = attendanceStatus == 'active';
-    final isComplete = attendanceStatus == 'completed';
-
     return Container(
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppDesign.surface,
-        border: Border.all(color: AppDesign.line),
         borderRadius: BorderRadius.circular(AppDesign.radius),
+        border: Border.all(color: AppDesign.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Right now', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(child: _Metric(value: '$readyCount', label: 'Ready')),
+              const SizedBox(width: 10),
+              Expanded(child: _Metric(value: '$approvalCount', label: 'Approvals')),
+              const SizedBox(width: 10),
+              Expanded(child: _Metric(value: '$responsibilityCount', label: 'Tools')),
+            ],
+          ),
+          if (sessionStatus == 'active' || tracker.active) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppDesign.greenWash,
+                borderRadius: BorderRadius.circular(AppDesign.controlRadius),
+              ),
+              child: Row(
+                children: [
+                  Icon(AppIcons.journey, size: 18, color: AppDesign.green),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: AnimatedBuilder(
+                      animation: tracker,
+                      builder: (_, _) => Text(
+                        tracker.active
+                            ? 'Field session active · ${tracker.distanceKm.toStringAsFixed(1)} km recorded'
+                            : 'Work session active',
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Metric extends StatelessWidget {
+  const _Metric({required this.value, required this.label});
+  final String value;
+  final String label;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: AppDesign.greenWash,
+        borderRadius: BorderRadius.circular(AppDesign.controlRadius),
       ),
       child: Column(
         children: [
-          _DataRow(
-            icon: AppIcons.attendance,
-            label: 'Attendance',
-            value: isComplete
-                ? 'Complete'
-                : isActive
-                    ? checkIn == null
-                        ? 'Checked in'
-                        : 'Checked in ${_time(checkIn!)}'
-                    : 'Not checked in',
-            actionLabel: !isComplete && onAttendance != null
-                ? isActive
-                    ? 'Open'
-                    : 'Check in'
-                : null,
-            onAction: onAttendance,
-          ),
-          const Divider(indent: 56),
-          _DataRow(
-            icon: LucideIcons.clipboard_list,
-            label: 'Open work',
-            value: '$openWork',
-          ),
-          const Divider(indent: 56),
-          AnimatedBuilder(
-            animation: tracker,
-            builder: (_, _) => _DataRow(
-              icon: AppIcons.journey,
-              label: 'Travel',
-              value: '${tracker.distanceKm.toStringAsFixed(1)} km',
-            ),
-          ),
-          const Divider(indent: 56),
-          _DataRow(
-            icon: offline ? AppIcons.cloudOff : AppIcons.cloud,
-            label: 'Sync',
-            value: offline ? 'Safe offline' : 'Ready',
-          ),
+          Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: AppDesign.greenDark)),
+          const SizedBox(height: 3),
+          Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppDesign.muted)),
         ],
       ),
     );
   }
-
-  static String _time(DateTime value) {
-    final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
-    final minute = value.minute.toString().padLeft(2, '0');
-    return '$hour:$minute ${value.hour >= 12 ? 'PM' : 'AM'}';
-  }
 }
 
-class _DataRow extends StatelessWidget {
-  const _DataRow({
-    required this.icon,
-    required this.label,
-    required this.value,
-    this.actionLabel,
-    this.onAction,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final String? actionLabel;
-  final VoidCallback? onAction;
+class _QuickResponsibilityGrid extends StatelessWidget {
+  const _QuickResponsibilityGrid({required this.modules, required this.onTap});
+  final List<MobileCapability> modules;
+  final ValueChanged<MobileCapability> onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: AppDesign.muted),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(fontSize: 12, color: AppDesign.muted),
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: modules
+          .map(
+            (module) => SizedBox(
+              width: (MediaQuery.sizeOf(context).width - 58) / 2,
+              child: Material(
+                color: AppDesign.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppDesign.radius),
+                  side: const BorderSide(color: AppDesign.line),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: AppDesign.ink,
+                child: InkWell(
+                  onTap: () => onTap(module),
+                  borderRadius: BorderRadius.circular(AppDesign.radius),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(AppIcons.forCapability(module), color: AppDesign.green, size: 21),
+                        const SizedBox(height: 12),
+                        Text(module.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+                        if (module.kernelAvailable) ...[
+                          const SizedBox(height: 6),
+                          Text('Live v${module.manifestVersion}', style: const TextStyle(color: AppDesign.green, fontSize: 10, fontWeight: FontWeight.w700)),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
-              ],
-            ),
-          ),
-          if (actionLabel != null && onAction != null)
-            TextButton(
-              onPressed: onAction,
-              child: Text(actionLabel!),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class _NextWorkCard extends StatelessWidget {
-  const _NextWorkCard({required this.item, required this.onTap});
-
-  final Map<String, dynamic> item;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final title = (item['title'] ?? 'Assigned work').toString();
-    final description = item['description']?.toString();
-    final due = item['dueAt']?.toString();
-
-    return Material(
-      color: AppDesign.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppDesign.radius),
-        side: const BorderSide(color: AppDesign.line),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(AppDesign.radius),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(LucideIcons.briefcase_business, size: 20),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (description != null && description.trim().isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        description,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
-                    if (due != null && due.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        'Due $due',
-                        style: const TextStyle(fontSize: 12, color: AppDesign.muted),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Icon(AppIcons.chevronRight, size: 18, color: AppDesign.muted),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _QuietState extends StatelessWidget {
-  const _QuietState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppDesign.surface,
-        border: Border.all(color: AppDesign.line),
-        borderRadius: BorderRadius.circular(AppDesign.radius),
-      ),
-      child: Row(
-        children: [
-          Icon(AppIcons.check, size: 20, color: AppDesign.green),
-          SizedBox(width: 16),
-          Expanded(
-            child: Text(
-              'Nothing needs your attention right now.',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppDesign.ink,
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PassiveNote extends StatelessWidget {
-  const _PassiveNote({required this.offline, required this.sessionActive});
-
-  final bool offline;
-  final bool sessionActive;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(
-          offline ? AppIcons.cloudOff : LucideIcons.shield_check,
-          size: 18,
-          color: AppDesign.muted,
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Text(
-            offline
-                ? 'Keep working. Changes are safe on this phone and will sync automatically.'
-                : sessionActive
-                    ? 'Your work session is active. Time, route and context are being recorded where needed.'
-                    : 'Do the work in the real world. Salesapp remembers the rest.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _WorkTab extends StatelessWidget {
-  const _WorkTab({
-    required this.modules,
-    required this.onRefresh,
-    required this.onCapabilityTap,
-  });
-
-  final List<MobileCapability> modules;
-  final Future<void> Function() onRefresh;
-  final ValueChanged<MobileCapability> onCapabilityTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: RefreshIndicator(
-        onRefresh: onRefresh,
-        child: ListView(
-          padding: AppDesign.pageInset,
-          children: [
-            Text('Work', style: Theme.of(context).textTheme.headlineLarge),
-            const SizedBox(height: 8),
-            Text(
-              'Only the tools currently assigned to you appear here.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 48),
-            const _SectionLabel('ASSIGNED TO YOU'),
-            const SizedBox(height: 16),
-            if (modules.isEmpty)
-              const _QuietState()
-            else
-              _CapabilityList(
-                modules: modules,
-                onTap: onCapabilityTap,
-              ),
-          ],
-        ),
-      ),
+          )
+          .toList(),
     );
   }
 }
 
 class _CapabilityList extends StatelessWidget {
   const _CapabilityList({required this.modules, required this.onTap});
-
   final List<MobileCapability> modules;
   final ValueChanged<MobileCapability> onTap;
 
@@ -793,10 +939,7 @@ class _CapabilityList extends StatelessWidget {
       child: Column(
         children: [
           for (var i = 0; i < modules.length; i++) ...[
-            _CapabilityRow(
-              capability: modules[i],
-              onTap: () => onTap(modules[i]),
-            ),
+            _CapabilityRow(capability: modules[i], onTap: () => onTap(modules[i])),
             if (i != modules.length - 1) const Divider(indent: 56),
           ],
         ],
@@ -807,7 +950,6 @@ class _CapabilityList extends StatelessWidget {
 
 class _CapabilityRow extends StatelessWidget {
   const _CapabilityRow({required this.capability, required this.onTap});
-
   final MobileCapability capability;
   final VoidCallback onTap;
 
@@ -818,42 +960,52 @@ class _CapabilityRow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
           child: Row(
             children: [
-              SizedBox(
-                width: 24,
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: capability.kernelAvailable ? AppDesign.softGreen : AppDesign.softGray,
+                  borderRadius: BorderRadius.circular(AppDesign.controlRadius),
+                ),
+                alignment: Alignment.center,
                 child: Icon(
                   AppIcons.forCapability(capability),
-                  size: 20,
-                  color: AppDesign.ink,
+                  size: 19,
+                  color: capability.kernelAvailable ? AppDesign.green : AppDesign.ink,
                 ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 13),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      capability.title,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        color: AppDesign.ink,
-                      ),
-                    ),
+                    Text(capability.title, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 4),
                     Text(
                       _capabilityHint(capability),
-                      style: const TextStyle(
-                        fontSize: 13,
-                        color: AppDesign.muted,
-                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12.5, color: AppDesign.muted),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
+              if (capability.kernelAvailable)
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppDesign.softGreen,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    'v${capability.manifestVersion}',
+                    style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: AppDesign.greenDark),
+                  ),
+                ),
               Icon(AppIcons.chevronRight, size: 18, color: AppDesign.muted),
             ],
           ),
@@ -863,151 +1015,190 @@ class _CapabilityRow extends StatelessWidget {
   }
 }
 
-class _ProfileTab extends StatelessWidget {
-  const _ProfileTab({
-    required this.controller,
-    required this.tracker,
-    required this.workSession,
+class _NextCard extends StatelessWidget {
+  const _NextCard({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.tone,
+    required this.onTap,
   });
 
-  final AppSessionController controller;
-  final TrackingController tracker;
-  final Map<String, Object?>? workSession;
+  factory _NextCard.fromWork(Map<String, dynamic> item, {required VoidCallback onTap}) {
+    return _NextCard(
+      title: item['title']?.toString() ?? _workActionLabel(item),
+      description: _workSubtitle(item),
+      icon: LucideIcons.circle_play,
+      tone: AppDesign.green,
+      onTap: onTap,
+    );
+  }
+
+  final String title;
+  final String description;
+  final IconData icon;
+  final Color tone;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final session = controller.session!;
+    return Material(
+      color: AppDesign.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppDesign.radius),
+        side: const BorderSide(color: AppDesign.line),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppDesign.radius),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: tone.withValues(alpha: .08),
+                  borderRadius: BorderRadius.circular(AppDesign.controlRadius),
+                ),
+                child: Icon(icon, color: tone, size: 20),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.w800)),
+                    const SizedBox(height: 4),
+                    Text(description, maxLines: 2, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.bodySmall),
+                  ],
+                ),
+              ),
+              Icon(AppIcons.chevronRight, size: 18, color: AppDesign.muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
-    return SafeArea(
-      child: ListView(
-        padding: AppDesign.pageInset,
+class _WorkNotice extends StatelessWidget {
+  const _WorkNotice({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.tone,
+    this.onTap,
+  });
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color tone;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppDesign.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppDesign.radius),
+        side: const BorderSide(color: AppDesign.line),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppDesign.radius),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
         children: [
-          Text('Account', style: Theme.of(context).textTheme.headlineLarge),
-          const SizedBox(height: 48),
-          const _SectionLabel('EMPLOYEE'),
-          const SizedBox(height: 16),
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppDesign.surface,
-              border: Border.all(color: AppDesign.line),
-              borderRadius: BorderRadius.circular(AppDesign.radius),
-            ),
-            child: Row(
-              children: [
-                Icon(AppIcons.profile, size: 24),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        session.user.name,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${session.user.designation} · ${session.user.employeeCode}',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 48),
-          const _SectionLabel('STATUS'),
-          const SizedBox(height: 16),
-          Container(
-            decoration: BoxDecoration(
-              color: AppDesign.surface,
-              border: Border.all(color: AppDesign.line),
-              borderRadius: BorderRadius.circular(AppDesign.radius),
-            ),
+          Icon(icon, size: 19, color: tone),
+          const SizedBox(width: 12),
+          Expanded(
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _DataRow(
-                  icon: AppIcons.attendance,
-                  label: 'Work session',
-                  value: _sessionLabel(workSession),
-                ),
-                const Divider(indent: 56),
-                AnimatedBuilder(
-                  animation: tracker,
-                  builder: (_, _) => _DataRow(
-                    icon: AppIcons.journey,
-                    label: 'Travel meter',
-                    value: tracker.active ? 'Active' : 'Standby',
-                  ),
-                ),
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 3),
+                Text(subtitle, style: const TextStyle(fontSize: 12, color: AppDesign.muted)),
               ],
             ),
           ),
-          const SizedBox(height: 48),
-          OutlinedButton.icon(
-            onPressed: controller.logout,
-            icon: Icon(AppIcons.logout, size: 18),
-            label: const Text('Sign out'),
+          if (onTap != null) ...[
+            const SizedBox(width: 8),
+            Icon(AppIcons.chevronRight, size: 17, color: AppDesign.muted),
+          ],
+        ],
+      ),
+        ),
+      ),
+    );
+  }
+}
+
+class _QuietState extends StatelessWidget {
+  const _QuietState();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppDesign.surface,
+        border: Border.all(color: AppDesign.line),
+        borderRadius: BorderRadius.circular(AppDesign.radius),
+      ),
+      child: Row(
+        children: [
+          Icon(AppIcons.check, size: 20, color: AppDesign.green),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Text(
+              'Nothing needs your attention right now.',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+            ),
           ),
         ],
       ),
     );
-  }
-
-  static String _sessionLabel(Map<String, Object?>? value) {
-    switch (value?['status']) {
-      case 'active':
-        return 'Active';
-      case 'completed':
-        return 'Complete';
-      default:
-        return 'Not started';
-    }
   }
 }
 
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel(this.text);
   final String text;
-
   @override
   Widget build(BuildContext context) {
     return Text(
       text,
       style: const TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.w500,
-        letterSpacing: .24,
+        fontSize: 11,
+        fontWeight: FontWeight.w800,
+        letterSpacing: .5,
         color: AppDesign.muted,
       ),
     );
   }
 }
 
-MobileCapability? _findCapability(
-  List<MobileCapability> modules,
-  String key,
-) {
-  for (final module in modules) {
-    if (module.key == key) return module;
+bool _kernelNeedsTracking(MobileCapability capability) {
+  if (!capability.kernelAvailable) return false;
+  final kernel = capability.kernelDefinition;
+  final possibilities = kernel['possibilities'];
+  if (possibilities is! List) return false;
+  for (final item in possibilities.whereType<Map>()) {
+    final capture = item['capture'];
+    if (capture is Map) {
+      final kind = capture['kind']?.toString().toLowerCase() ?? '';
+      if (kind.contains('route') || kind.contains('movement') || kind.contains('distance')) return true;
+    }
   }
-  return null;
-}
-
-DateTime? _parseDate(Object? raw) {
-  if (raw == null) return null;
-  return DateTime.tryParse(raw.toString())?.toLocal();
+  return false;
 }
 
 String _capabilityHint(MobileCapability capability) {
-  if (capability.description?.trim().isNotEmpty == true) {
-    return capability.description!.trim();
-  }
-
+  if (capability.description?.trim().isNotEmpty == true) return capability.description!.trim();
+  if (capability.kernelAvailable) return 'Company-built live Responsibility';
   switch (capability.key) {
     case 'attendance':
       return 'Check in / check out';
@@ -1021,16 +1212,36 @@ String _capabilityHint(MobileCapability capability) {
       return 'View your field route';
     case 'ta_da':
       return 'Travel, expenses and claims';
-  }
-
-  switch (capability.type.toLowerCase()) {
-    case 'checklist':
-      return 'Guided checklist';
-    case 'upload':
-      return 'Photo evidence';
-    case 'report':
-      return 'View report';
     default:
       return 'Record work';
   }
 }
+
+String? _responsibilityKeyFromAction(String? actionKey) {
+  if (actionKey == null || !actionKey.startsWith('responsibility.')) return null;
+  final parts = actionKey.split('.');
+  if (parts.length < 3) return null;
+  return parts.sublist(1, parts.length - 1).join('.');
+}
+
+String _workActionLabel(Map<String, dynamic> item) {
+  return (item['label'] ?? item['actionKey'] ?? item['kind'] ?? 'Work item').toString();
+}
+
+String _workSubtitle(Map<String, dynamic> item) {
+  final responsibility = _map(item['responsibility']);
+  return item['description']?.toString() ??
+      responsibility['title']?.toString() ??
+      item['reason']?.toString() ??
+      'Ready to continue';
+}
+
+String _workScope(dynamic session) => '${session.tenant.code}:${session.user.id}';
+
+Map<String, dynamic> _map(dynamic value) => value is Map
+    ? Map<String, dynamic>.from(value)
+    : <String, dynamic>{};
+
+List<Map<String, dynamic>> _mapList(dynamic value) => value is List
+    ? value.whereType<Map>().map((item) => Map<String, dynamic>.from(item)).toList()
+    : <Map<String, dynamic>>[];

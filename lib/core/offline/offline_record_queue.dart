@@ -4,21 +4,40 @@ import '../config/field_api.dart';
 import '../database/app_database.dart';
 import '../services/media/local_photo_store.dart';
 
-/// Offline queue for the generic Responsibility CRUD API.
-///
-/// Queue items store the HTTP method + generic record path instead of a
-/// business-specific submission type. Media values may contain a local file
-/// marker and are uploaded immediately before the queued mutation is sent.
+/// Tenant/user-scoped offline queue for generic Responsibility mutations.
 class OfflineRecordQueue {
   OfflineRecordQueue._();
 
-  static const _cacheKey = 'pending_responsibility_records_v1';
+  static const _legacyCacheKey = 'pending_responsibility_records_v1';
   static const localPhotoKey = '__localPhotoPath';
+
+  static String _scope = 'anonymous';
+
+  static void useScope(String value) {
+    final normalized = value.trim().replaceAll(RegExp(r'[^a-zA-Z0-9_.:-]+'), '_');
+    _scope = normalized.isEmpty ? 'anonymous' : normalized;
+  }
+
+  static String get _cacheKey => 'pending_responsibility_records_v2:$_scope';
+
+  static Future<void> migrateLegacyQueue() async {
+    if (_scope == 'anonymous') return;
+    final current = await AppDatabase.instance.getCache(_cacheKey);
+    if (current is List && current.isNotEmpty) return;
+
+    final legacy = await AppDatabase.instance.getCache(_legacyCacheKey);
+    if (legacy is List && legacy.isNotEmpty) {
+      await AppDatabase.instance.putCache(_cacheKey, legacy);
+      await AppDatabase.instance.removeCache(_legacyCacheKey);
+    }
+  }
 
   static Future<void> enqueue({
     required String method,
     required String path,
     required Map<String, dynamic> body,
+    String? producesRecordKey,
+    String? recordReferenceKey,
   }) async {
     final existing = await AppDatabase.instance.getCache(_cacheKey);
 
@@ -35,8 +54,7 @@ class OfflineRecordQueue {
         queue.any(
           (item) =>
               (item['body'] is Map) &&
-              (item['body'] as Map)['clientMutationId']?.toString() ==
-                  mutationId,
+              (item['body'] as Map)['clientMutationId']?.toString() == mutationId,
         )) {
       return;
     }
@@ -45,6 +63,10 @@ class OfflineRecordQueue {
       'method': method.toUpperCase(),
       'path': path,
       'body': body,
+      if (producesRecordKey != null && producesRecordKey.isNotEmpty)
+        'producesRecordKey': producesRecordKey,
+      if (recordReferenceKey != null && recordReferenceKey.isNotEmpty)
+        'recordReferenceKey': recordReferenceKey,
       'queuedAt': DateTime.now().toUtc().toIso8601String(),
     });
 
@@ -70,6 +92,7 @@ class OfflineRecordQueue {
     return Map<String, dynamic>.from(resolved);
   }
 
+  /// Returns the number of mutations still waiting after the flush.
   static Future<int> flush(String accessToken) async {
     final existing = await AppDatabase.instance.getCache(_cacheKey);
     if (existing is! List || existing.isEmpty) return 0;
@@ -80,31 +103,70 @@ class OfflineRecordQueue {
         .toList();
 
     final remaining = <Map<String, dynamic>>[];
+    final resolvedRecordIds = <String, String>{};
     final api = FieldApi(accessToken: accessToken);
 
-    for (final item in queue) {
+    for (final original in queue) {
+      final item = Map<String, dynamic>.from(original);
       final bodyRaw = item['body'];
       final path = item['path']?.toString();
       final method = item['method']?.toString().toUpperCase();
 
-      if (bodyRaw is! Map || path == null || path.isEmpty) {
-        continue;
-      }
+      if (bodyRaw is! Map || path == null || path.isEmpty) continue;
 
       final body = Map<String, dynamic>.from(bodyRaw);
+      final recordReferenceKey = item['recordReferenceKey']?.toString();
+
+      if (recordReferenceKey != null && recordReferenceKey.isNotEmpty) {
+        final resolvedId = resolvedRecordIds[recordReferenceKey];
+        if (resolvedId == null || resolvedId.isEmpty) {
+          // The mutation that creates the server record is still ahead of us
+          // (or failed). Keep this dependent action safely queued.
+          remaining.add(item);
+          continue;
+        }
+
+        body['recordId'] = resolvedId;
+        item['body'] = body;
+        item.remove('recordReferenceKey');
+      }
+
       final localPaths = _collectLocalPhotoPaths(body);
 
       try {
         final prepared = await prepareBodyForUpload(accessToken, body);
+        Map<String, dynamic> response;
 
         switch (method) {
           case 'PATCH':
-            await api.patchJson(path, prepared);
+            response = await api.patchJson(path, prepared);
+            break;
+          case 'DELETE':
+            response = await api.deleteJson(path, prepared);
             break;
           case 'POST':
           default:
-            await api.postJson(path, prepared);
+            response = await api.postJson(path, prepared);
             break;
+        }
+
+        final producesRecordKey = item['producesRecordKey']?.toString();
+        if (producesRecordKey != null && producesRecordKey.isNotEmpty) {
+          final recordRaw = response['record'];
+          final runtimeRaw = response['runtime'];
+          String? recordId;
+
+          if (recordRaw is Map) {
+            recordId = recordRaw['id']?.toString();
+          }
+          if ((recordId == null || recordId.isEmpty) && runtimeRaw is Map) {
+            final worldRaw = runtimeRaw['world'];
+            if (worldRaw is Map) recordId = worldRaw['recordId']?.toString();
+          }
+
+          if (recordId != null && recordId.isNotEmpty) {
+            resolvedRecordIds[producesRecordKey] = recordId;
+          }
         }
 
         for (final localPath in localPaths) {

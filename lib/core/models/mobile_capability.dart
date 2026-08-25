@@ -6,6 +6,7 @@ class MobileCapability {
     required this.type,
     required this.config,
     required this.definition,
+    this.runtimeManifest = const {},
     this.description,
     this.icon,
   });
@@ -14,13 +15,27 @@ class MobileCapability {
   final String key, title, type;
   final String? description, icon;
 
-  /// Raw compatibility config. New Platform Core responses expose the
-  /// normalized definition separately; older cached sessions may only have
-  /// config, so both are retained while the app migrates.
+  /// Compatibility definition used by pre-Kernel screens.
   final Map<String, dynamic> config;
-
-  /// Canonical Responsibility definition returned by /api/salesApp/bootstrap.
   final Map<String, dynamic> definition;
+
+  /// Latest published CMS contract. This is authoritative when
+  /// kernelAvailable is true.
+  final Map<String, dynamic> runtimeManifest;
+
+  bool get kernelAvailable => runtimeManifest['kernelAvailable'] == true;
+  int get manifestVersion =>
+      int.tryParse(runtimeManifest['version']?.toString() ?? '') ?? 0;
+  String get manifestHash => runtimeManifest['hash']?.toString() ?? '';
+  String get manifestSource => runtimeManifest['source']?.toString() ?? '';
+
+  Map<String, dynamic> get publishedManifest {
+    final raw = runtimeManifest['manifest'];
+    return raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
+  }
+
+  Map<String, dynamic> get kernelDefinition =>
+      _extractKernel(publishedManifest) ?? const <String, dynamic>{};
 
   Map<String, dynamic> get inputDefinition {
     final raw = definition['input'];
@@ -54,7 +69,6 @@ class MobileCapability {
           .toList();
     }
 
-    // Old cached capability shape.
     final legacy = config['fields'];
     if (legacy is List) {
       return legacy
@@ -67,6 +81,7 @@ class MobileCapability {
   }
 
   bool get hasGeneratedApp {
+    if (kernelAvailable) return true;
     final app = appDefinition;
     final actions = app['actions'];
     return app.isNotEmpty || actions is List;
@@ -90,6 +105,8 @@ class MobileCapability {
           : Map<String, dynamic>.from(definition);
     }
 
+    final rawRuntimeManifest = j['runtimeManifest'];
+
     return MobileCapability(
       id: (j['id'] as num).toInt(),
       key: j['key'].toString(),
@@ -99,6 +116,38 @@ class MobileCapability {
       icon: j['icon']?.toString(),
       config: config,
       definition: definition,
+      runtimeManifest: rawRuntimeManifest is Map
+          ? Map<String, dynamic>.from(rawRuntimeManifest)
+          : <String, dynamic>{},
     );
+  }
+
+  static Map<String, dynamic>? _extractKernel(dynamic value) {
+    if (value is! Map) return null;
+    final map = Map<String, dynamic>.from(value);
+
+    final version = int.tryParse(map['kernelVersion']?.toString() ?? '') ?? 0;
+    if (version >= 3 && map['runtimeWorld'] is Map && map['possibilities'] is List) {
+      return map;
+    }
+
+    final candidates = <dynamic>[
+      map['responsibilityKernel'],
+      map['kernel'],
+      if (map['metadata'] is Map) (map['metadata'] as Map)['responsibilityKernel'],
+      if (map['extension'] is Map) (map['extension'] as Map)['responsibilityKernel'],
+      if (map['extension'] is Map && (map['extension'] as Map)['metadata'] is Map)
+        ((map['extension'] as Map)['metadata'] as Map)['responsibilityKernel'],
+      if (map['runtime'] is Map) (map['runtime'] as Map)['kernel'],
+      if (map['app'] is Map && (map['app'] as Map)['config'] is Map)
+        ((map['app'] as Map)['config'] as Map)['responsibilityKernel'],
+    ];
+
+    for (final candidate in candidates) {
+      final found = _extractKernel(candidate);
+      if (found != null) return found;
+    }
+
+    return null;
   }
 }

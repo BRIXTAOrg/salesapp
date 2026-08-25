@@ -24,25 +24,25 @@ class TenantConfig {
   final String supportLabel;
 
   TenantConfig copyWith({String? code}) => TenantConfig(
-    id: id,
-    code: code ?? this.code,
-    displayName: displayName,
-    appName: appName,
-    primaryColor: primaryColor,
-    surfaceColor: surfaceColor,
-    backgroundColor: backgroundColor,
-    logoText: logoText,
-    supportLabel: supportLabel,
-  );
+        id: id,
+        code: code ?? this.code,
+        displayName: displayName,
+        appName: appName,
+        primaryColor: primaryColor,
+        surfaceColor: surfaceColor,
+        backgroundColor: backgroundColor,
+        logoText: logoText,
+        supportLabel: supportLabel,
+      );
 
   static const demo = TenantConfig(
     id: 'tenant-demo-cement',
     code: 'companyname',
     displayName: 'BRIXTA Cement',
     appName: 'BRIXTA Field',
-    primaryColor: Color(0xFF2563EB),
+    primaryColor: Color(0xFF15803D),
     surfaceColor: Color(0xFFFFFFFF),
-    backgroundColor: Color(0xFFF9FAFB),
+    backgroundColor: Color(0xFFF8FAF9),
     logoText: 'B',
   );
 }

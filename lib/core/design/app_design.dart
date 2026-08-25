@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 abstract final class AppDesign {
-  // 8pt system: 4 is reserved only for micro-adjustments.
+  // Existing restrained 8pt system retained.
   static const s4 = 4.0;
   static const s8 = 8.0;
   static const s16 = 16.0;
@@ -13,25 +13,29 @@ abstract final class AppDesign {
   static const ink = Color(0xFF111827);
   static const muted = Color(0xFF4B5563);
   static const faint = Color(0xFF9CA3AF);
-  static const canvas = Color(0xFFF9FAFB);
+  static const canvas = Color(0xFFF8FAF9);
   static const surface = Color(0xFFFFFFFF);
-  static const line = Color(0xFFE5E7EB);
-  static const softGray = Color(0xFFF3F4F6);
+  static const line = Color(0xFFE3E9E5);
+  static const softGray = Color(0xFFF2F5F3);
 
-  // One primary action color. Other colors are semantic only.
-  static const primary = Color(0xFF2563EB);
-  static const blue = primary;
+  // BRIXTA live/runtime accent. The visual language stays neutral; green is
+  // reserved for primary action, online/live state and successful progress.
+  static const primary = Color(0xFF15803D);
+  static const blue = Color(0xFF2563EB);
   static const green = Color(0xFF15803D);
+  static const greenDark = Color(0xFF166534);
+  static const greenBright = Color(0xFF16A34A);
   static const amber = Color(0xFFB45309);
   static const red = Color(0xFFB91C1C);
 
   static const softBlue = Color(0xFFEFF6FF);
   static const softGreen = Color(0xFFF0FDF4);
+  static const greenWash = Color(0xFFF5FBF7);
   static const softAmber = Color(0xFFFFFBEB);
   static const softRed = Color(0xFFFEF2F2);
   static const softViolet = softBlue;
 
-  // Backward-compatible aliases so older screens continue to compile.
+  // Backward-compatible aliases.
   static const lavender = softBlue;
   static const sky = softBlue;
   static const lemon = softAmber;
@@ -45,8 +49,8 @@ abstract final class AppDesign {
   static const pagePadding = EdgeInsets.symmetric(horizontal: s24);
   static const pageInset = EdgeInsets.fromLTRB(s24, s24, s24, s48);
 
-  static const radius = 8.0;
-  static const controlRadius = 6.0;
+  static const radius = 10.0;
+  static const controlRadius = 8.0;
 
   static ThemeData theme() {
     const scheme = ColorScheme.light(
@@ -163,10 +167,7 @@ abstract final class AppDesign {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(controlRadius),
           ),
-          textStyle: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -174,14 +175,11 @@ abstract final class AppDesign {
           foregroundColor: ink,
           minimumSize: const Size.fromHeight(48),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          side: const BorderSide(color: Color(0xFFD1D5DB)),
+          side: const BorderSide(color: Color(0xFFD1D8D3)),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(controlRadius),
           ),
-          textStyle: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -191,10 +189,7 @@ abstract final class AppDesign {
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(controlRadius),
           ),
-          textStyle: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-          ),
+          textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
@@ -202,17 +197,14 @@ abstract final class AppDesign {
         fillColor: surface,
         labelStyle: const TextStyle(color: muted, fontSize: 14),
         hintStyle: const TextStyle(color: faint, fontSize: 14),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(controlRadius),
-          borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+          borderSide: const BorderSide(color: Color(0xFFD1D8D3)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(controlRadius),
-          borderSide: const BorderSide(color: Color(0xFFD1D5DB)),
+          borderSide: const BorderSide(color: Color(0xFFD1D8D3)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(controlRadius),
@@ -224,19 +216,15 @@ abstract final class AppDesign {
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        height: 64,
+        height: 66,
         elevation: 0,
         backgroundColor: surface,
-        indicatorColor: softBlue,
+        indicatorColor: softGreen,
         indicatorShape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(controlRadius),
         ),
         labelTextStyle: const WidgetStatePropertyAll(
-          TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            color: ink,
-          ),
+          TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ink),
         ),
       ),
       chipTheme: ChipThemeData(
@@ -245,11 +233,7 @@ abstract final class AppDesign {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(controlRadius),
         ),
-        labelStyle: const TextStyle(
-          fontSize: 12,
-          fontWeight: FontWeight.w500,
-          color: ink,
-        ),
+        labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: ink),
       ),
       snackBarTheme: const SnackBarThemeData(
         behavior: SnackBarBehavior.floating,

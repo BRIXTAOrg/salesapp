@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import '../../config/api_config.dart';
 import '../../config/tenant_config.dart';
 import '../../database/app_database.dart';
+import '../../device/device_identity.dart';
 import '../../models/app_user.dart';
 import '../../models/auth_session.dart';
 import '../../models/mobile_capability.dart';
@@ -22,11 +23,19 @@ class BackendAuthGateway implements AuthGateway {
   final http.Client _client;
   final AppDatabase _database;
 
+  Map<String, String> get _runtimeHeaders =>
+      AppDeviceIdentity.instance.requestHeaders;
+
   @override
   Future<AuthSession> login(LoginRequest request) async {
+    await AppDeviceIdentity.instance.initialize();
+
     final loginResponse = await _client.post(
       Uri.parse('${ApiConfig.baseUrl}/api/salesApp/auth/login'),
-      headers: {'content-type': 'application/json'},
+      headers: {
+        'content-type': 'application/json',
+        ..._runtimeHeaders,
+      },
       body: jsonEncode({
         'companyCode': request.tenant.code,
         'salesmanLoginId': request.identifier.trim(),
@@ -59,6 +68,7 @@ class BackendAuthGateway implements AuthGateway {
     await _cacheSession(
       token: token,
       identifier: request.identifier.trim(),
+      tenantCode: request.tenant.code,
       bootstrap: bootstrap,
     );
 
@@ -79,6 +89,7 @@ class BackendAuthGateway implements AuthGateway {
     await _cacheSession(
       token: current.accessToken,
       identifier: current.user.employeeCode,
+      tenantCode: current.tenant.code,
       bootstrap: bootstrap,
     );
 
@@ -92,6 +103,7 @@ class BackendAuthGateway implements AuthGateway {
     final map = Map<String, dynamic>.from(cached);
     final token = map['token']?.toString();
     final identifier = map['identifier']?.toString();
+    final tenantCode = map['tenantCode']?.toString();
     final rawBootstrap = map['bootstrap'];
 
     if (token == null ||
@@ -103,7 +115,9 @@ class BackendAuthGateway implements AuthGateway {
 
     try {
       return _buildSession(
-        tenant: tenant,
+        tenant: tenant.copyWith(
+          code: tenantCode == null || tenantCode.isEmpty ? tenant.code : tenantCode,
+        ),
         token: token,
         identifier: identifier,
         bootstrap: Map<String, dynamic>.from(rawBootstrap),
@@ -114,9 +128,14 @@ class BackendAuthGateway implements AuthGateway {
   }
 
   Future<Map<String, dynamic>> _fetchBootstrap(String token) async {
+    await AppDeviceIdentity.instance.initialize();
+
     final response = await _client.get(
       Uri.parse('${ApiConfig.baseUrl}/api/salesApp/bootstrap'),
-      headers: {'authorization': 'Bearer $token'},
+      headers: {
+        'authorization': 'Bearer $token',
+        ..._runtimeHeaders,
+      },
     );
 
     final body = _decodeMap(response.body);
@@ -132,11 +151,13 @@ class BackendAuthGateway implements AuthGateway {
   Future<void> _cacheSession({
     required String token,
     required String identifier,
+    required String tenantCode,
     required Map<String, dynamic> bootstrap,
   }) {
     return _database.putCache(_cacheKey, {
       'token': token,
       'identifier': identifier,
+      'tenantCode': tenantCode,
       'bootstrap': bootstrap,
     });
   }
@@ -155,10 +176,6 @@ class BackendAuthGateway implements AuthGateway {
     }
 
     final user = Map<String, dynamic>.from(rawUser);
-
-    // Platform Core renamed business modules to Responsibilities. Keep the
-    // modules fallback so already-cached sessions from an older server can
-    // still restore during rollout.
     final responsibilitiesRaw =
         bootstrap['responsibilities'] ?? bootstrap['modules'];
     final permissionsRaw = bootstrap['permissions'];
@@ -168,19 +185,15 @@ class BackendAuthGateway implements AuthGateway {
         ...permissionsRaw.map((item) => item.toString()),
     };
 
-    // The workflow bootstrap already exposes ready action keys. Treat them as
-    // runtime permissions for presentation purposes; the backend remains the
-    // authoritative enforcement point.
-    final readyActions = bootstrap['readyActions'];
-    if (readyActions is List) {
-      for (final item in readyActions) {
-        if (item is String) {
-          permissions.add(item);
-        } else if (item is Map && item['actionKey'] != null) {
-          permissions.add(item['actionKey'].toString());
-        }
-      }
+    final readyActions = _mapList(bootstrap['readyActions']);
+    for (final item in readyActions) {
+      final key = item['actionKey']?.toString();
+      if (key != null && key.isNotEmpty) permissions.add(key);
     }
+
+    final sync = _map(bootstrap['sync']);
+    final device = _map(bootstrap['device']);
+    final workflow = _map(bootstrap['workflow']);
 
     return AuthSession(
       accessToken: token,
@@ -207,8 +220,27 @@ class BackendAuthGateway implements AuthGateway {
                 ),
               ),
       ],
+      workspaceRevision: sync['workspaceRevision']?.toString() ?? '',
+      syncConfig: sync,
+      deviceRuntime: device,
+      workflow: workflow,
+      readyActions: readyActions,
+      blockedActions: _mapList(bootstrap['blockedActions']),
+      pendingApprovals: _mapList(bootstrap['pendingApprovals']),
+      generatedAt: DateTime.tryParse(bootstrap['generatedAt']?.toString() ?? ''),
     );
   }
+
+  static Map<String, dynamic> _map(dynamic value) => value is Map
+      ? Map<String, dynamic>.from(value)
+      : <String, dynamic>{};
+
+  static List<Map<String, dynamic>> _mapList(dynamic value) => value is List
+      ? value
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList()
+      : <Map<String, dynamic>>[];
 
   Map<String, dynamic> _decodeMap(String body) {
     try {
