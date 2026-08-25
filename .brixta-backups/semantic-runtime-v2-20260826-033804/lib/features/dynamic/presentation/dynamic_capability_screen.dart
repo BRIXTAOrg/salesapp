@@ -108,17 +108,6 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     return config['hidden'] != true;
   }).toList();
 
-  bool get employeeOwnHistoryVisible {
-    final rawConfig = _capability.appDefinition['config'];
-    final config = rawConfig is Map
-        ? Map<String, dynamic>.from(rawConfig)
-        : <String, dynamic>{};
-
-    return config['employeeOwnHistoryVisible'] != false;
-  }
-
-
-
   String? get latestStatus {
     /*
      * The absence of a record does NOT mean the Responsibility has
@@ -470,14 +459,10 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
           for (final localPath in localPhotoPaths) {
             await LocalPhotoStore.delete(localPath);
           }
-        } on FieldApiException catch (error) {
-          // A 4xx/409 is a real server decision, not an offline condition.
-          // Never hide it in the offline queue or optimistic UI.
-          if (mounted) _message(error.message);
-          return;
         } catch (error) {
-          // Transport/unknown failures can be queued. CREATE is idempotent via
-          // clientMutationId and UPDATE targets a known cached server record.
+          // CREATE mutations are safe to queue because clientMutationId makes
+          // them idempotent. UPDATE is also queued when it targets a known
+          // server record ID from the local record cache.
           await OfflineRecordQueue.enqueue(
             method: method,
             path: path,
@@ -691,7 +676,7 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
                 ),
                 if (i != visibleActions.length - 1) const SizedBox(height: 20),
               ],
-            if (employeeOwnHistoryVisible && _records.isNotEmpty) ...[
+            if (_records.isNotEmpty) ...[
               const SizedBox(height: 40),
               const _SectionLabel('RECENT'),
               const SizedBox(height: 12),

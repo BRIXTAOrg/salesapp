@@ -108,17 +108,6 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     return config['hidden'] != true;
   }).toList();
 
-  bool get employeeOwnHistoryVisible {
-    final rawConfig = _capability.appDefinition['config'];
-    final config = rawConfig is Map
-        ? Map<String, dynamic>.from(rawConfig)
-        : <String, dynamic>{};
-
-    return config['employeeOwnHistoryVisible'] != false;
-  }
-
-
-
   String? get latestStatus {
     /*
      * The absence of a record does NOT mean the Responsibility has
@@ -691,7 +680,7 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
                 ),
                 if (i != visibleActions.length - 1) const SizedBox(height: 20),
               ],
-            if (employeeOwnHistoryVisible && _records.isNotEmpty) ...[
+            if (_records.isNotEmpty) ...[
               const SizedBox(height: 40),
               const _SectionLabel('RECENT'),
               const SizedBox(height: 12),

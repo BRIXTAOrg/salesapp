@@ -172,13 +172,6 @@ class OfflineRecordQueue {
         for (final localPath in localPaths) {
           await LocalPhotoStore.delete(localPath);
         }
-      } on FieldApiException catch (error) {
-        final status = error.statusCode ?? 0;
-        final permanentClientError =
-            status >= 400 && status < 500 && status != 408 && status != 429;
-        if (!permanentClientError) {
-          remaining.add(item);
-        }
       } catch (_) {
         remaining.add(item);
       }
