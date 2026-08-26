@@ -4,12 +4,12 @@
 - cluster-only mode — file stats not available
 
 ## Summary
-- 1553 nodes · 2109 edges · 72 communities (66 shown, 6 thin omitted)
+- 2041 nodes · 2815 edges · 83 communities (75 shown, 8 thin omitted)
 - Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 18 edges (avg confidence: 0.85)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `a4c34775`
+- Built from commit: `926d4e16`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -20,7 +20,7 @@
 - lib/features/dashboard/presentation/employee_dashboard_screen.dart
 - lib/features/dynamic/presentation/dynamic_capability_screen.dart
 - GeneratedPluginRegistrant.swift
-- app_design.dart
+- lib/core/design/app_design.dart
 - attendance_screen.dart
 - app_database.dart
 - app_icons.dart
@@ -32,14 +32,14 @@
 - app_session_controller.dart
 - tracking_controller.dart
 - tracking_screen.dart
-- login_screen.dart
+- lib/features/auth/presentation/login_screen.dart
 - playful_widgets.dart
 - main.dart
 - local_sync_gateway.dart
 - field_api.dart
-- daily_status_screen.dart
+- core/database/app_database.dart
 - kernel_responsibility_screen.dart
-- employee_profile_tab.dart
+- lib/features/dashboard/presentation/employee_profile_tab.dart
 - backend_auth_gateway.dart
 - StatefulWidget
 - MotionGate
@@ -55,7 +55,7 @@
 - offline_submission_queue.dart
 - offline_attendance_queue.dart
 - device_identity.dart
-- brixta_app.dart
+- core/session/app_session_controller.dart
 - native_tracking_repository.dart
 - status_pill.dart
 - static const
@@ -63,36 +63,47 @@
 - api_config.dart
 - responsibility_runtime_api.dart
 - Exception
-- AppSessionController
+- editorial-ui-20260826-013104/lib/features/dashboard/presentation/employee_dashboard_screen.dart
 - enquiry_form_screen.dart
-- runtime_connection_banner.dart
+- AppSessionController
 - String?
 - cms-sovereignty-20260825-231628/lib/features/dashboard/presentation/employee_dashboard_screen.dart
 - LaunchImage.imageset/README.md
 - cms-sovereignty-finish-20260825-231953/employee_dashboard_screen.dart
-- TrackingRepository
+- editorial-ui-20260826-013104/lib/features/dynamic/presentation/dynamic_capability_screen.dart
 - README.md
 - cms-sovereignty-20260825-231628/lib/features/dynamic/presentation/dynamic_capability_screen.dart
 - TrackingStore
 - MainActivity.kt
 - manifest.json
-- State
+- WidgetsBindingObserver
 - FieldTrackingService.kt
 - _ReferencePickerSheet
-- List
-- sync_transport.dart
+- employee-own-history-v2-20260826-042335/lib/features/dynamic/presentation/dynamic_capability_screen.dart
+- initial-state-runtime-20260826-022320/lib/features/dynamic/presentation/dynamic_capability_screen.dart
+- semantic-runtime-v2-20260826-033804/lib/features/dynamic/presentation/dynamic_capability_screen.dart
+- editorial-ui-20260826-013104/lib/core/design/app_design.dart
+- editorial-ui-20260826-013104/lib/features/dashboard/presentation/employee_profile_tab.dart
+- editorial_backdrop.dart
+- editorial-ui-20260826-013104/lib/features/auth/presentation/login_screen.dart
+- State
+- semantic-runtime-v2-20260826-033804/lib/core/offline/offline_record_queue.dart
+- firebase_options.dart
+- AllowancesScreen
+- _ClaimSheet
+- _KernelResponsibilityScreenState
 
 ## God Nodes (most connected - your core abstractions)
 1. `Win32Window` - 24 edges
 2. `FieldTrackingService` - 24 edges
-3. `TrackingStore` - 16 edges
-4. `AppSessionController` - 15 edges
+3. `AppSessionController` - 24 edges
+4. `TrackingStore` - 16 edges
 5. `MessageHandler` - 12 edges
-6. `MotionGate` - 11 edges
-7. `FlutterWindow` - 10 edges
-8. `MainActivity` - 10 edges
-9. `Create` - 10 edges
-10. `WndProc` - 10 edges
+6. `MobileCapability` - 12 edges
+7. `TrackingController` - 12 edges
+8. `MotionGate` - 11 edges
+9. `FlutterWindow` - 10 edges
+10. `MainActivity` - 10 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Win32Window::Win32Window()` --calls--> `Destroy`  [INFERRED]
@@ -109,7 +120,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (72 total, 6 thin omitted)
+## Communities (83 total, 8 thin omitted)
 
 ### Community 0 - "Win32Window"
 Cohesion: 0.05
@@ -117,27 +128,27 @@ Nodes (57): PluginRegistry, RECT, unique_ptr, RegisterPlugins(), DartProject, HW
 
 ### Community 2 - "allowances_screen.dart"
 Cohesion: 0.03
-Nodes (64): active, _addReceipt, AllowancesScreen, _AllowancesScreenState, border, build, busy, claim (+56 more)
+Nodes (71): active, _addReceipt, border, build, busy, claim, _ClaimDraft, _ClaimFact (+63 more)
 
 ### Community 3 - "lib/features/dashboard/presentation/employee_dashboard_screen.dart"
 Cohesion: 0.03
-Nodes (68): employee_profile_tab.dart, approvalCount, _approvals, _blockedWork, build, capability, _capabilityHint, _capabilityNeedsTracking (+60 more)
+Nodes (74): ../../../core/offline/offline_submission_queue.dart, approvalCount, _approvals, _blockedWork, build, capability, _capabilityHint, _capabilityNeedsTracking (+66 more)
 
 ### Community 4 - "lib/features/dynamic/presentation/dynamic_capability_screen.dart"
 Cohesion: 0.03
-Nodes (63): ../../../core/models/mobile_capability.dart, action, _ActionCard, actionCount, _actionVisible, _applyOptimisticRecord, build, _buildField (+55 more)
+Nodes (62): action, _ActionCard, actionCount, _actionVisible, _applyOptimisticRecord, build, _buildField, _cacheKey (+54 more)
 
 ### Community 5 - "GeneratedPluginRegistrant.swift"
 Cohesion: 0.06
 Nodes (30): Any, Cocoa, connectivity_plus, file_selector_macos, firebase_core, firebase_remote_config, Flutter, FlutterAppDelegate (+22 more)
 
-### Community 6 - "app_design.dart"
-Cohesion: 0.05
-Nodes (42): amber, AppDesign, blue, canvas, controlRadius, faint, green, greenBright (+34 more)
+### Community 6 - "lib/core/design/app_design.dart"
+Cohesion: 0.04
+Nodes (51): amber, AppDesign, blue, canvas, controlRadius, editorialCurve, editorialDuration, faint (+43 more)
 
 ### Community 7 - "attendance_screen.dart"
 Cohesion: 0.04
-Nodes (45): ../../../core/offline/offline_attendance_queue.dart, ../../../core/services/media/local_photo_store.dart, dart:io, delete, _extension, LocalPhotoStore, persist, AttendanceScreen (+37 more)
+Nodes (44): ../../../core/offline/offline_attendance_queue.dart, ../../../core/services/media/local_photo_store.dart, delete, _extension, LocalPhotoStore, persist, AttendanceScreen, _AttendanceScreenState (+36 more)
 
 ### Community 8 - "app_database.dart"
 Cohesion: 0.06
@@ -153,15 +164,15 @@ Nodes (30): accuracy, accuracyM, acknowledge, active, currentLocation, CurrentLo
 
 ### Community 11 - "StatelessWidget"
 Cohesion: 0.04
-Nodes (57): _CapabilityList, _CapabilityRow, _Header, _HomeTab, _LiveOverview, _NextCard, _QuickResponsibilityGrid, _QuietState (+49 more)
+Nodes (47): _CapabilityRow, _Header, _Metric, _QuickResponsibilityGrid, _QuietState, _WorkNotice, _CapabilityList, _CapabilityRow (+39 more)
 
 ### Community 12 - "my_application.cc"
 Cohesion: 0.09
 Nodes (22): FlPluginRegistry, FlView, GApplication, gboolean, gchar, GObject, GtkApplication, fl_register_plugins() (+14 more)
 
 ### Community 13 - "auth_session.dart"
-Cohesion: 0.11
-Nodes (18): app_user.dart, accessToken, AuthSession, blockedActions, can, deviceRuntime, generatedAt, modules (+10 more)
+Cohesion: 0.06
+Nodes (30): app_user.dart, DateTime?, AppUser, department, designation, roles, accessToken, AuthSession (+22 more)
 
 ### Community 14 - "field_tracking_service.dart"
 Cohesion: 0.09
@@ -177,55 +188,55 @@ Nodes (23): ../../../core/config/field_api.dart, TrackingSnapshot, active, _auto
 
 ### Community 17 - "tracking_screen.dart"
 Cohesion: 0.11
-Nodes (18): ../../../core/design/app_design.dart, build, controller, distanceKm, icon, _InfoCard, label, _MeterHero (+10 more)
+Nodes (17): build, controller, distanceKm, icon, _InfoCard, label, _MeterHero, _positionText (+9 more)
 
-### Community 18 - "login_screen.dart"
-Cohesion: 0.11
-Nodes (18): ../../../core/services/auth/auth_gateway.dart, core/session/app_session_controller.dart, ../../../core/widgets/tenant_logo.dart, build, _companyCodeController, controller, createState, dispose (+10 more)
+### Community 18 - "lib/features/auth/presentation/login_screen.dart"
+Cohesion: 0.13
+Nodes (14): ../../../core/design/app_design.dart, build, _companyCodeController, controller, createState, dispose, _employeeController, _error (+6 more)
 
 ### Community 19 - "playful_widgets.dart"
 Cohesion: 0.11
 Nodes (17): background, badge, build, eyebrow, foreground, FunPill, FunSectionTitle, icon (+9 more)
 
 ### Community 20 - "main.dart"
-Cohesion: 0.08
-Nodes (23): app/brixta_app.dart, core/config/remote_config_service.dart, core/config/tenant_config.dart, core/device/device_identity.dart, core/services/auth/backend_auth_gateway.dart, core/services/connectivity/device_connectivity_gateway.dart, core/services/sync/local_sync_gateway.dart, core/services/sync/sync_transport.dart (+15 more)
+Cohesion: 0.11
+Nodes (18): app/brixta_app.dart, core/config/remote_config_service.dart, core/config/tenant_config.dart, core/device/device_identity.dart, core/services/auth/backend_auth_gateway.dart, core/services/connectivity/device_connectivity_gateway.dart, core/services/sync/local_sync_gateway.dart, core/services/sync/sync_transport.dart (+10 more)
 
 ### Community 21 - "local_sync_gateway.dart"
 Cohesion: 0.12
 Nodes (16): ../connectivity/connectivity_gateway.dart, AppDatabase, changes, connectivityGateway, _connectivitySubscription, _controller, _current, database (+8 more)
 
 ### Community 22 - "field_api.dart"
-Cohesion: 0.11
-Nodes (18): api_config.dart, int?, accessToken, _client, code, _decode, deleteJson, details (+10 more)
+Cohesion: 0.10
+Nodes (19): api_config.dart, dart:convert, int?, accessToken, _client, code, _decode, deleteJson (+11 more)
 
-### Community 23 - "daily_status_screen.dart"
-Cohesion: 0.14
-Nodes (14): core/database/app_database.dart, FormState, build, createState, DailyStatusScreen, _DailyStatusScreenState, _dealersVisited, dispose (+6 more)
+### Community 23 - "core/database/app_database.dart"
+Cohesion: 0.15
+Nodes (13): core/database/app_database.dart, build, createState, DailyStatusScreen, _DailyStatusScreenState, _dealersVisited, dispose, employeeId (+5 more)
 
 ### Community 24 - "kernel_responsibility_screen.dart"
 Cohesion: 0.02
 Nodes (83): ../../../core/services/runtime/local_kernel_simulator.dart, _acceptRuntime, action, _actions, _api, build, _buildCapture, busy (+75 more)
 
-### Community 25 - "employee_profile_tab.dart"
+### Community 25 - "lib/features/dashboard/presentation/employee_profile_tab.dart"
 Cohesion: 0.06
-Nodes (36): ../../../core/design/app_icons.dart, ../../../core/services/runtime/responsibility_runtime_api.dart, ../../../core/widgets/runtime_connection_banner.dart, build, _Card, child, controller, createState (+28 more)
+Nodes (31): ../../../core/design/app_icons.dart, ../../../core/widgets/runtime_connection_banner.dart, build, _Card, child, controller, createState, current (+23 more)
 
 ### Community 26 - "backend_auth_gateway.dart"
-Cohesion: 0.12
-Nodes (16): Client, _buildSession, _cacheKey, _cacheSession, _client, _database, _decodeMap, _fetchBootstrap (+8 more)
+Cohesion: 0.11
+Nodes (18): Client, ../device/device_identity.dart, _buildSession, _cacheKey, _cacheSession, _client, _database, _decodeMap (+10 more)
 
 ### Community 27 - "StatefulWidget"
-Cohesion: 0.29
-Nodes (7): EmployeeDashboardScreen, DynamicCapabilityScreen, EmployeeDashboardScreen, EmployeeDashboardScreen, DynamicCapabilityScreen, KernelResponsibilityScreen, StatefulWidget
+Cohesion: 0.13
+Nodes (15): EmployeeDashboardScreen, DynamicCapabilityScreen, EmployeeDashboardScreen, LoginScreen, EmployeeDashboardScreen, EmployeeProfileTab, DynamicCapabilityScreen, DynamicCapabilityScreen (+7 more)
 
 ### Community 28 - "MotionGate"
 Cohesion: 0.24
 Nodes (4): MotionGate, Sensor, SensorEvent, SensorEventListener
 
 ### Community 29 - "package:flutter/material.dart"
-Cohesion: 0.20
-Nodes (9): ../config/tenant_config.dart, TenantConfig, build, TenantTheme, build, size, tenant, TenantLogo (+1 more)
+Cohesion: 0.16
+Nodes (12): build, TenantTheme, ../config/tenant_config.dart, ../design/app_design.dart, TenantConfig, build, TenantTheme, build (+4 more)
 
 ### Community 30 - "device_connectivity_gateway.dart"
 Cohesion: 0.12
@@ -249,7 +260,7 @@ Nodes (11): LocalSyncGateway, changes, clean, conflictCount, current, isSyncing,
 
 ### Community 35 - "mobile_capability.dart"
 Cohesion: 0.11
-Nodes (18): int get, config, definition, _extractKernel, fromJson, icon, id, kernelAvailable (+10 more)
+Nodes (17): int get, config, definition, _extractKernel, fromJson, icon, id, kernelAvailable (+9 more)
 
 ### Community 36 - "mock_auth_gateway.dart"
 Cohesion: 0.20
@@ -260,24 +271,24 @@ Cohesion: 0.14
 Nodes (13): _cacheKey, _collectLocalPhotoPaths, enqueue, flush, _legacyCacheKey, localPhotoKey, migrateLegacyQueue, OfflineRecordQueue (+5 more)
 
 ### Community 38 - "offline_submission_queue.dart"
-Cohesion: 0.20
-Nodes (9): _cacheKey, _collectLocalPhotoPaths, enqueue, flush, localPhotoKey, OfflineSubmissionQueue, pendingCount, prepareForUpload (+1 more)
+Cohesion: 0.18
+Nodes (10): dart:io, _cacheKey, _collectLocalPhotoPaths, enqueue, flush, localPhotoKey, OfflineSubmissionQueue, pendingCount (+2 more)
 
 ### Community 39 - "offline_attendance_queue.dart"
 Cohesion: 0.22
 Nodes (8): ../config/field_api.dart, ../../database/app_database.dart, _cacheKey, enqueue, flush, OfflineAttendanceQueue, pendingCount, ../services/media/local_photo_store.dart
 
 ### Community 40 - "device_identity.dart"
-Cohesion: 0.11
-Nodes (17): bool get, DateTime?, AppDeviceIdentity, appVersion, _cacheKey, _createdAt, _deviceId, initialize (+9 more)
+Cohesion: 0.12
+Nodes (16): bool get, AppDeviceIdentity, appVersion, _cacheKey, _createdAt, _deviceId, initialize, instance (+8 more)
 
-### Community 41 - "brixta_app.dart"
-Cohesion: 0.29
-Nodes (6): ../core/theme/tenant_theme.dart, ../features/auth/presentation/login_screen.dart, ../features/dashboard/presentation/employee_dashboard_screen.dart, BrixtaApp, build, controller
+### Community 41 - "core/session/app_session_controller.dart"
+Cohesion: 0.19
+Nodes (11): BrixtaApp, build, controller, core/session/app_session_controller.dart, ../core/theme/tenant_theme.dart, ../core/widgets/editorial_backdrop.dart, ../features/auth/presentation/login_screen.dart, ../features/dashboard/presentation/employee_dashboard_screen.dart (+3 more)
 
 ### Community 42 - "native_tracking_repository.dart"
-Cohesion: 0.13
-Nodes (14): dart:convert, ../domain/tracking_repository.dart, acknowledge, _channel, currentLocation, locateNow, pending, prune (+6 more)
+Cohesion: 0.12
+Nodes (15): ../domain/tracking_repository.dart, acknowledge, _channel, currentLocation, locateNow, NativeTrackingRepository, pending, prune (+7 more)
 
 ### Community 43 - "status_pill.dart"
 Cohesion: 0.29
@@ -296,32 +307,36 @@ Cohesion: 0.29
 Nodes (6): ApiConfig, _baseUrl, _compiledDefault, updateBaseUrl, static String, static String get
 
 ### Community 47 - "responsibility_runtime_api.dart"
-Cohesion: 0.15
-Nodes (12): ../device/device_identity.dart, FieldApi get, accessToken, _api, dataSource, latestRecordId, myWork, profileRuntime (+4 more)
+Cohesion: 0.17
+Nodes (11): FieldApi get, accessToken, _api, dataSource, latestRecordId, myWork, profileRuntime, ResponsibilityRuntimeApi (+3 more)
 
 ### Community 48 - "Exception"
 Cohesion: 0.40
 Nodes (5): Exception, FieldApiException, AuthException, TrackingException, TrackingUiException
 
-### Community 49 - "AppSessionController"
-Cohesion: 0.40
-Nodes (5): ChangeNotifier, FieldTrackingService, AppSessionController, _NeverListenable, TrackingController
+### Community 49 - "editorial-ui-20260826-013104/lib/features/dashboard/presentation/employee_dashboard_screen.dart"
+Cohesion: 0.03
+Nodes (66): approvalCount, _approvals, _blockedWork, build, capability, _capabilityHint, _capabilityNeedsTracking, controller (+58 more)
 
 ### Community 50 - "enquiry_form_screen.dart"
-Cohesion: 0.14
-Nodes (14): build, _company, createState, dispose, employeeId, EnquiryFormScreen, _EnquiryFormScreenState, _formKey (+6 more)
+Cohesion: 0.13
+Nodes (15): FormState, build, _company, createState, dispose, employeeId, EnquiryFormScreen, _EnquiryFormScreenState (+7 more)
 
-### Community 51 - "runtime_connection_banner.dart"
-Cohesion: 0.25
-Nodes (7): ../design/app_design.dart, build, compact, controller, RuntimeConnectionBanner, package:flutter_lucide/flutter_lucide.dart, ../session/app_session_controller.dart
+### Community 51 - "AppSessionController"
+Cohesion: 0.12
+Nodes (16): build, compact, controller, RuntimeConnectionBanner, ChangeNotifier, editorial_backdrop.dart, FieldTrackingService, AppSessionController (+8 more)
 
 ### Community 58 - "cms-sovereignty-20260825-231628/lib/features/dashboard/presentation/employee_dashboard_screen.dart"
 Cohesion: 0.03
-Nodes (70): ../../allowances/presentation/allowances_screen.dart, ../../attendance/presentation/attendance_screen.dart, approvalCount, _approvals, _blockedWork, build, capability, _capabilityHint (+62 more)
+Nodes (76): ../../allowances/presentation/allowances_screen.dart, ../../attendance/presentation/attendance_screen.dart, approvalCount, _approvals, _blockedWork, build, capability, _capabilityHint (+68 more)
 
 ### Community 60 - "cms-sovereignty-finish-20260825-231953/employee_dashboard_screen.dart"
 Cohesion: 0.03
-Nodes (68): approvalCount, _approvals, _blockedWork, build, capability, _capabilityHint, _capabilityNeedsTracking, controller (+60 more)
+Nodes (66): approvalCount, _approvals, _blockedWork, build, capability, _capabilityHint, _capabilityNeedsTracking, controller (+58 more)
+
+### Community 61 - "editorial-ui-20260826-013104/lib/features/dynamic/presentation/dynamic_capability_screen.dart"
+Cohesion: 0.03
+Nodes (63): action, _ActionCard, actionCount, _actionVisible, _applyOptimisticRecord, build, _buildField, _cacheKey (+55 more)
 
 ### Community 63 - "cms-sovereignty-20260825-231628/lib/features/dynamic/presentation/dynamic_capability_screen.dart"
 Cohesion: 0.03
@@ -339,41 +354,73 @@ Nodes (5): MainActivity, FlutterActivity, FlutterEngine, IntArray, MethodChannel
 Cohesion: 0.18
 Nodes (10): background_color, description, display, icons, name, orientation, prefer_related_applications, short_name (+2 more)
 
-### Community 67 - "State"
-Cohesion: 0.33
-Nodes (10): _EmployeeDashboardScreenState, _DynamicCapabilityScreenState, _EmployeeDashboardScreenState, DynamicCapabilityScreen, EmployeeDashboardScreen, _EmployeeDashboardScreenState, _DynamicCapabilityScreenState, _KernelResponsibilityScreenState (+2 more)
+### Community 67 - "WidgetsBindingObserver"
+Cohesion: 0.53
+Nodes (6): _EmployeeDashboardScreenState, _EmployeeDashboardScreenState, _EmployeeDashboardScreenState, EmployeeDashboardScreen, _EmployeeDashboardScreenState, WidgetsBindingObserver
 
 ### Community 68 - "FieldTrackingService.kt"
 Cohesion: 0.33
 Nodes (5): IBinder, Intent, LocationListener, LocationManager, Service
 
-### Community 70 - "List"
-Cohesion: 0.29
-Nodes (6): AppUser, department, designation, roles, List, String id, employeeCode, name,
+### Community 70 - "employee-own-history-v2-20260826-042335/lib/features/dynamic/presentation/dynamic_capability_screen.dart"
+Cohesion: 0.03
+Nodes (62): action, _ActionCard, actionCount, _actionVisible, _applyOptimisticRecord, build, _buildField, _cacheKey (+54 more)
 
-### Community 71 - "sync_transport.dart"
-Cohesion: 0.40
-Nodes (5): acknowledgedEventIds, push, SyncPushResult, SyncTransport, UnconfiguredSyncTransport
+### Community 71 - "initial-state-runtime-20260826-022320/lib/features/dynamic/presentation/dynamic_capability_screen.dart"
+Cohesion: 0.03
+Nodes (62): action, _ActionCard, actionCount, _actionVisible, _applyOptimisticRecord, build, _buildField, _cacheKey (+54 more)
+
+### Community 72 - "semantic-runtime-v2-20260826-033804/lib/features/dynamic/presentation/dynamic_capability_screen.dart"
+Cohesion: 0.03
+Nodes (62): action, _ActionCard, actionCount, _actionVisible, _applyOptimisticRecord, build, _buildField, _cacheKey (+54 more)
+
+### Community 73 - "editorial-ui-20260826-013104/lib/core/design/app_design.dart"
+Cohesion: 0.05
+Nodes (42): amber, AppDesign, blue, canvas, controlRadius, faint, green, greenBright (+34 more)
+
+### Community 74 - "editorial-ui-20260826-013104/lib/features/dashboard/presentation/employee_profile_tab.dart"
+Cohesion: 0.06
+Nodes (31): build, _Card, child, controller, createState, current, device, _DeviceCard (+23 more)
+
+### Community 75 - "editorial_backdrop.dart"
+Cohesion: 0.11
+Nodes (18): AnimationController, CustomPainter, build, child, color, _controller, createState, dispose (+10 more)
+
+### Community 76 - "editorial-ui-20260826-013104/lib/features/auth/presentation/login_screen.dart"
+Cohesion: 0.12
+Nodes (15): build, _companyCodeController, controller, createState, dispose, _employeeController, _error, _formKey (+7 more)
+
+### Community 77 - "State"
+Cohesion: 0.22
+Nodes (14): _DynamicCapabilityScreenState, _LoginScreenState, _EmployeeProfileTabState, _DynamicCapabilityScreenState, _DynamicCapabilityScreenState, _DynamicCapabilityScreenState, _DynamicCapabilityScreenState, DynamicCapabilityScreen (+6 more)
+
+### Community 78 - "semantic-runtime-v2-20260826-033804/lib/core/offline/offline_record_queue.dart"
+Cohesion: 0.14
+Nodes (13): _cacheKey, _collectLocalPhotoPaths, enqueue, flush, _legacyCacheKey, localPhotoKey, migrateLegacyQueue, OfflineRecordQueue (+5 more)
+
+### Community 79 - "firebase_options.dart"
+Cohesion: 0.33
+Nodes (5): android, DefaultFirebaseOptions, package:firebase_core/firebase_core.dart, package:flutter/foundation.dart, static const FirebaseOptions
 
 ## Knowledge Gaps
-- **1021 isolated node(s):** `flutter_controller_`, `project_`, `x`, `y`, `height` (+1016 more)
+- **1423 isolated node(s):** `flutter_controller_`, `project_`, `x`, `y`, `height` (+1418 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **6 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **8 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `AppSessionController` connect `AppSessionController` to `allowances_screen.dart`, `lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `lib/features/dynamic/presentation/dynamic_capability_screen.dart`, `attendance_screen.dart`, `brixta_app.dart`, `app_session_controller.dart`, `login_screen.dart`, `runtime_connection_banner.dart`, `main.dart`, `kernel_responsibility_screen.dart`, `employee_profile_tab.dart`, `cms-sovereignty-20260825-231628/lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `cms-sovereignty-finish-20260825-231953/employee_dashboard_screen.dart`, `cms-sovereignty-20260825-231628/lib/features/dynamic/presentation/dynamic_capability_screen.dart`?**
-  _High betweenness centrality (0.042) - this node is a cross-community bridge._
-- **Why does `TrackingController` connect `AppSessionController` to `allowances_screen.dart`, `lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `attendance_screen.dart`, `tracking_controller.dart`, `tracking_screen.dart`, `kernel_responsibility_screen.dart`, `employee_profile_tab.dart`, `cms-sovereignty-20260825-231628/lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `cms-sovereignty-finish-20260825-231953/employee_dashboard_screen.dart`?**
-  _High betweenness centrality (0.013) - this node is a cross-community bridge._
-- **Why does `MobileCapability` connect `mobile_capability.dart` to `lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `lib/features/dynamic/presentation/dynamic_capability_screen.dart`, `kernel_responsibility_screen.dart`, `cms-sovereignty-20260825-231628/lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `cms-sovereignty-finish-20260825-231953/employee_dashboard_screen.dart`, `cms-sovereignty-20260825-231628/lib/features/dynamic/presentation/dynamic_capability_screen.dart`?**
-  _High betweenness centrality (0.010) - this node is a cross-community bridge._
+- **Why does `AppSessionController` connect `AppSessionController` to `allowances_screen.dart`, `lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `lib/features/dynamic/presentation/dynamic_capability_screen.dart`, `attendance_screen.dart`, `app_session_controller.dart`, `lib/features/auth/presentation/login_screen.dart`, `main.dart`, `kernel_responsibility_screen.dart`, `lib/features/dashboard/presentation/employee_profile_tab.dart`, `core/session/app_session_controller.dart`, `editorial-ui-20260826-013104/lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `cms-sovereignty-20260825-231628/lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `cms-sovereignty-finish-20260825-231953/employee_dashboard_screen.dart`, `editorial-ui-20260826-013104/lib/features/dynamic/presentation/dynamic_capability_screen.dart`, `cms-sovereignty-20260825-231628/lib/features/dynamic/presentation/dynamic_capability_screen.dart`, `employee-own-history-v2-20260826-042335/lib/features/dynamic/presentation/dynamic_capability_screen.dart`, `initial-state-runtime-20260826-022320/lib/features/dynamic/presentation/dynamic_capability_screen.dart`, `semantic-runtime-v2-20260826-033804/lib/features/dynamic/presentation/dynamic_capability_screen.dart`, `editorial-ui-20260826-013104/lib/features/dashboard/presentation/employee_profile_tab.dart`, `editorial-ui-20260826-013104/lib/features/auth/presentation/login_screen.dart`?**
+  _High betweenness centrality (0.049) - this node is a cross-community bridge._
+- **Why does `MobileCapability` connect `mobile_capability.dart` to `lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `lib/features/dynamic/presentation/dynamic_capability_screen.dart`, `employee-own-history-v2-20260826-042335/lib/features/dynamic/presentation/dynamic_capability_screen.dart`, `initial-state-runtime-20260826-022320/lib/features/dynamic/presentation/dynamic_capability_screen.dart`, `semantic-runtime-v2-20260826-033804/lib/features/dynamic/presentation/dynamic_capability_screen.dart`, `editorial-ui-20260826-013104/lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `kernel_responsibility_screen.dart`, `cms-sovereignty-20260825-231628/lib/features/dashboard/presentation/employee_dashboard_screen.dart`, `cms-sovereignty-finish-20260825-231953/employee_dashboard_screen.dart`, `editorial-ui-20260826-013104/lib/features/dynamic/presentation/dynamic_capability_screen.dart`, `cms-sovereignty-20260825-231628/lib/features/dynamic/presentation/dynamic_capability_screen.dart`?**
+  _High betweenness centrality (0.016) - this node is a cross-community bridge._
 - **What connects `flutter_controller_`, `project_`, `x` to the rest of the system?**
-  _1021 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _1423 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Win32Window` be split into smaller, more focused modules?**
   _Cohesion score 0.05311676909569798 - nodes in this community are weakly interconnected._
 - **Should `allowances_screen.dart` be split into smaller, more focused modules?**
-  _Cohesion score 0.03173076923076923 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.027777777777777776 - nodes in this community are weakly interconnected._
 - **Should `lib/features/dashboard/presentation/employee_dashboard_screen.dart` be split into smaller, more focused modules?**
-  _Cohesion score 0.028985507246376812 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.02666666666666667 - nodes in this community are weakly interconnected._
+- **Should `lib/features/dynamic/presentation/dynamic_capability_screen.dart` be split into smaller, more focused modules?**
+  _Cohesion score 0.031746031746031744 - nodes in this community are weakly interconnected._

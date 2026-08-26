@@ -84,10 +84,10 @@
     "semantic_hash": "a225a382d14d7b16b6f602a5c1d49331"
   },
   "lib/app/brixta_app.dart": {
-    "mtime": 1786776044.6305726,
-    "seen": 1787598487.629465,
-    "ast_hash": "b360411b9fef78a23f20a2c47586d28f",
-    "semantic_hash": "b360411b9fef78a23f20a2c47586d28f"
+    "mtime": 1787688067.0436273,
+    "seen": 1787719489.5354528,
+    "ast_hash": "aab15db3e8a259689866adc15a9c993f",
+    "semantic_hash": ""
   },
   "lib/core/config/api_config.dart": {
     "mtime": 1787052016.5477011,
@@ -120,9 +120,9 @@
     "semantic_hash": "194d66a6fa45031c5d2de0bce0c7165c"
   },
   "lib/core/design/app_design.dart": {
-    "mtime": 1787602667.7907999,
-    "seen": 1787634374.502217,
-    "ast_hash": "ec024e402c500a1e902b6e6df0135927",
+    "mtime": 1787688067.0344992,
+    "seen": 1787719489.535455,
+    "ast_hash": "55f309545da863b74592c23f04161026",
     "semantic_hash": ""
   },
   "lib/core/design/app_icons.dart": {
@@ -156,9 +156,9 @@
     "semantic_hash": "aa9e55c943f8cbce2a4867de78f09cbc"
   },
   "lib/core/offline/offline_record_queue.dart": {
-    "mtime": 1787602746.466052,
-    "seen": 1787634374.502222,
-    "ast_hash": "29dd1ce05a2fb745a32da8fe7612106e",
+    "mtime": 1787695684.2433774,
+    "seen": 1787719489.535458,
+    "ast_hash": "b230c17e4db5b4bd4d43c4d7f5ad02f4",
     "semantic_hash": ""
   },
   "lib/core/offline/offline_submission_queue.dart": {
@@ -234,10 +234,10 @@
     "semantic_hash": ""
   },
   "lib/core/theme/tenant_theme.dart": {
-    "mtime": 1786889657.604717,
-    "seen": 1787598487.629475,
-    "ast_hash": "75ab7ebaa1e0082a3e7350486b5692c8",
-    "semantic_hash": "75ab7ebaa1e0082a3e7350486b5692c8"
+    "mtime": 1787688067.0360172,
+    "seen": 1787719489.535465,
+    "ast_hash": "418ba7247ce4374a1b46f6b0aca80576",
+    "semantic_hash": ""
   },
   "lib/core/widgets/playful_widgets.dart": {
     "mtime": 1786816577.6566203,
@@ -270,10 +270,10 @@
     "semantic_hash": "f749c8d9bc8fe6cfebf30b2b810b8274"
   },
   "lib/features/auth/presentation/login_screen.dart": {
-    "mtime": 1787308715.3540528,
-    "seen": 1787598487.629477,
-    "ast_hash": "d6826d44e92e4955ddde74c2e5c8617a",
-    "semantic_hash": "d6826d44e92e4955ddde74c2e5c8617a"
+    "mtime": 1787688067.0527742,
+    "seen": 1787719489.535468,
+    "ast_hash": "347c5c9e3b9923f359dddda54d4ade2a",
+    "semantic_hash": ""
   },
   "lib/features/daily_status/presentation/daily_status_screen.dart": {
     "mtime": 1786776500.5600479,
@@ -282,15 +282,15 @@
     "semantic_hash": "d171d915bc5e584160b6b695e0dcc8cb"
   },
   "lib/features/dashboard/presentation/employee_dashboard_screen.dart": {
-    "mtime": 1787680302.3938775,
-    "seen": 1787685792.938197,
-    "ast_hash": "bd1475b3ce8ba1df4b8bb4ada0a571d8",
+    "mtime": 1787688064.517383,
+    "seen": 1787719489.535469,
+    "ast_hash": "7bcc4ea775adf21e0229907c38527077",
     "semantic_hash": ""
   },
   "lib/features/dynamic/presentation/dynamic_capability_screen.dart": {
-    "mtime": 1787680302.392261,
-    "seen": 1787685792.938197,
-    "ast_hash": "643701b479a6015a057e15dd45cb0cd5",
+    "mtime": 1787698415.814934,
+    "seen": 1787719489.53547,
+    "ast_hash": "be7f99b2236e60fd2dba26a26bf54322",
     "semantic_hash": ""
   },
   "lib/features/enquiry/presentation/enquiry_form_screen.dart": {
@@ -492,15 +492,15 @@
     "semantic_hash": ""
   },
   "lib/core/widgets/runtime_connection_banner.dart": {
-    "mtime": 1787602846.7961874,
-    "seen": 1787634374.50223,
-    "ast_hash": "4845f8582f628e3b8d7a5dbb46eee27f",
+    "mtime": 1787688067.041058,
+    "seen": 1787719489.535466,
+    "ast_hash": "dc5e805cf41b8e3b2a6c5accf7d4e897",
     "semantic_hash": ""
   },
   "lib/features/dashboard/presentation/employee_profile_tab.dart": {
-    "mtime": 1787602906.5917528,
-    "seen": 1787634374.5022342,
-    "ast_hash": "76ac84d937599424e44950c18abe4e47",
+    "mtime": 1787688067.073636,
+    "seen": 1787719489.53547,
+    "ast_hash": "a1e1f423f9c961177956b81b81c51e5c",
     "semantic_hash": ""
   },
   "lib/features/dynamic/presentation/kernel_responsibility_screen.dart": {
@@ -510,9 +510,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1787052016.5456963,
-    "seen": 1787634374.50225,
-    "ast_hash": "a3a7a0e99666878a5a9711fd5f9390ff",
+    "mtime": 1787689528.3706362,
+    "seen": 1787719489.5354838,
+    "ast_hash": "bad65e789220d4f293dcd1c37a722aa8",
     "semantic_hash": ""
   },
   "analysis_options.yaml": {
@@ -546,9 +546,9 @@
     "semantic_hash": ""
   },
   "pubspec.yaml": {
-    "mtime": 1787052016.5523071,
-    "seen": 1787634374.502253,
-    "ast_hash": "515ca10fe3881491410ef01933e8b2f3",
+    "mtime": 1787688064.515959,
+    "seen": 1787719489.535487,
+    "ast_hash": "c0c1f6a130a0778dfab50e3cde483153",
     "semantic_hash": ""
   },
   "web/index.html": {
@@ -807,6 +807,90 @@
     "mtime": 1787052016.5477521,
     "seen": 1787685792.938167,
     "ast_hash": "1cc8ce03ab0ec98dcdbc7635f9042cb5",
+    "semantic_hash": ""
+  },
+  ".brixta-backups/editorial-ui-20260826-013104/lib/app/brixta_app.dart": {
+    "mtime": 1786776044.6305726,
+    "seen": 1787719489.535439,
+    "ast_hash": "b360411b9fef78a23f20a2c47586d28f",
+    "semantic_hash": ""
+  },
+  ".brixta-backups/editorial-ui-20260826-013104/lib/core/design/app_design.dart": {
+    "mtime": 1787602667.7907999,
+    "seen": 1787719489.535439,
+    "ast_hash": "ec024e402c500a1e902b6e6df0135927",
+    "semantic_hash": ""
+  },
+  ".brixta-backups/editorial-ui-20260826-013104/lib/core/theme/tenant_theme.dart": {
+    "mtime": 1786889657.604717,
+    "seen": 1787719489.53544,
+    "ast_hash": "75ab7ebaa1e0082a3e7350486b5692c8",
+    "semantic_hash": ""
+  },
+  ".brixta-backups/editorial-ui-20260826-013104/lib/core/widgets/runtime_connection_banner.dart": {
+    "mtime": 1787602846.7961874,
+    "seen": 1787719489.53544,
+    "ast_hash": "4845f8582f628e3b8d7a5dbb46eee27f",
+    "semantic_hash": ""
+  },
+  ".brixta-backups/editorial-ui-20260826-013104/lib/features/auth/presentation/login_screen.dart": {
+    "mtime": 1787308715.3540528,
+    "seen": 1787719489.535441,
+    "ast_hash": "d6826d44e92e4955ddde74c2e5c8617a",
+    "semantic_hash": ""
+  },
+  ".brixta-backups/editorial-ui-20260826-013104/lib/features/dashboard/presentation/employee_dashboard_screen.dart": {
+    "mtime": 1787680302.3938775,
+    "seen": 1787719489.535441,
+    "ast_hash": "bd1475b3ce8ba1df4b8bb4ada0a571d8",
+    "semantic_hash": ""
+  },
+  ".brixta-backups/editorial-ui-20260826-013104/lib/features/dashboard/presentation/employee_profile_tab.dart": {
+    "mtime": 1787602906.5917528,
+    "seen": 1787719489.535441,
+    "ast_hash": "76ac84d937599424e44950c18abe4e47",
+    "semantic_hash": ""
+  },
+  ".brixta-backups/editorial-ui-20260826-013104/lib/features/dynamic/presentation/dynamic_capability_screen.dart": {
+    "mtime": 1787680302.392261,
+    "seen": 1787719489.5354419,
+    "ast_hash": "643701b479a6015a057e15dd45cb0cd5",
+    "semantic_hash": ""
+  },
+  ".brixta-backups/employee-own-history-v2-20260826-042335/lib/features/dynamic/presentation/dynamic_capability_screen.dart": {
+    "mtime": 1787695684.2430778,
+    "seen": 1787719489.5354419,
+    "ast_hash": "f1329edb4bb61930c526d02dbc7958b4",
+    "semantic_hash": ""
+  },
+  ".brixta-backups/initial-state-runtime-20260826-022320/lib/features/dynamic/presentation/dynamic_capability_screen.dart": {
+    "mtime": 1787688064.5174963,
+    "seen": 1787719489.5354428,
+    "ast_hash": "643701b479a6015a057e15dd45cb0cd5",
+    "semantic_hash": ""
+  },
+  ".brixta-backups/semantic-runtime-v2-20260826-033804/lib/core/offline/offline_record_queue.dart": {
+    "mtime": 1787602746.466052,
+    "seen": 1787719489.535444,
+    "ast_hash": "29dd1ce05a2fb745a32da8fe7612106e",
+    "semantic_hash": ""
+  },
+  ".brixta-backups/semantic-runtime-v2-20260826-033804/lib/features/dynamic/presentation/dynamic_capability_screen.dart": {
+    "mtime": 1787691205.2607687,
+    "seen": 1787719489.535444,
+    "ast_hash": "f37dbda2eac685a8a2d76028480cf1f4",
+    "semantic_hash": ""
+  },
+  "lib/core/widgets/editorial_backdrop.dart": {
+    "mtime": 1787688067.0391529,
+    "seen": 1787719489.535465,
+    "ast_hash": "b1ae31d57123e129b5d9a602f71a8373",
+    "semantic_hash": ""
+  },
+  ".brixta-backups/editorial-ui-20260826-013104/pubspec.yaml": {
+    "mtime": 1787052016.5523071,
+    "seen": 1787719489.5354838,
+    "ast_hash": "515ca10fe3881491410ef01933e8b2f3",
     "semantic_hash": ""
   }
 }
