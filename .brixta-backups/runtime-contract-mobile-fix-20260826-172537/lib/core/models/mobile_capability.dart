@@ -1,5 +1,3 @@
-import '../runtime/runtime_contract.dart';
-
 class MobileCapability {
   const MobileCapability({
     required this.id,
@@ -90,9 +88,6 @@ class MobileCapability {
   }
 
   factory MobileCapability.fromJson(Map<String, dynamic> j) {
-    // BRIXTA_AUTOPILOT_MOBILE_NORMALIZE
-    j = Map<String, dynamic>.from(normalizeRuntimeContractJson(j) as Map);
-
     final rawDefinition = j['definition'];
     final definition = rawDefinition is Map
         ? Map<String, dynamic>.from(rawDefinition)
@@ -132,21 +127,16 @@ class MobileCapability {
     final map = Map<String, dynamic>.from(value);
 
     final version = int.tryParse(map['kernelVersion']?.toString() ?? '') ?? 0;
-    if (version >= 3 &&
-        map['runtimeWorld'] is Map &&
-        map['possibilities'] is List) {
+    if (version >= 3 && map['runtimeWorld'] is Map && map['possibilities'] is List) {
       return map;
     }
 
     final candidates = <dynamic>[
       map['responsibilityKernel'],
       map['kernel'],
-      if (map['metadata'] is Map)
-        (map['metadata'] as Map)['responsibilityKernel'],
-      if (map['extension'] is Map)
-        (map['extension'] as Map)['responsibilityKernel'],
-      if (map['extension'] is Map &&
-          (map['extension'] as Map)['metadata'] is Map)
+      if (map['metadata'] is Map) (map['metadata'] as Map)['responsibilityKernel'],
+      if (map['extension'] is Map) (map['extension'] as Map)['responsibilityKernel'],
+      if (map['extension'] is Map && (map['extension'] as Map)['metadata'] is Map)
         ((map['extension'] as Map)['metadata'] as Map)['responsibilityKernel'],
       if (map['runtime'] is Map) (map['runtime'] as Map)['kernel'],
       if (map['app'] is Map && (map['app'] as Map)['config'] is Map)

@@ -878,7 +878,7 @@
     ],
     "22": [
       "api_config_dart",
-      "dart_convert",
+      "client",
       "int",
       "lib_core_config_field_api",
       "lib_core_config_field_api_accesstoken",
@@ -1035,7 +1035,7 @@
       "lib_features_dashboard_presentation_employee_profile_tab_worksession"
     ],
     "26": [
-      "client",
+      "dart_convert",
       "device_device_identity_dart",
       "lib_core_services_auth_backend_auth_gateway",
       "lib_core_services_auth_backend_auth_gateway_buildsession",

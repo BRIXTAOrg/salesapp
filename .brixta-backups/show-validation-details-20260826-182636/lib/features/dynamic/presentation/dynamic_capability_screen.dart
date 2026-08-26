@@ -117,6 +117,8 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     return config['employeeOwnHistoryVisible'] != false;
   }
 
+
+
   String? get latestStatus {
     /*
      * The absence of a record does NOT mean the Responsibility has
@@ -469,24 +471,9 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
             await LocalPhotoStore.delete(localPath);
           }
         } on FieldApiException catch (error) {
-          // BRIXTA_SHOW_SERVER_VALIDATION_DETAILS
-          // A 4xx/409 is a real server decision. Surface the backend's
-          // validation details instead of hiding them behind the generic
-          // "Record payload does not match..." wrapper.
-          final rawDetails = error.details;
-          String detailText = '';
-
-          if (rawDetails is List) {
-            detailText = rawDetails.map((item) => item.toString()).join('\n');
-          } else if (rawDetails != null) {
-            detailText = rawDetails.toString();
-          }
-
-          final message = detailText.trim().isEmpty
-              ? error.message
-              : '${error.message}\n$detailText';
-
-          if (mounted) _message(message);
+          // A 4xx/409 is a real server decision, not an offline condition.
+          // Never hide it in the offline queue or optimistic UI.
+          if (mounted) _message(error.message);
           return;
         } catch (error) {
           // Transport/unknown failures can be queued. CREATE is idempotent via

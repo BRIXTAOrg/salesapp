@@ -208,7 +208,7 @@ Nodes (16): ../connectivity/connectivity_gateway.dart, AppDatabase, changes, con
 
 ### Community 22 - "field_api.dart"
 Cohesion: 0.10
-Nodes (19): api_config.dart, dart:convert, int?, accessToken, _client, code, _decode, deleteJson (+11 more)
+Nodes (19): api_config.dart, Client, int?, accessToken, _client, code, _decode, deleteJson (+11 more)
 
 ### Community 23 - "core/database/app_database.dart"
 Cohesion: 0.15
@@ -224,7 +224,7 @@ Nodes (31): ../../../core/design/app_icons.dart, ../../../core/widgets/runtime_c
 
 ### Community 26 - "backend_auth_gateway.dart"
 Cohesion: 0.11
-Nodes (18): Client, ../device/device_identity.dart, _buildSession, _cacheKey, _cacheSession, _client, _database, _decodeMap (+10 more)
+Nodes (18): dart:convert, ../device/device_identity.dart, _buildSession, _cacheKey, _cacheSession, _client, _database, _decodeMap (+10 more)
 
 ### Community 27 - "StatefulWidget"
 Cohesion: 0.13

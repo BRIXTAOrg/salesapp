@@ -5859,13 +5859,13 @@
       "source_location": null
     },
     {
-      "id": "dart_convert",
-      "label": "dart:convert",
+      "id": "client",
+      "label": "Client",
       "_origin": "ast",
       "community": 22,
       "community_name": "field_api.dart",
       "file_type": "code",
-      "norm_label": "dart:convert",
+      "norm_label": "client",
       "source_file": null,
       "source_location": null
     },
@@ -7498,13 +7498,13 @@
       "source_location": null
     },
     {
-      "id": "client",
-      "label": "Client",
+      "id": "dart_convert",
+      "label": "dart:convert",
       "_origin": "ast",
       "community": 26,
       "community_name": "backend_auth_gateway.dart",
       "file_type": "code",
-      "norm_label": "client",
+      "norm_label": "dart:convert",
       "source_file": null,
       "source_location": null
     },
