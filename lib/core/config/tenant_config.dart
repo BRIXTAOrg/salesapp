@@ -44,5 +44,5 @@ class TenantConfig {
     surfaceColor: Color(0xFFFFFFFF),
     backgroundColor: Color(0xFFF8FAF9),
     logoText: 'B',
-  );
+  );   
 }
