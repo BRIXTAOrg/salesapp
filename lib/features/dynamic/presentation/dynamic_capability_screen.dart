@@ -158,6 +158,43 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     widget.controller.addListener(_onWorkspaceChanged);
 
     _loadRecords();
+    _autoPopulateFields();
+  }
+
+  /// Location and date/time are things the device already knows -- a
+  /// person shouldn't have to tap "Use current location" or type a
+  /// timestamp by hand before every check-in. Pre-fill both the moment
+  /// the screen opens. (Some actions separately re-sample location fresh
+  /// at submit time via `action.capture.location` -- unrelated to this,
+  /// that path already worked; this covers plain `location_point` /
+  /// `date` / `datetime` fields that had no auto-fill at all.)
+  void _autoPopulateFields() {
+    for (final field in fields) {
+      final type = _fieldType(field);
+      final key = _fieldKey(field);
+
+      if (type == 'location_point' || type == 'gps') {
+        unawaited(_captureManualLocation(key));
+      } else if (type == 'date' || type == 'datetime') {
+        _controllerFor(key).text = _formatIstNow(withTime: type == 'datetime');
+      }
+    }
+  }
+
+  /// India runs one fixed UTC+5:30 offset year-round (no DST), so a plain
+  /// offset add is correct here without pulling in the `timezone` package.
+  static String _formatIstNow({required bool withTime}) {
+    final ist = DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30));
+    final datePart =
+        '${ist.year.toString().padLeft(4, '0')}-'
+        '${ist.month.toString().padLeft(2, '0')}-'
+        '${ist.day.toString().padLeft(2, '0')}';
+    if (!withTime) return datePart;
+
+    final hour12 = ist.hour % 12 == 0 ? 12 : ist.hour % 12;
+    final minute = ist.minute.toString().padLeft(2, '0');
+    final period = ist.hour < 12 ? 'AM' : 'PM';
+    return '$datePart $hour12:$minute $period';
   }
 
   @override
@@ -307,6 +344,49 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     if (value != null && mounted) {
       setState(() => _manualLocations[key] = value);
     }
+  }
+
+  /// Same interaction pattern already used elsewhere in the app
+  /// (kernel_responsibility_screen.dart's _pickDate) -- a native picker
+  /// instead of asking someone to type a date by hand. Writes into the
+  /// field's own text controller so _valueForField's existing fallback
+  /// keeps working unchanged.
+  Future<void> _pickDate(String key, {required bool withTime}) async {
+    final controller = _controllerFor(key);
+    final initial = DateTime.tryParse(controller.text) ?? DateTime.now();
+
+    final day = await showDatePicker(
+      context: context,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      initialDate: initial,
+    );
+    if (day == null || !mounted) return;
+
+    DateTime value = day;
+    if (withTime) {
+      final time = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(initial),
+      );
+      if (time == null || !mounted) return;
+      value = DateTime(day.year, day.month, day.day, time.hour, time.minute);
+    }
+
+    final datePart =
+        '${value.year.toString().padLeft(4, '0')}-'
+        '${value.month.toString().padLeft(2, '0')}-'
+        '${value.day.toString().padLeft(2, '0')}';
+
+    if (!withTime) {
+      setState(() => controller.text = datePart);
+      return;
+    }
+
+    final hour12 = value.hour % 12 == 0 ? 12 : value.hour % 12;
+    final minute = value.minute.toString().padLeft(2, '0');
+    final period = value.hour < 12 ? 'AM' : 'PM';
+    setState(() => controller.text = '$datePart $hour12:$minute $period');
   }
 
   bool _actionVisible(Map<String, dynamic> action) {
@@ -850,10 +930,22 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
             initialValue: _selects[key],
             isExpanded: true,
             hint: Text(config['placeholder']?.toString() ?? 'Choose one'),
+            // The app theme sets canvasColor to transparent (the
+            // EditorialBackdrop paints scaffold backgrounds), and this
+            // widget's popup menu falls back to canvasColor when
+            // dropdownColor isn't set -- so without this it renders with
+            // no background at all. Set it explicitly instead of
+            // touching the global theme.
+            dropdownColor: Colors.white,
             items: options
                 .map(
-                  (option) =>
-                      DropdownMenuItem(value: option, child: Text(option)),
+                  (option) => DropdownMenuItem(
+                    value: option,
+                    child: Text(
+                      option,
+                      style: const TextStyle(color: Colors.black),
+                    ),
+                  ),
                 )
                 .toList(),
             onChanged: (value) {
@@ -897,6 +989,39 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
                 )
                 .toList(),
           ),
+        ],
+      );
+    }
+
+    if (type == 'date' || type == 'datetime') {
+      final withTime = type == 'datetime';
+      final current = _controllerFor(key).text.trim();
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _FieldLabel(label: label),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => _pickDate(key, withTime: withTime),
+            icon: Icon(
+              withTime
+                  ? Icons.event_available_outlined
+                  : Icons.calendar_today_outlined,
+              size: 18,
+            ),
+            label: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                current.isEmpty
+                    ? (withTime ? 'Choose date & time' : 'Choose date')
+                    : current,
+              ),
+            ),
+          ),
+          if (helpText != null) ...[
+            const SizedBox(height: 6),
+            Text(helpText, style: Theme.of(context).textTheme.bodySmall),
+          ],
         ],
       );
     }

@@ -32,8 +32,6 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
-
-    _companyCodeController.text = widget.controller.tenant.code;
   }
 
   @override
@@ -58,10 +56,13 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     try {
+      final typedCode = _companyCodeController.text.trim();
       await widget.controller.login(
         identifier: _employeeController.text,
         password: _passwordController.text,
-        companyCode: _companyCodeController.text,
+        companyCode: typedCode.isEmpty
+            ? widget.controller.tenant.code
+            : typedCode,
       );
     } on AuthException catch (error) {
       if (mounted) {
@@ -207,14 +208,20 @@ class _LoginScreenState extends State<LoginScreen> {
                           controller: _companyCodeController,
                           textInputAction: TextInputAction.next,
                           autocorrect: false,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'COMPANY CODE',
-                            hintText: 'COMPANY',
+                            hintText: widget.controller.tenant.code.isEmpty
+                                ? 'COMPANY'
+                                : widget.controller.tenant.code,
                           ),
-                          validator: (value) =>
-                              value == null || value.trim().isEmpty
-                              ? 'Enter your company code'
-                              : null,
+                          validator: (value) {
+                            final hasDefault =
+                                widget.controller.tenant.code.trim().isNotEmpty;
+                            if (hasDefault) return null;
+                            return value == null || value.trim().isEmpty
+                                ? 'Enter your company code'
+                                : null;
+                          },
                         ),
 
                         const SizedBox(height: 14),

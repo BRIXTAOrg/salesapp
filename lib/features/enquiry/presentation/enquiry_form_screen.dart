@@ -77,16 +77,38 @@ class _EnquiryFormScreenState extends State<EnquiryFormScreen> {
                 labelText: 'Enquiry type',
                 prefixIcon: Icon(Icons.category_outlined),
               ),
+              // canvasColor is intentionally transparent app-wide (the
+              // EditorialBackdrop paints scaffold backgrounds); this
+              // widget's popup falls back to it unless set explicitly.
+              dropdownColor: Colors.white,
               items: const [
-                DropdownMenuItem(value: 'Dealer', child: Text('Dealer')),
+                DropdownMenuItem(
+                  value: 'Dealer',
+                  child: Text(
+                    'Dealer',
+                    style: TextStyle(color: Colors.black),
+                  ),
+                ),
                 DropdownMenuItem(
                   value: 'Contractor',
-                  child: Text('Contractor'),
+                  child: Text(
+                    'Contractor',
+                    style: TextStyle(color: Colors.black),
+                  ),
                 ),
-                DropdownMenuItem(value: 'Builder', child: Text('Builder')),
+                DropdownMenuItem(
+                  value: 'Builder',
+                  child: Text(
+                    'Builder',
+                    style: TextStyle(color: Colors.black),
+                  ),
+                ),
                 DropdownMenuItem(
                   value: 'Institutional',
-                  child: Text('Institutional'),
+                  child: Text(
+                    'Institutional',
+                    style: TextStyle(color: Colors.black),
+                  ),
                 ),
               ],
               onChanged: (value) =>

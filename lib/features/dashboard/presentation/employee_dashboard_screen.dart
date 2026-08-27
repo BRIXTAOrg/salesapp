@@ -164,7 +164,12 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
           setState(() {
             _readyWork = ready;
             _blockedWork = blocked;
-            _approvals = approvals;
+            // Approvals are decided in the CMS dashboard only. Rendering
+            // them here was also surfacing a submitter's own request
+            // back to their own account as something to "approve" --
+            // never intentional. Leave _approvals at its default empty
+            // list instead of wiring the backend response into it.
+            // _approvals = approvals;
           });
         }
       } else {
@@ -207,7 +212,8 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
       setState(() {
         _readyWork = _mapList(map['ready']);
         _blockedWork = _mapList(map['blocked']);
-        _approvals = _mapList(map['approvals']);
+        // See _refreshWork -- approvals are CMS-only, never rendered here.
+        // _approvals = _mapList(map['approvals']);
       });
     }
   }

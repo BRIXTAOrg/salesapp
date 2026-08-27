@@ -440,6 +440,13 @@ class _KernelResponsibilityScreenState extends State<KernelResponsibilityScreen>
       return _values[id];
     }
 
+    if (kind == 'datetime' || kind == 'time') {
+      // Same principle as GPS above: this is derived from the device,
+      // not typed by the employee. Storage stays UTC ISO 8601; display
+      // formatting (12hr IST) happens at render time in _displayValue.
+      return DateTime.now().toUtc().toIso8601String();
+    }
+
     if (kind == 'route' ||
         kind == 'route_movement' ||
         kind == 'location_route') {
@@ -729,9 +736,18 @@ class _KernelResponsibilityScreenState extends State<KernelResponsibilityScreen>
         initialValue: _values[id]?.toString(),
         isExpanded: true,
         hint: Text(config['placeholder']?.toString() ?? 'Choose one'),
+        // See dynamic_capability_screen.dart for why this is needed --
+        // canvasColor is intentionally transparent app-wide.
+        dropdownColor: Colors.white,
         items: options
             .map(
-              (option) => DropdownMenuItem(value: option, child: Text(option)),
+              (option) => DropdownMenuItem(
+                value: option,
+                child: Text(
+                  option,
+                  style: const TextStyle(color: Colors.black),
+                ),
+              ),
             )
             .toList(),
         onChanged: (value) => setState(() => _values[id] = value),
@@ -1672,7 +1688,27 @@ String _displayValue(dynamic value) {
   if (value is List) {
     return '${value.length} item${value.length == 1 ? '' : 's'}';
   }
+  final istTime = _formatIstTime(value);
+  if (istTime != null) return istTime;
   return value.toString();
+}
+
+/// India has a single fixed UTC+5:30 offset year-round (no DST), so a
+/// plain offset add is correct and avoids pulling in the full `timezone`
+/// package just for this. Returns null for anything that isn't a
+/// parseable ISO-8601 timestamp, so callers can fall back to the raw
+/// value.
+String? _formatIstTime(dynamic value) {
+  if (value is! String) return null;
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) return null;
+
+  final ist = parsed.toUtc().add(const Duration(hours: 5, minutes: 30));
+  final hour24 = ist.hour;
+  final hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12;
+  final minute = ist.minute.toString().padLeft(2, '0');
+  final period = hour24 < 12 ? 'AM' : 'PM';
+  return '$hour12:$minute $period';
 }
 
 String _historyLabel(dynamic value) {
