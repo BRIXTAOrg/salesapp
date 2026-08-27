@@ -410,65 +410,36 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
       final now = DateTime.now().toUtc().toIso8601String();
       final api = FieldApi(accessToken: widget.controller.session!.accessToken);
 
-      // BRIXTA_KERNEL_ACTION_API_V1
-      //
-      // Generated Responsibility actions must execute through the
-      // canonical Kernel endpoint. Pixel Logic is attached to the
-      // exact same action execution lifecycle.
-      final target =
-          operation == 'update'
-              ? _targetRecord(action)
-              : null;
+      String method;
+      String path;
+      Map<String, dynamic> body;
 
-      if (operation == 'update' &&
-          (target == null ||
-              target['id'] == null)) {
-        _message(
-          'There is no matching record to update yet.',
-        );
-        return;
+      if (operation == 'update') {
+        final target = _targetRecord(action);
+        if (target == null || target['id'] == null) {
+          _message('There is no matching record to update yet.');
+          return;
+        }
+
+        method = 'PATCH';
+        path =
+            '/api/salesApp/records/${Uri.encodeComponent(_capability.key)}/${Uri.encodeComponent(target['id'].toString())}';
+        body = {
+          'payload': payload,
+          'status': status,
+          'appActionKey': actionKey,
+        };
+      } else {
+        method = 'POST';
+        path = '/api/salesApp/records/${Uri.encodeComponent(_capability.key)}';
+        body = {
+          'clientMutationId': AppDatabase.instance.newId(),
+          'clientCreatedAt': now,
+          'payload': payload,
+          'status': status,
+          'appActionKey': actionKey,
+        };
       }
-
-      final method =
-          'POST';
-
-      final path =
-          '/api/salesApp/responsibilities/'
-          '${Uri.encodeComponent(_capability.key)}'
-          '/actions/'
-          '${Uri.encodeComponent(actionKey)}';
-
-      final body =
-          <String, dynamic>{
-            'recordId':
-                target?['id']
-                    ?.toString(),
-
-            'clientMutationId':
-                operation == 'update'
-                    ? null
-                    : AppDatabase
-                        .instance
-                        .newId(),
-
-            'clientCreatedAt':
-                now,
-
-            'payload':
-                payload,
-
-            // These remain useful to the optimistic/offline
-            // mobile renderer. Server Kernel state is authoritative.
-            'status':
-                status,
-
-            'appActionKey':
-                actionKey,
-          }
-            ..removeWhere(
-              (_, value) =>
-                  value == null,
-            );
 
       Map<String, dynamic>? response;
 
@@ -539,71 +510,19 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
         _mergeServerRecord(record);
       }
 
-      // BRIXTA_RUNTIME_EFFECT_MESSAGES_V1
-      final runtimeMessages =
-          <String>[];
-
-      final rawEffects =
-          response == null
-              ? null
-              : response['effects'];
-
-      if (rawEffects is List) {
-        for (
-          final raw
-          in rawEffects.whereType<Map>()
-        ) {
-          final effect =
-              Map<String, dynamic>.from(
-                raw,
-              );
-
-          if (
-            effect['kind']
-                    ?.toString() !=
-                'notify_actor'
-          ) {
-            continue;
-          }
-
-          final message =
-              effect['message']
-                  ?.toString()
-                  .trim();
-
-          if (
-            message != null &&
-            message.isNotEmpty
-          ) {
-            runtimeMessages.add(
-              message,
-            );
-          }
-        }
-      }
-
       _clearActionFields(selectedKeys);
       await AppDatabase.instance.putCache(_cacheKey, _records);
 
       await HapticFeedback.lightImpact();
       if (!mounted) return;
 
-      // BRIXTA_PIXEL_MESSAGE_PRIORITY_V1
-      if (runtimeMessages.isNotEmpty) {
-        _message(
-          runtimeMessages.join(
-            '\n',
-          ),
-        );
-      } else {
-        _message(
-          (action['successMessage'] ??
-                  (widget.controller.isOffline
-                      ? 'Safe on this phone. It will sync automatically.'
-                      : 'Recorded.'))
-              .toString(),
-        );
-      }
+      _message(
+        (action['successMessage'] ??
+                (widget.controller.isOffline
+                    ? 'Safe on this phone. It will sync automatically.'
+                    : 'Recorded.'))
+            .toString(),
+      );
 
       if (widget.controller.isOnline) {
         await _loadRecords();
