@@ -44,170 +44,20 @@ class MobileCapability {
     return raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
   }
 
-  /// Effective employee-app definition.
-  ///
-  /// BRIXTA_VISUAL_APP_AUTHORITATIVE_V2
-  ///
-  /// Compatibility definition remains useful for older/offline apps.
-  /// Latest published Kernel/UI wins whenever available.
   Map<String, dynamic> get appDefinition {
-    final compatibility = _compatibilityAppDefinition();
-
-    final publishedApp = _extractPublishedApp(publishedManifest);
-
-    if (publishedApp != null) {
-      return _mergeAppDefinitions(compatibility, publishedApp);
-    }
-
-    final kernelUiDocument = _extractKernelUiDocument(kernelDefinition);
-
-    if (kernelUiDocument != null) {
-      final existingConfig = compatibility['config'];
-
-      return {
-        ...compatibility,
-
-        'renderer': 'brixta_ui_v1',
-
-        'config': {
-          if (existingConfig is Map)
-            ...Map<String, dynamic>.from(existingConfig),
-
-          'uiDocument': kernelUiDocument,
-
-          'presentationContract': {
-            'id': 'brixta-presentation-v2',
-
-            'requiredRuntimeVersion': 2,
-          },
-        },
-      };
-    }
-
-    return compatibility;
-  }
-
-  Map<String, dynamic> _compatibilityAppDefinition() {
     final direct = definition['app'];
-
-    if (direct is Map) {
-      return Map<String, dynamic>.from(direct);
-    }
+    if (direct is Map) return Map<String, dynamic>.from(direct);
 
     final rawDefinition = definition['raw'];
-
     if (rawDefinition is Map) {
       final rawApp = rawDefinition['app'];
-
-      if (rawApp is Map) {
-        return Map<String, dynamic>.from(rawApp);
-      }
+      if (rawApp is Map) return Map<String, dynamic>.from(rawApp);
     }
 
     final configApp = config['app'];
-
-    if (configApp is Map) {
-      return Map<String, dynamic>.from(configApp);
-    }
+    if (configApp is Map) return Map<String, dynamic>.from(configApp);
 
     return <String, dynamic>{};
-  }
-
-  static Map<String, dynamic>? _extractPublishedApp(
-    dynamic value, {
-    int depth = 0,
-  }) {
-    if (value is! Map || depth > 8) {
-      return null;
-    }
-
-    final map = Map<String, dynamic>.from(value);
-
-    final renderer = map['renderer']?.toString();
-
-    if (renderer == 'brixta_ui_v1' || renderer == 'action_form_v1') {
-      return map;
-    }
-
-    const candidates = [
-      'app',
-      'definition',
-      'raw',
-      'compiledDefinition',
-      'mobileDefinition',
-      'runtime',
-      'extension',
-      'manifest',
-    ];
-
-    for (final key in candidates) {
-      final candidate = map[key];
-
-      if (candidate is! Map) {
-        continue;
-      }
-
-      final found = _extractPublishedApp(candidate, depth: depth + 1);
-
-      if (found != null) {
-        return found;
-      }
-    }
-
-    return null;
-  }
-
-  static Map<String, dynamic>? _extractKernelUiDocument(
-    Map<String, dynamic> kernel,
-  ) {
-    final metadata = kernel['metadata'];
-
-    if (metadata is! Map) {
-      return null;
-    }
-
-    final ui = metadata['ui'];
-
-    if (ui is! Map) {
-      return null;
-    }
-
-    final document = ui['uiDocument'];
-
-    if (document is! Map) {
-      return null;
-    }
-
-    final normalized = Map<String, dynamic>.from(document);
-
-    if (normalized['version']?.toString() != '1' ||
-        normalized['engine']?.toString() != 'brixta_stac_v1') {
-      return null;
-    }
-
-    return normalized;
-  }
-
-  static Map<String, dynamic> _mergeAppDefinitions(
-    Map<String, dynamic> compatibility,
-    Map<String, dynamic> published,
-  ) {
-    final compatibilityConfig = compatibility['config'];
-
-    final publishedConfig = published['config'];
-
-    return {
-      ...compatibility,
-      ...published,
-
-      'config': {
-        if (compatibilityConfig is Map)
-          ...Map<String, dynamic>.from(compatibilityConfig),
-
-        if (publishedConfig is Map)
-          ...Map<String, dynamic>.from(publishedConfig),
-      },
-    };
   }
 
   List<Map<String, dynamic>> get fields {

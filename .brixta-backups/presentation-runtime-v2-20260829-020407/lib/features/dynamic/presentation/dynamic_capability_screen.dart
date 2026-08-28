@@ -10,7 +10,6 @@ import '../../../core/config/field_api.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/design/app_design.dart';
 import '../../../core/design/app_icons.dart';
-import '../../../core/design/responsibility_theme.dart';
 import '../../../core/models/mobile_capability.dart';
 import '../../../core/offline/offline_record_queue.dart';
 import '../../../core/services/media/local_photo_store.dart';
@@ -93,17 +92,6 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
   String? _submittingActionKey;
   String _lastWorkspaceRevision = '';
 
-  // BRIXTA_PIXEL_PRESENTATION_EFFECT_STATE_V2
-  final Map<String, int> _uiEffectNonces = {};
-
-  final Map<String, String> _uiEffectAnimationPresets = {};
-
-  final Map<String, int> _uiEffectAnimationDurations = {};
-
-  final Set<String> _uiForceVisibleBlockIds = {};
-
-  final Set<String> _uiForceHiddenBlockIds = {};
-
   /// Resolve the live Responsibility from the refreshed workspace so an
   /// administrator can publish a changed app definition without requiring an
   /// APK release or a new login. The screen updates after the normal workspace
@@ -142,58 +130,6 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     }
 
     return document;
-  }
-
-  String get _appRenderer {
-    return _capability.appDefinition['renderer']?.toString() ??
-        'action_form_v1';
-  }
-
-  Map<String, dynamic> get _appConfig {
-    final raw = _capability.appDefinition['config'];
-
-    return raw is Map ? Map<String, dynamic>.from(raw) : <String, dynamic>{};
-  }
-
-  bool get _usesVisualUi {
-    return _appRenderer == 'brixta_ui_v1' || _uiDocument != null;
-  }
-
-  bool get _immersiveVisualUi {
-    return ResponsibilityTheme.immersive(_uiDocument);
-  }
-
-  String? get _visualContractError {
-    if (!_usesVisualUi) {
-      return null;
-    }
-
-    if (_uiDocument == null) {
-      return 'This Responsibility declares the visual renderer, but its UI document did not arrive on this phone.';
-    }
-
-    final raw = _appConfig['presentationContract'];
-
-    if (raw is! Map) {
-      return null;
-    }
-
-    final contract = Map<String, dynamic>.from(raw);
-
-    final id = contract['id']?.toString();
-
-    final requiredVersion =
-        int.tryParse(contract['requiredRuntimeVersion']?.toString() ?? '') ?? 0;
-
-    if (id != null && id.isNotEmpty && id != brixtaPresentationContractId) {
-      return 'This Responsibility requires presentation contract "$id", but this app contains "$brixtaPresentationContractId".';
-    }
-
-    if (requiredVersion > brixtaPresentationRuntimeVersion) {
-      return 'This Responsibility requires presentation runtime v$requiredVersion, but this app contains v$brixtaPresentationRuntimeVersion.';
-    }
-
-    return null;
   }
 
   String get _cacheKey =>
@@ -1054,10 +990,8 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
         _mergeServerRecord(record);
       }
 
-      // BRIXTA_RUNTIME_EFFECT_MESSAGES_V2
+      // BRIXTA_RUNTIME_EFFECT_MESSAGES_V1
       final runtimeMessages = <String>[];
-
-      var explicitHaptic = false;
 
       final rawEffects = response == null ? null : response['effects'];
 
@@ -1065,83 +999,14 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
         for (final raw in rawEffects.whereType<Map>()) {
           final effect = Map<String, dynamic>.from(raw);
 
-          final kind = effect['kind']?.toString() ?? '';
-
-          if (kind == 'notify_actor') {
-            final message = effect['message']?.toString().trim();
-
-            if (message != null && message.isNotEmpty) {
-              runtimeMessages.add(message);
-            }
-
+          if (effect['kind']?.toString() != 'notify_actor') {
             continue;
           }
 
-          if (kind == 'ui_animate') {
-            final target = effect['targetBlockId']?.toString() ?? '';
+          final message = effect['message']?.toString().trim();
 
-            if (target.isNotEmpty && mounted) {
-              setState(() {
-                _uiEffectNonces[target] = (_uiEffectNonces[target] ?? 0) + 1;
-
-                final preset = effect['preset']?.toString();
-
-                if (preset != null && preset.isNotEmpty) {
-                  _uiEffectAnimationPresets[target] = preset;
-                }
-
-                final duration = int.tryParse(
-                  effect['durationMs']?.toString() ?? '',
-                );
-
-                if (duration != null) {
-                  _uiEffectAnimationDurations[target] = duration.clamp(
-                    50,
-                    10000,
-                  );
-                }
-              });
-            }
-
-            continue;
-          }
-
-          if (kind == 'ui_show' || kind == 'ui_hide') {
-            final target = effect['targetBlockId']?.toString() ?? '';
-
-            if (target.isNotEmpty && mounted) {
-              setState(() {
-                if (kind == 'ui_show') {
-                  _uiForceHiddenBlockIds.remove(target);
-
-                  _uiForceVisibleBlockIds.add(target);
-                } else {
-                  _uiForceVisibleBlockIds.remove(target);
-
-                  _uiForceHiddenBlockIds.add(target);
-                }
-              });
-            }
-
-            continue;
-          }
-
-          if (kind == 'ui_play') {
-            final target = effect['targetBlockId']?.toString() ?? '';
-
-            if (target.isNotEmpty && mounted) {
-              setState(() {
-                _uiEffectNonces[target] = (_uiEffectNonces[target] ?? 0) + 1;
-              });
-            }
-
-            continue;
-          }
-
-          if (kind == 'haptic') {
-            explicitHaptic = true;
-
-            await _performPixelHaptic(effect['preset']?.toString() ?? 'light');
+          if (message != null && message.isNotEmpty) {
+            runtimeMessages.add(message);
           }
         }
       }
@@ -1149,10 +1014,7 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
       _clearActionFields(selectedKeys);
       await AppDatabase.instance.putCache(_cacheKey, _records);
 
-      if (!explicitHaptic) {
-        await HapticFeedback.lightImpact();
-      }
-
+      await HapticFeedback.lightImpact();
       if (!mounted) return;
 
       // BRIXTA_PIXEL_MESSAGE_PRIORITY_V1
@@ -1291,28 +1153,6 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     return false;
   }
 
-  Future<void> _performPixelHaptic(String preset) async {
-    switch (preset) {
-      case 'medium':
-      case 'success':
-        await HapticFeedback.mediumImpact();
-        break;
-
-      case 'heavy':
-      case 'warning':
-        await HapticFeedback.heavyImpact();
-        break;
-
-      case 'error':
-        await HapticFeedback.vibrate();
-        break;
-
-      case 'light':
-      default:
-        await HapticFeedback.lightImpact();
-    }
-  }
-
   void _message(String text) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text)));
@@ -1324,54 +1164,34 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     final visibleActions = actions.where(_actionVisible).toList();
 
     return Scaffold(
-      appBar: _immersiveVisualUi
-          ? null
-          : AppBar(
-              title: Text(capability.title),
-              actions: [
-                IconButton(
-                  tooltip: 'Refresh app definition and records',
-                  onPressed: _loading
-                      ? null
-                      : () async {
-                          await widget.controller.refreshWorkspace();
-                          await _loadRecords();
-                        },
-                  icon: const Icon(Icons.refresh),
-                ),
-              ],
-            ),
-      body: _usesVisualUi
-          ? (_visualContractError == null && _uiDocument != null
-                ? BrixtaStacUi(
-                    document: _uiDocument!,
-                    record: _records.isEmpty ? null : _records.first,
-                    stateId: latestStatus,
-                    actions: visibleActions,
-                    submittingActionKey: _submittingActionKey,
-                    effectNonces: _uiEffectNonces,
-                    effectAnimationPresets: _uiEffectAnimationPresets,
-                    effectAnimationDurations: _uiEffectAnimationDurations,
-                    forceVisibleBlockIds: _uiForceVisibleBlockIds,
-                    forceHiddenBlockIds: _uiForceHiddenBlockIds,
-                    onRunAction: _runAction,
-                    onRefresh: () async {
-                      await widget.controller.refreshWorkspace();
-
-                      await _loadRecords();
-                    },
-                  )
-                : _VisualUiContractError(
-                    title: capability.title,
-                    error:
-                        _visualContractError ??
-                        'Visual UI document unavailable.',
-                    onRefresh: () async {
-                      await widget.controller.refreshWorkspace();
-
-                      await _loadRecords();
-                    },
-                  ))
+      appBar: AppBar(
+        title: Text(capability.title),
+        actions: [
+          IconButton(
+            tooltip: 'Refresh app definition and records',
+            onPressed: _loading
+                ? null
+                : () async {
+                    await widget.controller.refreshWorkspace();
+                    await _loadRecords();
+                  },
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
+      body: _uiDocument != null
+          ? BrixtaStacUi(
+              document: _uiDocument!,
+              record: _records.isEmpty ? null : _records.first,
+              stateId: latestStatus,
+              actions: visibleActions,
+              submittingActionKey: _submittingActionKey,
+              onRunAction: _runAction,
+              onRefresh: () async {
+                await widget.controller.refreshWorkspace();
+                await _loadRecords();
+              },
+            )
           : RefreshIndicator(
               onRefresh: () async {
                 await widget.controller.refreshWorkspace();
@@ -2122,75 +1942,6 @@ class _SectionLabel extends StatelessWidget {
         fontSize: 11,
         fontWeight: FontWeight.w700,
         letterSpacing: 1.2,
-      ),
-    );
-  }
-}
-
-class _VisualUiContractError extends StatelessWidget {
-  const _VisualUiContractError({
-    required this.title,
-    required this.error,
-    required this.onRefresh,
-  });
-
-  final String title;
-  final String error;
-  final Future<void> Function() onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
-
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-
-          child: Container(
-            padding: const EdgeInsets.all(22),
-
-            decoration: BoxDecoration(
-              border: Border.all(
-                color: Theme.of(
-                  context,
-                ).colorScheme.error.withValues(alpha: 0.25),
-              ),
-
-              borderRadius: BorderRadius.circular(16),
-            ),
-
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-
-              crossAxisAlignment: CrossAxisAlignment.start,
-
-              children: [
-                const Icon(Icons.developer_mode_outlined, size: 30),
-
-                const SizedBox(height: 14),
-
-                Text(title, style: Theme.of(context).textTheme.titleLarge),
-
-                const SizedBox(height: 8),
-
-                Text(error),
-
-                const SizedBox(height: 18),
-
-                FilledButton.icon(
-                  onPressed: () async {
-                    await onRefresh();
-                  },
-
-                  icon: const Icon(Icons.refresh),
-
-                  label: const Text('Refresh published app'),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }

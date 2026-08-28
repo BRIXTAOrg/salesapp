@@ -5,8 +5,6 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:lottie/lottie.dart';
 import 'package:stac/stac.dart';
 
-import '../../../core/design/responsibility_theme.dart';
-
 typedef BrixtaUiRunAction = Future<void> Function(Map<String, dynamic> action);
 
 class BrixtaUiRuntime {
@@ -17,25 +15,18 @@ class BrixtaUiRuntime {
     required this.submittingActionKey,
     required this.onRunAction,
     this.onRefresh,
-    this.effectNonces = const {},
-    this.effectAnimationPresets = const {},
-    this.effectAnimationDurations = const {},
-    this.forceVisibleBlockIds = const {},
-    this.forceHiddenBlockIds = const {},
   });
 
   final Map<String, dynamic>? record;
   final String? stateId;
-  final List<Map<String, dynamic>> actions;
-  final String? submittingActionKey;
-  final BrixtaUiRunAction onRunAction;
-  final Future<void> Function()? onRefresh;
 
-  final Map<String, int> effectNonces;
-  final Map<String, String> effectAnimationPresets;
-  final Map<String, int> effectAnimationDurations;
-  final Set<String> forceVisibleBlockIds;
-  final Set<String> forceHiddenBlockIds;
+  final List<Map<String, dynamic>> actions;
+
+  final String? submittingActionKey;
+
+  final BrixtaUiRunAction onRunAction;
+
+  final Future<void> Function()? onRefresh;
 
   Map<String, dynamic> get payload {
     final raw = record?['payload'];
@@ -94,7 +85,7 @@ class BrixtaUiRuntime {
           return stateId;
         }
 
-        return stateValues[key];
+        return stateValues[key] ?? (key == 'process' ? stateId : null);
 
       case 'record':
         if (key == null) {
@@ -104,14 +95,14 @@ class BrixtaUiRuntime {
         return record?[key];
 
       case 'actor':
-        return key == null ? null : contextValues[key];
+        return contextValues[key];
 
       default:
         return null;
     }
   }
 
-  bool declarativeVisible(dynamic raw) {
+  bool isVisible(dynamic raw) {
     if (raw == null) {
       return true;
     }
@@ -156,32 +147,6 @@ class BrixtaUiRuntime {
     }
   }
 
-  bool blockVisible(Map<String, dynamic> block) {
-    final id = block['id']?.toString();
-
-    if (id != null && forceHiddenBlockIds.contains(id)) {
-      return false;
-    }
-
-    if (id != null && forceVisibleBlockIds.contains(id)) {
-      return true;
-    }
-
-    return declarativeVisible(block['visibility']);
-  }
-
-  int effectNonce(String blockId) {
-    return effectNonces[blockId] ?? 0;
-  }
-
-  String? effectAnimationPreset(String blockId) {
-    return effectAnimationPresets[blockId];
-  }
-
-  int? effectAnimationDuration(String blockId) {
-    return effectAnimationDurations[blockId];
-  }
-
   static double _number(dynamic value) {
     if (value is num) {
       return value.toDouble();
@@ -215,8 +180,10 @@ class BrixtaUiRuntimeScope extends InheritedWidget {
   }
 }
 
-/// Stac is the JSON -> Flutter entry point.
-/// BRIXTA provides installed binding/action/presentation semantics.
+/// Stac custom parser.
+///
+/// Stac remains the JSON -> Widget entry point.
+/// BRIXTA owns only the app-specific binding/action semantics.
 class BrixtaScreenParser extends StacParser<Map<String, dynamic>> {
   const BrixtaScreenParser();
 
@@ -252,136 +219,52 @@ class BrixtaStacUi extends StatelessWidget {
     required this.submittingActionKey,
     required this.onRunAction,
     this.onRefresh,
-    this.effectNonces = const {},
-    this.effectAnimationPresets = const {},
-    this.effectAnimationDurations = const {},
-    this.forceVisibleBlockIds = const {},
-    this.forceHiddenBlockIds = const {},
   });
 
   final Map<String, dynamic> document;
-  final Map<String, dynamic>? record;
-  final String? stateId;
-  final List<Map<String, dynamic>> actions;
-  final String? submittingActionKey;
-  final BrixtaUiRunAction onRunAction;
-  final Future<void> Function()? onRefresh;
 
-  final Map<String, int> effectNonces;
-  final Map<String, String> effectAnimationPresets;
-  final Map<String, int> effectAnimationDurations;
-  final Set<String> forceVisibleBlockIds;
-  final Set<String> forceHiddenBlockIds;
+  final Map<String, dynamic>? record;
+
+  final String? stateId;
+
+  final List<Map<String, dynamic>> actions;
+
+  final String? submittingActionKey;
+
+  final BrixtaUiRunAction onRunAction;
+
+  final Future<void> Function()? onRefresh;
 
   @override
   Widget build(BuildContext context) {
     final runtime = BrixtaUiRuntime(
       record: record,
+
       stateId: stateId,
+
       actions: actions,
+
       submittingActionKey: submittingActionKey,
+
       onRunAction: onRunAction,
+
       onRefresh: onRefresh,
-      effectNonces: effectNonces,
-      effectAnimationPresets: effectAnimationPresets,
-      effectAnimationDurations: effectAnimationDurations,
-      forceVisibleBlockIds: forceVisibleBlockIds,
-      forceHiddenBlockIds: forceHiddenBlockIds,
     );
 
-    final theme = ResponsibilityTheme.resolve(context, document);
+    return BrixtaUiRuntimeScope(
+      runtime: runtime,
 
-    final background = ResponsibilityTheme.background(context, document);
+      child: Builder(
+        builder: (innerContext) {
+          return Stac.fromJson({
+                'type': 'brixtaScreen',
 
-    return Theme(
-      data: theme,
-
-      child: ColoredBox(
-        color: background,
-
-        child: BrixtaUiRuntimeScope(
-          runtime: runtime,
-
-          child: Builder(
-            builder: (innerContext) {
-              return Stac.fromJson({
-                    'type': 'brixtaScreen',
-
-                    'document': document,
-                  }, innerContext) ??
-                  const SizedBox.shrink();
-            },
-          ),
-        ),
+                'document': document,
+              }, innerContext) ??
+              const SizedBox.shrink();
+        },
       ),
     );
-  }
-}
-
-class _BrixtaFullscreenHost extends StatefulWidget {
-  const _BrixtaFullscreenHost({required this.overlays, required this.child});
-
-  final List<Widget> overlays;
-  final Widget child;
-
-  @override
-  State<_BrixtaFullscreenHost> createState() => _BrixtaFullscreenHostState();
-}
-
-class _BrixtaFullscreenHostState extends State<_BrixtaFullscreenHost> {
-  OverlayEntry? _entry;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _scheduleSync();
-  }
-
-  @override
-  void didUpdateWidget(_BrixtaFullscreenHost oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _scheduleSync();
-  }
-
-  void _scheduleSync() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _sync();
-      }
-    });
-  }
-
-  void _sync() {
-    if (widget.overlays.isEmpty) {
-      _entry?.remove();
-      _entry = null;
-      return;
-    }
-
-    if (_entry == null) {
-      _entry = OverlayEntry(
-        builder: (context) =>
-            Stack(fit: StackFit.expand, children: widget.overlays),
-      );
-
-      Overlay.of(context, rootOverlay: true).insert(_entry!);
-
-      return;
-    }
-
-    _entry!.markNeedsBuild();
-  }
-
-  @override
-  void dispose() {
-    _entry?.remove();
-    _entry = null;
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return widget.child;
   }
 }
 
@@ -389,6 +272,7 @@ class _BrixtaDocumentView extends StatelessWidget {
   const _BrixtaDocumentView({required this.document, required this.runtime});
 
   final Map<String, dynamic> document;
+
   final BrixtaUiRuntime runtime;
 
   List<Map<String, dynamic>> get blocks {
@@ -432,7 +316,11 @@ class _BrixtaDocumentView extends StatelessWidget {
     for (final id in rootIds) {
       final block = map[id];
 
-      if (block == null || !runtime.blockVisible(block)) {
+      if (block == null) {
+        continue;
+      }
+
+      if (!runtime.isVisible(block['visibility'])) {
         continue;
       }
 
@@ -470,7 +358,7 @@ class _BrixtaDocumentView extends StatelessWidget {
         ? scroll
         : RefreshIndicator(onRefresh: runtime.onRefresh!, child: scroll);
 
-    return _BrixtaFullscreenHost(overlays: overlays, child: content);
+    return Stack(fit: StackFit.expand, children: [content, ...overlays]);
   }
 
   Widget _renderBlock(
@@ -479,8 +367,6 @@ class _BrixtaDocumentView extends StatelessWidget {
     Map<String, Map<String, dynamic>> blockMap,
   ) {
     final type = block['type']?.toString() ?? '';
-
-    final blockId = block['id']?.toString() ?? '';
 
     final config = block['config'] is Map
         ? Map<String, dynamic>.from(block['config'] as Map)
@@ -505,6 +391,7 @@ class _BrixtaDocumentView extends StatelessWidget {
             gap: _double(config['gap'], 16),
           ),
         );
+
         break;
 
       case 'layout.row':
@@ -519,6 +406,7 @@ class _BrixtaDocumentView extends StatelessWidget {
             gap: _double(config['gap'], 12),
           ),
         );
+
         break;
 
       case 'layout.stack':
@@ -526,21 +414,19 @@ class _BrixtaDocumentView extends StatelessWidget {
           children: childIds.map((id) {
             final child = blockMap[id];
 
-            if (child == null || !runtime.blockVisible(child)) {
+            if (child == null || !runtime.isVisible(child['visibility'])) {
               return const SizedBox.shrink();
             }
 
             return _renderBlock(context, child, blockMap);
           }).toList(),
         );
+
         break;
 
       case 'display.text':
-        rendered = _textWidget(
-          context,
-          config['text']?.toString() ?? '',
-          config,
-        );
+        rendered = _textWidget(config['text']?.toString() ?? '', config);
+
         break;
 
       case 'display.value':
@@ -552,13 +438,14 @@ class _BrixtaDocumentView extends StatelessWidget {
 
         final suffix = config['suffix']?.toString() ?? '';
 
-        rendered = _textWidget(context, '$prefix${_display(value)}$suffix', {
+        rendered = _textWidget('$prefix${_display(value)}$suffix', {
           ...config,
 
           if (type == 'display.counter') 'size': config['size'] ?? 'hero',
 
           if (type == 'display.metric') 'size': config['size'] ?? 'large',
         });
+
         break;
 
       case 'display.progress':
@@ -577,6 +464,7 @@ class _BrixtaDocumentView extends StatelessWidget {
           minHeight: 10,
           borderRadius: BorderRadius.circular(999),
         );
+
         break;
 
       case 'display.badge':
@@ -589,9 +477,7 @@ class _BrixtaDocumentView extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
 
             decoration: BoxDecoration(
-              color: Theme.of(
-                context,
-              ).colorScheme.primary.withValues(alpha: 0.10),
+              color: Theme.of(context).colorScheme.secondaryContainer,
 
               borderRadius: BorderRadius.circular(999),
             ),
@@ -599,6 +485,7 @@ class _BrixtaDocumentView extends StatelessWidget {
             child: Text(_display(value)),
           ),
         );
+
         break;
 
       case 'interaction.action_button':
@@ -642,6 +529,7 @@ class _BrixtaDocumentView extends StatelessWidget {
             ),
           ),
         );
+
         break;
 
       case 'overlay.banner':
@@ -651,35 +539,26 @@ class _BrixtaDocumentView extends StatelessWidget {
           padding: const EdgeInsets.all(20),
 
           decoration: BoxDecoration(
-            color: Theme.of(
-              context,
-            ).colorScheme.primary.withValues(alpha: 0.10),
+            color: Theme.of(context).colorScheme.primaryContainer,
 
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
           ),
 
           child: Text(
             config['text']?.toString() ?? '',
-
             textAlign: TextAlign.center,
-
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
           ),
         );
+
         break;
 
       case 'overlay.fullscreen':
-        final theme = Theme.of(context);
-
         final background =
-            _hexColor(config['background']?.toString()) ??
-            theme.scaffoldBackgroundColor;
+            _hexColor(config['background']?.toString()) ?? Colors.black;
 
         final foreground =
-            _hexColor(config['foreground']?.toString()) ??
-            theme.colorScheme.onSurface;
+            _hexColor(config['foreground']?.toString()) ?? Colors.white;
 
         rendered = Material(
           color: background,
@@ -694,16 +573,21 @@ class _BrixtaDocumentView extends StatelessWidget {
 
                   textAlign: TextAlign.center,
 
-                  style: theme.textTheme.displayLarge?.copyWith(
+                  style: TextStyle(
                     color: foreground,
 
+                    fontSize: 64,
+
                     fontWeight: FontWeight.w900,
+
+                    letterSpacing: -2,
                   ),
                 ),
               ),
             ),
           ),
         );
+
         break;
 
       case 'media.image':
@@ -713,11 +597,12 @@ class _BrixtaDocumentView extends StatelessWidget {
 
         rendered = url.startsWith('http')
             ? ClipRRect(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(18),
 
                 child: Image.network(url, fit: BoxFit.cover),
               )
             : const SizedBox.shrink();
+
         break;
 
       case 'animation.lottie':
@@ -725,31 +610,24 @@ class _BrixtaDocumentView extends StatelessWidget {
 
         final asset = config['asset']?.toString() ?? '';
 
-        Widget lottie;
-
         if (url.startsWith('http')) {
-          lottie = Lottie.network(url, repeat: config['repeat'] != false);
+          rendered = Lottie.network(url, repeat: config['repeat'] != false);
         } else if (asset.isNotEmpty) {
-          lottie = Lottie.asset(asset, repeat: config['repeat'] != false);
+          rendered = Lottie.asset(asset, repeat: config['repeat'] != false);
         } else {
-          lottie = const SizedBox.shrink();
+          rendered = const SizedBox.shrink();
         }
 
-        rendered = KeyedSubtree(
-          key: ValueKey<String>(
-            'lottie:$blockId:${runtime.effectNonce(blockId)}',
-          ),
-
-          child: lottie,
-        );
         break;
 
       case 'spacing.spacer':
         rendered = SizedBox(height: _double(config['height'], 16));
+
         break;
 
       case 'spacing.divider':
         rendered = const Divider();
+
         break;
 
       case 'stac.raw':
@@ -759,13 +637,14 @@ class _BrixtaDocumentView extends StatelessWidget {
             ? (Stac.fromJson(Map<String, dynamic>.from(raw), context) ??
                   const SizedBox.shrink())
             : const SizedBox.shrink();
+
         break;
 
       default:
         rendered = const SizedBox.shrink();
     }
 
-    return _animate(context, rendered, block);
+    return _animate(rendered, block['animation']);
   }
 
   List<Widget> _children(
@@ -777,20 +656,22 @@ class _BrixtaDocumentView extends StatelessWidget {
   }) {
     final result = <Widget>[];
 
-    final visibleIds = ids.where((id) {
-      final block = map[id];
+    for (var index = 0; index < ids.length; index += 1) {
+      final block = map[ids[index]];
 
-      return block != null && runtime.blockVisible(block);
-    }).toList();
-
-    for (var index = 0; index < visibleIds.length; index += 1) {
-      final block = map[visibleIds[index]]!;
+      if (block == null || !runtime.isVisible(block['visibility'])) {
+        continue;
+      }
 
       final child = _renderBlock(context, block, map);
 
-      result.add(vertical ? child : Expanded(child: child));
+      if (!vertical) {
+        result.add(Expanded(child: child));
+      } else {
+        result.add(child);
+      }
 
-      if (index != visibleIds.length - 1) {
+      if (index != ids.length - 1) {
         result.add(vertical ? SizedBox(height: gap) : SizedBox(width: gap));
       }
     }
@@ -798,37 +679,16 @@ class _BrixtaDocumentView extends StatelessWidget {
     return result;
   }
 
-  Widget _textWidget(
-    BuildContext context,
-    String text,
-    Map<String, dynamic> config,
-  ) {
-    final theme = Theme.of(context);
-
+  Widget _textWidget(String text, Map<String, dynamic> config) {
     final size = config['size']?.toString() ?? 'body';
 
-    TextStyle? style;
-
-    switch (size) {
-      case 'hero':
-        style = theme.textTheme.displayLarge;
-        break;
-
-      case 'large':
-        style = theme.textTheme.headlineLarge;
-        break;
-
-      case 'title':
-        style = theme.textTheme.titleLarge;
-        break;
-
-      case 'small':
-        style = theme.textTheme.bodySmall;
-        break;
-
-      default:
-        style = theme.textTheme.bodyLarge;
-    }
+    final fontSize = switch (size) {
+      'hero' => 64.0,
+      'large' => 36.0,
+      'title' => 28.0,
+      'small' => 13.0,
+      _ => 18.0,
+    };
 
     final alignment = config['alignment']?.toString();
 
@@ -844,83 +704,39 @@ class _BrixtaDocumentView extends StatelessWidget {
             ? TextAlign.right
             : TextAlign.left,
 
-        style: style?.copyWith(
+        style: TextStyle(
+          fontSize: fontSize,
+
           fontWeight: size == 'hero' || size == 'large' || size == 'title'
               ? FontWeight.w800
-              : style.fontWeight,
+              : FontWeight.w500,
         ),
       ),
     );
   }
 
-  Widget _animate(
-    BuildContext context,
-    Widget child,
-    Map<String, dynamic> block,
-  ) {
-    final blockId = block['id']?.toString() ?? '';
-
-    final raw = block['animation'];
-
-    final authored = raw is Map
-        ? Map<String, dynamic>.from(raw)
-        : <String, dynamic>{};
-
-    final preset =
-        runtime.effectAnimationPreset(blockId) ??
-        authored['preset']?.toString() ??
-        'none';
-
-    if (preset == 'none') {
+  Widget _animate(Widget child, dynamic raw) {
+    if (raw is! Map) {
       return child;
     }
 
-    /*
-     * System accessibility outranks authored motion.
-     */
-    if (MediaQuery.maybeOf(context)?.disableAnimations == true) {
-      return child;
-    }
+    final animation = Map<String, dynamic>.from(raw);
 
-    final rawDuration =
-        runtime.effectAnimationDuration(blockId) ??
-        (authored['durationMs'] as num?)?.toInt() ??
-        350;
+    final preset = animation['preset']?.toString() ?? 'none';
 
-    final duration = Duration(milliseconds: rawDuration.clamp(50, 10000));
-
-    final bindingValue = runtime.resolveBinding(block['binding']);
-
-    dynamic visibilityValue;
-
-    final rawVisibility = block['visibility'];
-
-    if (rawVisibility is Map) {
-      visibilityValue = runtime.resolveBinding(rawVisibility['binding']);
-    }
-
-    final reactionKey = [
-      blockId,
-      block['type'],
-      preset,
-      runtime.stateId,
-      bindingValue,
-      visibilityValue,
-      runtime.effectNonce(blockId),
-    ].map((value) => value?.toString() ?? '<null>').join('|');
-
-    Widget animated;
+    final duration = Duration(
+      milliseconds: (animation['durationMs'] as num?)?.toInt() ?? 350,
+    );
 
     switch (preset) {
       case 'fade':
-        animated = Animate(
+        return Animate(
           effects: [FadeEffect(duration: duration)],
           child: child,
         );
-        break;
 
       case 'scale':
-        animated = Animate(
+        return Animate(
           effects: [
             ScaleEffect(
               begin: const Offset(0.88, 0.88),
@@ -930,10 +746,9 @@ class _BrixtaDocumentView extends StatelessWidget {
           ],
           child: child,
         );
-        break;
 
       case 'fade_scale':
-        animated = Animate(
+        return Animate(
           effects: [
             FadeEffect(duration: duration),
             ScaleEffect(
@@ -944,10 +759,9 @@ class _BrixtaDocumentView extends StatelessWidget {
           ],
           child: child,
         );
-        break;
 
       case 'slide_up':
-        animated = Animate(
+        return Animate(
           effects: [
             FadeEffect(duration: duration),
             SlideEffect(
@@ -958,33 +772,28 @@ class _BrixtaDocumentView extends StatelessWidget {
           ],
           child: child,
         );
-        break;
 
       case 'pulse':
-        animated = Animate(
+        return Animate(
           effects: [
             ScaleEffect(
-              begin: const Offset(0.84, 0.84),
-              end: const Offset(1, 1),
+              begin: const Offset(0.92, 0.92),
+              end: const Offset(1.05, 1.05),
               duration: duration,
             ),
           ],
           child: child,
         );
-        break;
 
       case 'shake':
-        animated = Animate(
+        return Animate(
           effects: [ShakeEffect(duration: duration)],
           child: child,
         );
-        break;
 
       default:
-        animated = child;
+        return child;
     }
-
-    return KeyedSubtree(key: ValueKey<String>(reactionKey), child: animated);
   }
 
   static CrossAxisAlignment _crossAxis(dynamic value) {
