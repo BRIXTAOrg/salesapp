@@ -640,214 +640,7 @@ class _HomeTab extends StatelessWidget {
   }
 }
 
-// _WorkTab removed after migration to PremiumWorkTab.
-
-class _Header extends StatelessWidget {
-  const _Header({
-    required this.name,
-    required this.designation,
-    required this.refreshing,
-  });
-  final String name;
-  final String designation;
-  final bool refreshing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _dateLabel(),
-                style: const TextStyle(
-                  color: AppDesign.muted,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: .24,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Good ${_dayPart()}, $name',
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 4),
-              Text(designation, style: Theme.of(context).textTheme.bodyMedium),
-            ],
-          ),
-        ),
-        if (refreshing)
-          const Padding(
-            padding: EdgeInsets.only(top: 8),
-            child: SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ),
-      ],
-    );
-  }
-
-  static String _dayPart() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'morning';
-    if (hour < 17) return 'afternoon';
-    return 'evening';
-  }
-
-  static String _dateLabel() {
-    const weekdays = [
-      'Monday',
-      'Tuesday',
-      'Wednesday',
-      'Thursday',
-      'Friday',
-      'Saturday',
-      'Sunday',
-    ];
-    const months = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    final now = DateTime.now();
-    return '${weekdays[now.weekday - 1]}, ${now.day} ${months[now.month - 1]}';
-  }
-}
-
-class _LiveOverview extends StatelessWidget {
-  const _LiveOverview({
-    required this.readyCount,
-    required this.approvalCount,
-    required this.responsibilityCount,
-    required this.tracker,
-    required this.sessionStatus,
-  });
-
-  final int readyCount;
-  final int approvalCount;
-  final int responsibilityCount;
-  final TrackingController tracker;
-  final String? sessionStatus;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: AppDesign.surface,
-        borderRadius: BorderRadius.circular(AppDesign.radius),
-        border: Border.all(color: AppDesign.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Right now',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: _Metric(value: '$readyCount', label: 'Ready'),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _Metric(value: '$approvalCount', label: 'Approvals'),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _Metric(value: '$responsibilityCount', label: 'Tools'),
-              ),
-            ],
-          ),
-          if (sessionStatus == 'active' || tracker.active) ...[
-            const SizedBox(height: 14),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppDesign.greenWash,
-                borderRadius: BorderRadius.circular(AppDesign.controlRadius),
-              ),
-              child: Row(
-                children: [
-                  Icon(AppIcons.journey, size: 18, color: AppDesign.green),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: AnimatedBuilder(
-                      animation: tracker,
-                      builder: (_, _) => Text(
-                        tracker.active
-                            ? 'Field session active · ${tracker.distanceKm.toStringAsFixed(1)} km recorded'
-                            : 'Work session active',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _Metric extends StatelessWidget {
-  const _Metric({required this.value, required this.label});
-  final String value;
-  final String label;
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(
-        color: AppDesign.greenWash,
-        borderRadius: BorderRadius.circular(AppDesign.controlRadius),
-      ),
-      child: Column(
-        children: [
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: AppDesign.greenDark,
-            ),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              color: AppDesign.muted,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
+// Legacy Work tab removed after migration to PremiumWorkTab.
 
 class _QuickResponsibilityGrid extends StatelessWidget {
   const _QuickResponsibilityGrid({required this.modules, required this.onTap});
@@ -912,9 +705,120 @@ class _QuickResponsibilityGrid extends StatelessWidget {
   }
 }
 
-// _CapabilityList removed after PremiumWorkTab migration.
+class _CapabilityList extends StatelessWidget {
+  const _CapabilityList({required this.modules, required this.onTap});
+  final List<MobileCapability> modules;
+  final ValueChanged<MobileCapability> onTap;
 
-// _CapabilityRow removed after PremiumWorkTab migration.
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppDesign.surface,
+        border: Border.all(color: AppDesign.line),
+        borderRadius: BorderRadius.circular(AppDesign.radius),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < modules.length; i++) ...[
+            _CapabilityRow(
+              capability: modules[i],
+              onTap: () => onTap(modules[i]),
+            ),
+            if (i != modules.length - 1) const Divider(indent: 56),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CapabilityRow extends StatelessWidget {
+  const _CapabilityRow({required this.capability, required this.onTap});
+  final MobileCapability capability;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: capability.kernelAvailable
+                      ? AppDesign.softGreen
+                      : AppDesign.softGray,
+                  borderRadius: BorderRadius.circular(AppDesign.controlRadius),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  AppIcons.forCapability(capability),
+                  size: 19,
+                  color: capability.kernelAvailable
+                      ? AppDesign.green
+                      : AppDesign.ink,
+                ),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      capability.title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _capabilityHint(capability),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: AppDesign.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (capability.kernelAvailable)
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppDesign.softGreen,
+                    borderRadius: BorderRadius.circular(AppDesign.radius),
+                  ),
+                  child: Text(
+                    'v${capability.manifestVersion}',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      color: AppDesign.greenDark,
+                    ),
+                  ),
+                ),
+              Icon(AppIcons.chevronRight, size: 18, color: AppDesign.muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _NextCard extends StatelessWidget {
   const _NextCard({
@@ -996,7 +900,67 @@ class _NextCard extends StatelessWidget {
   }
 }
 
-// _WorkNotice removed after PremiumWorkTab migration.
+class _WorkNotice extends StatelessWidget {
+  const _WorkNotice({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.tone,
+    this.onTap,
+  });
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color tone;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppDesign.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppDesign.radius),
+        side: const BorderSide(color: AppDesign.line),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppDesign.radius),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Icon(icon, size: 19, color: tone),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppDesign.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (onTap != null) ...[
+                const SizedBox(width: 8),
+                Icon(AppIcons.chevronRight, size: 17, color: AppDesign.muted),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _QuietState extends StatelessWidget {
   const _QuietState();
@@ -1076,7 +1040,16 @@ bool _kernelNeedsTracking(MobileCapability capability) {
   }
   return false;
 }
-// _capabilityHint removed after PremiumWorkTab migration.
+
+String _capabilityHint(MobileCapability capability) {
+  final description = capability.description?.trim() ?? '';
+
+  if (description.isNotEmpty) {
+    return description;
+  }
+
+  return 'Company Responsibility';
+}
 
 String? _responsibilityKeyFromAction(String? actionKey) {
   if (actionKey == null || !actionKey.startsWith('responsibility.')) {

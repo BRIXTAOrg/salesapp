@@ -1076,7 +1076,16 @@ bool _kernelNeedsTracking(MobileCapability capability) {
   }
   return false;
 }
-// _capabilityHint removed after PremiumWorkTab migration.
+
+String _capabilityHint(MobileCapability capability) {
+  final description = capability.description?.trim() ?? '';
+
+  if (description.isNotEmpty) {
+    return description;
+  }
+
+  return 'Company Responsibility';
+}
 
 String? _responsibilityKeyFromAction(String? actionKey) {
   if (actionKey == null || !actionKey.startsWith('responsibility.')) {

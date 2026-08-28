@@ -18,8 +18,6 @@ import '../../dynamic/presentation/dynamic_capability_screen.dart';
 import '../../tracking/data/native_tracking_repository.dart';
 import '../../tracking/presentation/tracking_controller.dart';
 import 'employee_profile_tab.dart';
-import 'brixta_premium_nav.dart';
-import 'premium_work_tab.dart';
 
 class EmployeeDashboardScreen extends StatefulWidget {
   const EmployeeDashboardScreen({super.key, required this.controller});
@@ -218,6 +216,24 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
 
   @override
   Widget build(BuildContext context) {
+    final destinations = <NavigationDestination>[
+      NavigationDestination(
+        icon: Icon(AppIcons.home),
+        selectedIcon: Icon(AppIcons.home, color: AppDesign.green),
+        label: 'HOME',
+      ),
+      NavigationDestination(
+        icon: Icon(AppIcons.work),
+        selectedIcon: Icon(AppIcons.work, color: AppDesign.green),
+        label: 'WORK',
+      ),
+      NavigationDestination(
+        icon: Icon(AppIcons.profile),
+        selectedIcon: Icon(AppIcons.profile, color: AppDesign.green),
+        label: 'ME',
+      ),
+    ];
+
     final screens = <Widget>[
       _HomeTab(
         controller: widget.controller,
@@ -231,7 +247,7 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
         onOpenWork: () => setState(() => _tab = 1),
         onCapabilityTap: _openCapability,
       ),
-      PremiumWorkTab(
+      _WorkTab(
         controller: widget.controller,
         modules: _modules,
         readyWork: _readyWork,
@@ -255,9 +271,16 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
 
     return Scaffold(
       body: screens[safeTab],
-      bottomNavigationBar: BrixtaPremiumNav(
-        selectedIndex: safeTab,
-        onChanged: (index) => setState(() => _tab = index),
+      bottomNavigationBar: DecoratedBox(
+        decoration: const BoxDecoration(
+          color: AppDesign.surface,
+          border: Border(top: BorderSide(color: AppDesign.line)),
+        ),
+        child: NavigationBar(
+          selectedIndex: safeTab,
+          destinations: destinations,
+          onDestinationSelected: (index) => setState(() => _tab = index),
+        ),
       ),
     );
   }
@@ -640,7 +663,107 @@ class _HomeTab extends StatelessWidget {
   }
 }
 
-// _WorkTab removed after migration to PremiumWorkTab.
+class _WorkTab extends StatelessWidget {
+  const _WorkTab({
+    required this.controller,
+    required this.modules,
+    required this.readyWork,
+    required this.blockedWork,
+    required this.approvals,
+    required this.onRefresh,
+    required this.onCapabilityTap,
+    required this.onReadyTap,
+    required this.onApprovalTap,
+  });
+
+  final AppSessionController controller;
+  final List<MobileCapability> modules;
+  final List<Map<String, dynamic>> readyWork;
+  final List<Map<String, dynamic>> blockedWork;
+  final List<Map<String, dynamic>> approvals;
+  final Future<void> Function() onRefresh;
+  final ValueChanged<MobileCapability> onCapabilityTap;
+  final ValueChanged<Map<String, dynamic>> onReadyTap;
+  final ValueChanged<Map<String, dynamic>> onApprovalTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: RefreshIndicator(
+        onRefresh: onRefresh,
+        child: ListView(
+          padding: AppDesign.pageInset,
+          children: [
+            Text('Work', style: Theme.of(context).textTheme.headlineLarge),
+            const SizedBox(height: 8),
+            Text(
+              'Your company controls what appears here. Published changes arrive automatically when you are online.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 20),
+            RuntimeConnectionBanner(controller: controller, compact: false),
+            if (approvals.isNotEmpty) ...[
+              const SizedBox(height: 30),
+              const _SectionLabel('NEEDS YOUR DECISION'),
+              const SizedBox(height: 12),
+              for (final approval in approvals.take(5))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _WorkNotice(
+                    icon: LucideIcons.shield_check,
+                    title: approval['title']?.toString() ?? 'Approval',
+                    subtitle: 'Tap to review and decide',
+                    tone: AppDesign.green,
+                    onTap: () => onApprovalTap(approval),
+                  ),
+                ),
+            ],
+            if (readyWork.isNotEmpty) ...[
+              const SizedBox(height: 30),
+              const _SectionLabel('READY NOW'),
+              const SizedBox(height: 12),
+              for (final item in readyWork.take(8))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _WorkNotice(
+                    icon: LucideIcons.circle_play,
+                    title: item['title']?.toString() ?? _workActionLabel(item),
+                    subtitle: _workSubtitle(item),
+                    tone: AppDesign.green,
+                    onTap: () => onReadyTap(item),
+                  ),
+                ),
+            ],
+            const SizedBox(height: 30),
+            const _SectionLabel('RESPONSIBILITIES'),
+            const SizedBox(height: 12),
+            if (modules.isEmpty)
+              const _QuietState()
+            else
+              _CapabilityList(modules: modules, onTap: onCapabilityTap),
+            if (blockedWork.isNotEmpty) ...[
+              const SizedBox(height: 30),
+              const _SectionLabel('WAITING'),
+              const SizedBox(height: 12),
+              for (final item in blockedWork.take(6))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _WorkNotice(
+                    icon: LucideIcons.lock_keyhole,
+                    title: item['title']?.toString() ?? _workActionLabel(item),
+                    subtitle:
+                        item['reason']?.toString() ??
+                        'Waiting for an earlier step',
+                    tone: AppDesign.muted,
+                  ),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _Header extends StatelessWidget {
   const _Header({
@@ -912,9 +1035,120 @@ class _QuickResponsibilityGrid extends StatelessWidget {
   }
 }
 
-// _CapabilityList removed after PremiumWorkTab migration.
+class _CapabilityList extends StatelessWidget {
+  const _CapabilityList({required this.modules, required this.onTap});
+  final List<MobileCapability> modules;
+  final ValueChanged<MobileCapability> onTap;
 
-// _CapabilityRow removed after PremiumWorkTab migration.
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppDesign.surface,
+        border: Border.all(color: AppDesign.line),
+        borderRadius: BorderRadius.circular(AppDesign.radius),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < modules.length; i++) ...[
+            _CapabilityRow(
+              capability: modules[i],
+              onTap: () => onTap(modules[i]),
+            ),
+            if (i != modules.length - 1) const Divider(indent: 56),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CapabilityRow extends StatelessWidget {
+  const _CapabilityRow({required this.capability, required this.onTap});
+  final MobileCapability capability;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: capability.kernelAvailable
+                      ? AppDesign.softGreen
+                      : AppDesign.softGray,
+                  borderRadius: BorderRadius.circular(AppDesign.controlRadius),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  AppIcons.forCapability(capability),
+                  size: 19,
+                  color: capability.kernelAvailable
+                      ? AppDesign.green
+                      : AppDesign.ink,
+                ),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      capability.title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _capabilityHint(capability),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: AppDesign.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (capability.kernelAvailable)
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppDesign.softGreen,
+                    borderRadius: BorderRadius.circular(AppDesign.radius),
+                  ),
+                  child: Text(
+                    'v${capability.manifestVersion}',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      color: AppDesign.greenDark,
+                    ),
+                  ),
+                ),
+              Icon(AppIcons.chevronRight, size: 18, color: AppDesign.muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _NextCard extends StatelessWidget {
   const _NextCard({
@@ -996,7 +1230,67 @@ class _NextCard extends StatelessWidget {
   }
 }
 
-// _WorkNotice removed after PremiumWorkTab migration.
+class _WorkNotice extends StatelessWidget {
+  const _WorkNotice({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.tone,
+    this.onTap,
+  });
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color tone;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppDesign.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppDesign.radius),
+        side: const BorderSide(color: AppDesign.line),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppDesign.radius),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              Icon(icon, size: 19, color: tone),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppDesign.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (onTap != null) ...[
+                const SizedBox(width: 8),
+                Icon(AppIcons.chevronRight, size: 17, color: AppDesign.muted),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _QuietState extends StatelessWidget {
   const _QuietState();
@@ -1076,7 +1370,16 @@ bool _kernelNeedsTracking(MobileCapability capability) {
   }
   return false;
 }
-// _capabilityHint removed after PremiumWorkTab migration.
+
+String _capabilityHint(MobileCapability capability) {
+  final description = capability.description?.trim() ?? '';
+
+  if (description.isNotEmpty) {
+    return description;
+  }
+
+  return 'Company Responsibility';
+}
 
 String? _responsibilityKeyFromAction(String? actionKey) {
   if (actionKey == null || !actionKey.startsWith('responsibility.')) {

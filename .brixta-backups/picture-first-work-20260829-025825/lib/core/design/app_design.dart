@@ -89,18 +89,9 @@ abstract final class AppDesign {
 
   static const pageInset = EdgeInsets.fromLTRB(s24, s24, s24, s48);
 
-  // ----------------------------------------------------------
-  // BRIXTA PICTURE-FIRST GEOMETRY V2
-  //
-  // Consumer-quality presentation without changing the operational
-  // information architecture.
-  // ----------------------------------------------------------
-
-  static const radius = 24.0;
-  static const controlRadius = 18.0;
-  static const heroRadius = 32.0;
-  static const sheetRadius = 30.0;
-  static const pillRadius = 999.0;
+  // NO soft SaaS bubbles.
+  static const radius = 2.0;
+  static const controlRadius = 2.0;
 
   // ----------------------------------------------------------
   // EDITORIAL MOTION
@@ -252,7 +243,7 @@ abstract final class AppDesign {
         surfaceTintColor: Colors.transparent,
         titleSpacing: s24,
         toolbarHeight: 64,
-        shape: null,
+        shape: const Border(bottom: BorderSide(color: line, width: 1)),
         titleTextStyle: serif(size: 20, color: ink),
       ),
 
@@ -386,7 +377,7 @@ abstract final class AppDesign {
         backgroundColor: Colors.transparent,
         side: const BorderSide(color: line),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(pillRadius),
+          borderRadius: BorderRadius.circular(controlRadius),
         ),
         labelStyle: mono(size: 8, color: ink, letterSpacing: 1.2),
       ),
@@ -396,20 +387,16 @@ abstract final class AppDesign {
         elevation: 0,
         backgroundColor: ink,
         contentTextStyle: sans(size: 13, color: white),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(controlRadius),
-        ),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.zero),
       ),
 
-      bottomSheetTheme: BottomSheetThemeData(
+      bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: surface,
         surfaceTintColor: Colors.transparent,
         showDragHandle: true,
         shape: RoundedRectangleBorder(
-          borderRadius: const BorderRadius.vertical(
-            top: Radius.circular(sheetRadius),
-          ),
-          side: const BorderSide(color: line),
+          borderRadius: BorderRadius.zero,
+          side: BorderSide(color: line),
         ),
       ),
 

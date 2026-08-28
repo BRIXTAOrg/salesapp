@@ -914,7 +914,92 @@ class _QuickResponsibilityGrid extends StatelessWidget {
 
 // _CapabilityList removed after PremiumWorkTab migration.
 
-// _CapabilityRow removed after PremiumWorkTab migration.
+class _CapabilityRow extends StatelessWidget {
+  const _CapabilityRow({required this.capability, required this.onTap});
+  final MobileCapability capability;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: capability.kernelAvailable
+                      ? AppDesign.softGreen
+                      : AppDesign.softGray,
+                  borderRadius: BorderRadius.circular(AppDesign.controlRadius),
+                ),
+                alignment: Alignment.center,
+                child: Icon(
+                  AppIcons.forCapability(capability),
+                  size: 19,
+                  color: capability.kernelAvailable
+                      ? AppDesign.green
+                      : AppDesign.ink,
+                ),
+              ),
+              const SizedBox(width: 13),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      capability.title,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _capabilityHint(capability),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: AppDesign.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (capability.kernelAvailable)
+                Container(
+                  margin: const EdgeInsets.only(right: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppDesign.softGreen,
+                    borderRadius: BorderRadius.circular(AppDesign.radius),
+                  ),
+                  child: Text(
+                    'v${capability.manifestVersion}',
+                    style: const TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800,
+                      color: AppDesign.greenDark,
+                    ),
+                  ),
+                ),
+              Icon(AppIcons.chevronRight, size: 18, color: AppDesign.muted),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
 
 class _NextCard extends StatelessWidget {
   const _NextCard({
@@ -1076,7 +1161,16 @@ bool _kernelNeedsTracking(MobileCapability capability) {
   }
   return false;
 }
-// _capabilityHint removed after PremiumWorkTab migration.
+
+String _capabilityHint(MobileCapability capability) {
+  final description = capability.description?.trim() ?? '';
+
+  if (description.isNotEmpty) {
+    return description;
+  }
+
+  return 'Company Responsibility';
+}
 
 String? _responsibilityKeyFromAction(String? actionKey) {
   if (actionKey == null || !actionKey.startsWith('responsibility.')) {
