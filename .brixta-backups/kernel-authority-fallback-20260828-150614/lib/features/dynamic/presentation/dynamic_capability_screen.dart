@@ -68,25 +68,6 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
   List<Map<String, dynamic>> _runtimeActions = const [];
   List<Map<String, dynamic>> _runtimeOutputs = const [];
 
-  /*
-   * BRIXTA_KERNEL_PROJECTION_AUTHORITY_V1
-   *
-   * IMPORTANT:
-   *
-   *   runtimeActions == []
-   *
-   * can mean two completely different things:
-   *
-   *   1. Kernel successfully evaluated this actor/world/state and
-   *      intentionally returned ZERO actions.
-   *
-   *   2. Runtime projection was never loaded.
-   *
-   * Those must never be confused. Once Kernel responds successfully,
-   * its empty action list is authoritative.
-   */
-  bool _runtimeProjectionLoaded = false;
-
   bool _loading = true;
   String? _submittingActionKey;
   String _lastWorkspaceRevision = '';
@@ -255,14 +236,7 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
   }
 
   List<Map<String, dynamic>> get actions {
-    /*
-     * Online Kernel projection is authoritative even when it returns [].
-     *
-     * Previously an empty Kernel action list caused Flutter to resurrect
-     * static legacy actions. That could display a button which the server
-     * had explicitly determined was unavailable.
-     */
-    if (_runtimeProjectionLoaded) {
+    if (_runtimeActions.isNotEmpty) {
       return _runtimeActions.map(_runtimeActionToAppAction).toList();
     }
 
@@ -503,7 +477,6 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
               _records = records;
               _runtimeActions = runtimeActions;
               _runtimeOutputs = runtimeOutputs;
-              _runtimeProjectionLoaded = true;
             });
           }
 
@@ -534,8 +507,6 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
         List<Map<String, dynamic>> runtimeActions = const [];
 
         List<Map<String, dynamic>> runtimeOutputs = const [];
-
-        var runtimeProjectionLoaded = false;
 
         try {
           /*
@@ -577,8 +548,6 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
                     .map((item) => Map<String, dynamic>.from(item))
                     .toList()
               : const [];
-
-          runtimeProjectionLoaded = true;
         } catch (_) {
           /*
            * Legacy Responsibilities can still use their compiled static
@@ -593,7 +562,6 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
             _records = records;
             _runtimeActions = runtimeActions;
             _runtimeOutputs = runtimeOutputs;
-            _runtimeProjectionLoaded = runtimeProjectionLoaded;
           });
         }
       } else {
@@ -610,7 +578,6 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
           setState(() {
             _runtimeActions = const [];
             _runtimeOutputs = const [];
-            _runtimeProjectionLoaded = false;
           });
         }
       }
