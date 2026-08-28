@@ -101,33 +101,102 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // ------------------------------------------
-                  _LoginHero(tenant: tenant),
+                  // TECHNICAL HEADER
+                  // ------------------------------------------
 
-                  const SizedBox(height: 26),
+                  Row(
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: AppDesign.surface,
+                          border: Border.all(color: AppDesign.line),
+                          borderRadius: BorderRadius.circular(AppDesign.radius),
+                        ),
+                        alignment: Alignment.center,
+                        child: TenantLogo(tenant: tenant, size: 38),
+                      ),
+
+                      const SizedBox(width: 16),
+
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'SECURE FIELD ACCESS',
+                              style: AppDesign.mono(
+                                size: 9,
+                                color: AppDesign.primary,
+                                weight: FontWeight.w600,
+                                letterSpacing: 2.2,
+                              ),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              tenant.code.toUpperCase(),
+                              style: AppDesign.mono(
+                                size: 9,
+                                color: AppDesign.faint,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Container(width: 32, height: 1, color: AppDesign.ink),
+                          const SizedBox(height: 5),
+                          Container(width: 22, height: 1, color: AppDesign.ink),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 52),
 
                   Text(
-                    'Welcome back',
-                    style: AppDesign.sans(
-                      size: 30,
-                      weight: FontWeight.w700,
-                      height: 1,
-                      letterSpacing: -.9,
+                    tenant.displayName.toUpperCase(),
+                    style: AppDesign.serif(
+                      size: 46,
+                      height: .96,
+                      letterSpacing: -1.1,
                     ),
                   ),
 
-                  const SizedBox(height: 8),
+                  Text(
+                    'field operations',
+                    style: AppDesign.serif(
+                      size: 40,
+                      color: const Color(0xFFB4B4B4),
+                      height: .98,
+                      fontStyle: FontStyle.italic,
+                      letterSpacing: -.8,
+                    ),
+                  ),
+
+                  const SizedBox(height: 28),
+
+                  Container(height: 1, color: AppDesign.line),
+
+                  const SizedBox(height: 18),
 
                   Text(
-                    'Enter your company workspace and employee credentials.',
+                    'Company-issued access to your live responsibilities, workflows and field records.',
                     style: AppDesign.sans(
-                      size: 13,
+                      size: 14,
                       color: AppDesign.muted,
-                      height: 1.45,
+                      height: 1.55,
                     ),
                   ),
 
-                  const SizedBox(height: 26),
+                  const SizedBox(height: 38),
 
+                  // ------------------------------------------
                   // FORM
                   // ------------------------------------------
                   Form(
@@ -146,9 +215,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                 : widget.controller.tenant.code,
                           ),
                           validator: (value) {
-                            final hasDefault = widget.controller.tenant.code
-                                .trim()
-                                .isNotEmpty;
+                            final hasDefault =
+                                widget.controller.tenant.code.trim().isNotEmpty;
                             if (hasDefault) return null;
                             return value == null || value.trim().isEmpty
                                 ? 'Enter your company code'
@@ -276,107 +344,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _LoginHero extends StatelessWidget {
-  const _LoginHero({required this.tenant});
-
-  final dynamic tenant;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppDesign.heroRadius),
-      child: SizedBox(
-        height: 290,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.asset(
-              'assets/images/brixta_work_hero.jpg',
-              fit: BoxFit.cover,
-              cacheWidth: 1000,
-              filterQuality: FilterQuality.medium,
-            ),
-
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0x06000000),
-                    Color(0x26000000),
-                    Color(0xE6000000),
-                  ],
-                ),
-              ),
-            ),
-
-            Positioned(
-              top: 18,
-              left: 18,
-              child: Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  color: AppDesign.white.withValues(alpha: .95),
-                  shape: BoxShape.circle,
-                ),
-                alignment: Alignment.center,
-                child: TenantLogo(tenant: tenant, size: 36),
-              ),
-            ),
-
-            Positioned(
-              left: 22,
-              right: 22,
-              bottom: 22,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'BRIXTA / FIELD',
-                    style: AppDesign.mono(
-                      size: 8,
-                      color: AppDesign.white.withValues(alpha: .65),
-                      weight: FontWeight.w600,
-                      letterSpacing: 1.8,
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  Text(
-                    tenant.displayName.toString(),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppDesign.sans(
-                      size: 30,
-                      color: AppDesign.white,
-                      weight: FontWeight.w700,
-                      height: 1,
-                      letterSpacing: -.9,
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  Text(
-                    'Your work starts here.',
-                    style: AppDesign.sans(
-                      size: 13,
-                      color: AppDesign.white.withValues(alpha: .73),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );

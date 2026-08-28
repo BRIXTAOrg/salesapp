@@ -7,7 +7,6 @@ import '../../../core/config/field_api.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/design/app_design.dart';
 import '../../../core/design/app_icons.dart';
-import '../../../core/design/brixta_feedback.dart';
 import '../../../core/models/mobile_capability.dart';
 import '../../../core/offline/offline_attendance_queue.dart';
 import '../../../core/offline/offline_record_queue.dart';
@@ -255,11 +254,6 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
     final safeTab = _tab >= 0 && _tab < screens.length ? _tab : 0;
 
     return Scaffold(
-      // BRIXTA_PREMIUM_FLOATING_SHELL_V2
-      //
-      // The app content deliberately continues beneath the navigation.
-      // The navigation is a floating layer, not a hard layout boundary.
-      extendBody: true,
       body: screens[safeTab],
       bottomNavigationBar: BrixtaPremiumNav(
         selectedIndex: safeTab,
@@ -585,8 +579,7 @@ class _HomeTab extends StatelessWidget {
       child: RefreshIndicator(
         onRefresh: onRefresh,
         child: ListView(
-          // BRIXTA_HOME_FLOATING_NAV_CLEARANCE
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 118),
+          padding: AppDesign.pageInset,
           children: [
             _Header(
               name: session.user.name,
@@ -640,8 +633,6 @@ class _HomeTab extends StatelessWidget {
                 onTap: onCapabilityTap,
               ),
             ],
-            // Floating navigation overlays the body.
-            const SizedBox(height: 92),
           ],
         ),
       ),
@@ -657,99 +648,56 @@ class _Header extends StatelessWidget {
     required this.designation,
     required this.refreshing,
   });
-
   final String name;
   final String designation;
   final bool refreshing;
 
   @override
   Widget build(BuildContext context) {
-    final firstName = name.trim().split(RegExp(r'\s+')).first;
-
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Hello, $firstName',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppDesign.sans(
-                  size: 32,
-                  weight: FontWeight.w700,
-                  height: 1,
-                  letterSpacing: -1,
-                ),
-              ),
-              const SizedBox(height: 7),
-              Text(
-                designation.trim().isEmpty ? _dateLabel() : designation,
-                style: AppDesign.sans(
-                  size: 13,
+                _dateLabel(),
+                style: const TextStyle(
                   color: AppDesign.muted,
-                  height: 1.35,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: .24,
                 ),
               ),
+              const SizedBox(height: 8),
+              Text(
+                'Good ${_dayPart()}, $name',
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(height: 4),
+              Text(designation, style: Theme.of(context).textTheme.bodyMedium),
             ],
           ),
         ),
-        const SizedBox(width: 18),
-        Container(
-          width: 52,
-          height: 52,
-          decoration: BoxDecoration(
-            color: AppDesign.ink,
-            shape: BoxShape.circle,
-            border: Border.all(color: AppDesign.white, width: 3),
-            boxShadow: const [
-              BoxShadow(
-                color: Color(0x12000000),
-                blurRadius: 18,
-                offset: Offset(0, 7),
-              ),
-            ],
+        if (refreshing)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
           ),
-          alignment: Alignment.center,
-          child: refreshing
-              ? const SizedBox(
-                  width: 17,
-                  height: 17,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: AppDesign.white,
-                  ),
-                )
-              : Text(
-                  _initials(name),
-                  style: AppDesign.sans(
-                    size: 14,
-                    color: AppDesign.white,
-                    weight: FontWeight.w700,
-                  ),
-                ),
-        ),
       ],
     );
   }
 
-  static String _initials(String value) {
-    final parts = value
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((part) => part.isNotEmpty)
-        .toList();
-
-    if (parts.isEmpty) return 'BR';
-
-    if (parts.length == 1) {
-      return parts.first.substring(0, 1).toUpperCase();
-    }
-
-    return (parts.first.substring(0, 1) + parts.last.substring(0, 1))
-        .toUpperCase();
+  static String _dayPart() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'morning';
+    if (hour < 17) return 'afternoon';
+    return 'evening';
   }
 
   static String _dateLabel() {
@@ -762,10 +710,22 @@ class _Header extends StatelessWidget {
       'Saturday',
       'Sunday',
     ];
-
+    const months = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
     final now = DateTime.now();
-
-    return '${weekdays[now.weekday - 1]} · Your workspace is ready';
+    return '${weekdays[now.weekday - 1]}, ${now.day} ${months[now.month - 1]}';
   }
 }
 
@@ -786,315 +746,168 @@ class _LiveOverview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final active = sessionStatus == 'active' || tracker.active;
-
-    final hasSignals = readyCount > 0 || approvalCount > 0;
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppDesign.heroRadius),
-      child: SizedBox(
-        height: 315,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.asset(
-              'assets/images/brixta_work_hero.jpg',
-              fit: BoxFit.cover,
-              cacheWidth: 1000,
-              filterQuality: FilterQuality.medium,
-            ),
-
-            const DecoratedBox(
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppDesign.surface,
+        borderRadius: BorderRadius.circular(AppDesign.radius),
+        border: Border.all(color: AppDesign.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Right now',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _Metric(value: '$readyCount', label: 'Ready'),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _Metric(value: '$approvalCount', label: 'Approvals'),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _Metric(value: '$responsibilityCount', label: 'Tools'),
+              ),
+            ],
+          ),
+          if (sessionStatus == 'active' || tracker.active) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0x08000000),
-                    Color(0x26000000),
-                    Color(0xE5000000),
-                  ],
-                  stops: [0, .46, 1],
-                ),
+                color: AppDesign.greenWash,
+                borderRadius: BorderRadius.circular(AppDesign.controlRadius),
               ),
-            ),
-
-            Positioned(
-              top: 20,
-              left: 20,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 13,
-                  vertical: 9,
-                ),
-                decoration: BoxDecoration(
-                  color: AppDesign.white.withValues(alpha: .92),
-                  borderRadius: BorderRadius.circular(AppDesign.pillRadius),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      width: 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        color: active ? AppDesign.green : AppDesign.muted,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      active ? 'FIELD SESSION ACTIVE' : 'TODAY',
-                      style: AppDesign.mono(
-                        size: 7.5,
-                        color: AppDesign.ink,
-                        weight: FontWeight.w700,
-                        letterSpacing: 1.25,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            Positioned(
-              left: 22,
-              right: 22,
-              bottom: 22,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Text(
-                    active ? 'You’re in motion.' : 'Everything is ready.',
-                    style: AppDesign.sans(
-                      size: 27,
-                      color: AppDesign.white,
-                      weight: FontWeight.w700,
-                      height: 1.02,
-                      letterSpacing: -.7,
-                    ),
-                  ),
-
-                  const SizedBox(height: 8),
-
-                  AnimatedBuilder(
-                    animation: tracker,
-                    builder: (_, _) => Text(
-                      tracker.active
-                          ? '${tracker.distanceKm.toStringAsFixed(1)} km recorded today'
-                          : '$responsibilityCount '
-                                '${responsibilityCount == 1 ? 'Responsibility' : 'Responsibilities'} available',
-                      style: AppDesign.sans(
-                        size: 13,
-                        color: AppDesign.white.withValues(alpha: .74),
-                        height: 1.35,
+                  Icon(AppIcons.journey, size: 18, color: AppDesign.green),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: AnimatedBuilder(
+                      animation: tracker,
+                      builder: (_, _) => Text(
+                        tracker.active
+                            ? 'Field session active · ${tracker.distanceKm.toStringAsFixed(1)} km recorded'
+                            : 'Work session active',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                   ),
-
-                  if (hasSignals) ...[
-                    const SizedBox(height: 18),
-
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        if (readyCount > 0)
-                          _HomeSignal(label: '$readyCount TO DO'),
-
-                        if (approvalCount > 0)
-                          _HomeSignal(
-                            label:
-                                '$approvalCount '
-                                '${approvalCount == 1 ? 'DECISION' : 'DECISIONS'}',
-                          ),
-                      ],
-                    ),
-                  ],
                 ],
               ),
             ),
           ],
-        ),
+        ],
       ),
     );
   }
 }
 
-class _HomeSignal extends StatelessWidget {
-  const _HomeSignal({required this.label});
-
+class _Metric extends StatelessWidget {
+  const _Metric({required this.value, required this.label});
+  final String value;
   final String label;
-
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+      padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        color: AppDesign.ink.withValues(alpha: .70),
-        borderRadius: BorderRadius.circular(AppDesign.pillRadius),
-        border: Border.all(color: AppDesign.white.withValues(alpha: .12)),
+        color: AppDesign.greenWash,
+        borderRadius: BorderRadius.circular(AppDesign.controlRadius),
       ),
-      child: Text(
-        label,
-        style: AppDesign.mono(
-          size: 7,
-          color: AppDesign.white,
-          weight: FontWeight.w600,
-          letterSpacing: 1,
-        ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: AppDesign.greenDark,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: AppDesign.muted,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-// _Metric removed during BRIXTA de-clutter pass.
-
 class _QuickResponsibilityGrid extends StatelessWidget {
   const _QuickResponsibilityGrid({required this.modules, required this.onTap});
-
   final List<MobileCapability> modules;
   final ValueChanged<MobileCapability> onTap;
 
   @override
   Widget build(BuildContext context) {
-    if (modules.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const gap = 12.0;
-
-        final tileWidth = (constraints.maxWidth - gap) / 2;
-
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: [
-            for (final module in modules)
-              SizedBox(
-                width: tileWidth,
-                height: 174,
-                child: _ResponsibilityTile(
-                  module: module,
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: modules
+          .map(
+            (module) => SizedBox(
+              width: (MediaQuery.sizeOf(context).width - 58) / 2,
+              child: Material(
+                color: AppDesign.surface,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(AppDesign.radius),
+                  side: const BorderSide(color: AppDesign.line),
+                ),
+                child: InkWell(
                   onTap: () => onTap(module),
+                  borderRadius: BorderRadius.circular(AppDesign.radius),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          AppIcons.forCapability(module),
+                          color: AppDesign.green,
+                          size: 21,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          module.title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        if (module.kernelAvailable) ...[
+                          const SizedBox(height: 6),
+                          Text(
+                            'Live v${module.manifestVersion}',
+                            style: const TextStyle(
+                              color: AppDesign.green,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _ResponsibilityTile extends StatelessWidget {
-  const _ResponsibilityTile({required this.module, required this.onTap});
-
-  final MobileCapability module;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppDesign.white,
-      borderRadius: BorderRadius.circular(26),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () async {
-          await BrixtaFeedback.action();
-          onTap();
-        },
-        borderRadius: BorderRadius.circular(26),
-        child: Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(26),
-            border: Border.all(color: AppDesign.line.withValues(alpha: .72)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: const BoxDecoration(
-                      color: AppDesign.softGreen,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      AppIcons.forCapability(module),
-                      color: AppDesign.green,
-                      size: 21,
-                    ),
-                  ),
-
-                  const Spacer(),
-
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: AppDesign.softGray.withValues(alpha: .7),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.arrow_outward_rounded,
-                      size: 18,
-                      color: AppDesign.muted,
-                    ),
-                  ),
-                ],
-              ),
-
-              const Spacer(),
-
-              Text(
-                module.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppDesign.sans(
-                  size: 16,
-                  weight: FontWeight.w600,
-                  height: 1.12,
-                  letterSpacing: -.2,
-                ),
-              ),
-
-              const SizedBox(height: 7),
-
-              Row(
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: module.kernelAvailable
-                          ? AppDesign.green
-                          : AppDesign.faint,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-
-                  const SizedBox(width: 7),
-
-                  Expanded(
-                    child: Text(
-                      module.kernelAvailable ? 'Ready to open' : 'Available',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppDesign.sans(size: 11, color: AppDesign.muted),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
+            ),
+          )
+          .toList(),
     );
   }
 }
@@ -1121,10 +934,7 @@ class _NextCard extends StatelessWidget {
       description: _workSubtitle(item),
       icon: LucideIcons.circle_play,
       tone: AppDesign.green,
-      onTap: () async {
-        await BrixtaFeedback.action();
-        onTap();
-      },
+      onTap: onTap,
     );
   }
 

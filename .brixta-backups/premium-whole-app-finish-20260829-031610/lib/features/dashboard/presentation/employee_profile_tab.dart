@@ -5,10 +5,10 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 
 import '../../../core/design/app_design.dart';
 import '../../../core/design/app_icons.dart';
-import '../../../core/design/brixta_feedback.dart';
 import '../../../core/device/device_identity.dart';
 import '../../../core/services/runtime/responsibility_runtime_api.dart';
 import '../../../core/session/app_session_controller.dart';
+import '../../../core/widgets/runtime_connection_banner.dart';
 import '../../tracking/presentation/tracking_controller.dart';
 
 class EmployeeProfileTab extends StatefulWidget {
@@ -65,37 +65,102 @@ class _EmployeeProfileTabState extends State<EmployeeProfileTab> {
       child: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(22, 22, 22, 125),
+          padding: AppDesign.pageInset,
           children: [
+            Text('Me', style: Theme.of(context).textTheme.headlineLarge),
+            const SizedBox(height: 8),
             Text(
-              'Your account',
-              style: AppDesign.sans(
-                size: 32,
-                weight: FontWeight.w700,
-                height: 1,
-                letterSpacing: -1,
+              'Your account, connection and company devices.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 22),
+            RuntimeConnectionBanner(controller: widget.controller),
+            const SizedBox(height: 32),
+            const _SectionLabel('EMPLOYEE'),
+            const SizedBox(height: 12),
+            _Card(
+              child: Row(
+                children: [
+                  Container(
+                    width: 46,
+                    height: 46,
+                    decoration: BoxDecoration(
+                      color: AppDesign.softGreen,
+                      borderRadius: BorderRadius.circular(AppDesign.radius),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      AppIcons.profile,
+                      color: AppDesign.green,
+                      size: 23,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          session.user.name,
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${session.user.designation} · ${session.user.employeeCode}',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                        if (session.user.department?.trim().isNotEmpty ==
+                            true) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            session.user.department!,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppDesign.muted,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 7),
-            Text(
-              'Identity, activity and trusted company devices.',
-              style: AppDesign.sans(
-                size: 13,
-                color: AppDesign.muted,
-                height: 1.4,
+            const SizedBox(height: 32),
+            const _SectionLabel('TODAY'),
+            const SizedBox(height: 12),
+            _Card(
+              child: Column(
+                children: [
+                  _FactRow(
+                    icon: AppIcons.attendance,
+                    label: 'Work session',
+                    value: _sessionLabel(widget.workSession),
+                  ),
+                  const Divider(height: 24),
+                  AnimatedBuilder(
+                    animation: widget.tracker,
+                    builder: (_, _) => _FactRow(
+                      icon: AppIcons.journey,
+                      label: 'Travel meter',
+                      value: widget.tracker.active
+                          ? '${widget.tracker.distanceKm.toStringAsFixed(1)} km · Active'
+                          : '${widget.tracker.distanceKm.toStringAsFixed(1)} km · Standby',
+                    ),
+                  ),
+                  const Divider(height: 24),
+                  _FactRow(
+                    icon: LucideIcons.refresh_cw,
+                    label: 'Workspace',
+                    value: widget.controller.lastSyncLabel,
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 24),
-
-            _ProfileHero(
-              name: session.user.name,
-              designation: session.user.designation,
-              employeeCode: session.user.employeeCode,
-              department: session.user.department,
-            ),
-
-            const SizedBox(height: 18),
-
+            const SizedBox(height: 32),
             Row(
               children: [
                 const Expanded(child: _SectionLabel('COMPANY DEVICES')),
@@ -134,10 +199,7 @@ class _EmployeeProfileTabState extends State<EmployeeProfileTab> {
               ],
             const SizedBox(height: 36),
             OutlinedButton.icon(
-              onPressed: () async {
-                await BrixtaFeedback.action();
-                widget.controller.logout();
-              },
+              onPressed: widget.controller.logout,
               icon: Icon(AppIcons.logout, size: 18),
               label: const Text('Sign out'),
             ),
@@ -146,128 +208,16 @@ class _EmployeeProfileTabState extends State<EmployeeProfileTab> {
       ),
     );
   }
-}
 
-class _ProfileHero extends StatelessWidget {
-  const _ProfileHero({
-    required this.name,
-    required this.designation,
-    required this.employeeCode,
-    required this.department,
-  });
-
-  final String name;
-  final String designation;
-  final String employeeCode;
-  final String? department;
-
-  @override
-  Widget build(BuildContext context) {
-    final details = [
-      designation,
-      employeeCode,
-      if (department?.trim().isNotEmpty == true) department!,
-    ].where((value) => value.trim().isNotEmpty).join(' · ');
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(AppDesign.heroRadius),
-      child: SizedBox(
-        height: 280,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.asset(
-              'assets/images/brixta_work_hero.jpg',
-              fit: BoxFit.cover,
-              cacheWidth: 900,
-              filterQuality: FilterQuality.medium,
-            ),
-
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Color(0x08000000),
-                    Color(0x26000000),
-                    Color(0xE8000000),
-                  ],
-                  stops: [0, .45, 1],
-                ),
-              ),
-            ),
-
-            Positioned(
-              top: 18,
-              right: 18,
-              child: Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: AppDesign.white.withValues(alpha: .94),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.person_outline_rounded,
-                  color: AppDesign.ink,
-                  size: 22,
-                ),
-              ),
-            ),
-
-            Positioned(
-              left: 22,
-              right: 22,
-              bottom: 22,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'EMPLOYEE PROFILE',
-                    style: AppDesign.mono(
-                      size: 8,
-                      color: AppDesign.white.withValues(alpha: .68),
-                      weight: FontWeight.w600,
-                      letterSpacing: 1.7,
-                    ),
-                  ),
-
-                  const SizedBox(height: 7),
-
-                  Text(
-                    name,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppDesign.sans(
-                      size: 28,
-                      color: AppDesign.white,
-                      weight: FontWeight.w700,
-                      height: 1.02,
-                      letterSpacing: -.8,
-                    ),
-                  ),
-
-                  if (details.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      details,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppDesign.sans(
-                        size: 12.5,
-                        color: AppDesign.white.withValues(alpha: .73),
-                        height: 1.35,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+  static String _sessionLabel(Map<String, Object?>? value) {
+    switch (value?['status']) {
+      case 'active':
+        return 'Active';
+      case 'completed':
+        return 'Complete';
+      default:
+        return 'Not started';
+    }
   }
 }
 
@@ -359,7 +309,40 @@ class _DeviceCard extends StatelessWidget {
   }
 }
 
-// _FactRow removed after Account de-clutter.
+class _FactRow extends StatelessWidget {
+  const _FactRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 19, color: AppDesign.muted),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(color: AppDesign.muted, fontSize: 13),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _Card extends StatelessWidget {
   const _Card({required this.child});
@@ -369,9 +352,9 @@ class _Card extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppDesign.white,
-        border: Border.all(color: AppDesign.line.withValues(alpha: .70)),
-        borderRadius: BorderRadius.circular(24),
+        color: AppDesign.surface,
+        border: Border.all(color: AppDesign.line),
+        borderRadius: BorderRadius.circular(AppDesign.radius),
       ),
       child: child,
     );

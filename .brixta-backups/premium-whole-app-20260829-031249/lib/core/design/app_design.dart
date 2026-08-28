@@ -321,48 +321,45 @@ abstract final class AppDesign {
         ),
       ),
 
-      // BRIXTA_PREMIUM_INPUTS_V2
       inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: white,
+        filled: false,
 
-        labelStyle: sans(size: 12, color: muted, weight: FontWeight.w500),
-
-        floatingLabelStyle: sans(size: 11, color: ink, weight: FontWeight.w600),
-
-        hintStyle: sans(size: 13, color: faint),
-
-        prefixIconColor: muted,
-        suffixIconColor: muted,
-
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 18,
+        labelStyle: mono(
+          size: 9,
+          color: muted,
+          weight: FontWeight.w500,
+          letterSpacing: 1.7,
         ),
 
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
-          borderSide: const BorderSide(color: line),
+        floatingLabelStyle: mono(
+          size: 9,
+          color: primary,
+          weight: FontWeight.w600,
+          letterSpacing: 1.7,
         ),
 
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
-          borderSide: const BorderSide(color: line),
+        hintStyle: mono(size: 10, color: faint, letterSpacing: .7),
+
+        contentPadding: const EdgeInsets.fromLTRB(0, 16, 0, 12),
+
+        border: const UnderlineInputBorder(
+          borderSide: BorderSide(color: line, width: 1),
         ),
 
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
-          borderSide: const BorderSide(color: ink, width: 1.25),
+        enabledBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: line, width: 1),
         ),
 
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
-          borderSide: const BorderSide(color: red),
+        focusedBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: primary, width: 1),
         ),
 
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
-          borderSide: const BorderSide(color: red, width: 1.25),
+        errorBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: red, width: 1),
+        ),
+
+        focusedErrorBorder: const UnderlineInputBorder(
+          borderSide: BorderSide(color: red, width: 1),
         ),
       ),
 

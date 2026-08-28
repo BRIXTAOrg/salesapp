@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../core/design/app_design.dart';
 import '../../../core/design/app_icons.dart';
-import '../../../core/design/brixta_feedback.dart';
 import '../../../core/models/mobile_capability.dart';
 import '../../../core/session/app_session_controller.dart';
 
@@ -51,7 +50,7 @@ class _PremiumWorkTabState extends State<PremiumWorkTab> {
   void initState() {
     super.initState();
 
-    _pages = PageController(viewportFraction: .89);
+    _pages = PageController(viewportFraction: .87);
 
     _search.addListener(_searchChanged);
   }
@@ -137,58 +136,51 @@ class _PremiumWorkTabState extends State<PremiumWorkTab> {
 
             const SizedBox(height: 22),
 
-            // BRIXTA_CONTEXTUAL_WORK_LENSES
-            if (widget.readyWork.isNotEmpty ||
-                widget.approvals.isNotEmpty ||
-                widget.blockedWork.isNotEmpty) ...[
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 22),
-                child: Row(
-                  children: [
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 22),
+              child: Row(
+                children: [
+                  _LensChip(
+                    label: 'Responsibilities',
+                    count: widget.modules.length,
+                    selected: _lens == _WorkLens.responsibilities,
+                    onTap: () => _selectLens(_WorkLens.responsibilities),
+                  ),
+
+                  const SizedBox(width: 8),
+
+                  _LensChip(
+                    label: 'Ready',
+                    count: widget.readyWork.length,
+                    selected: _lens == _WorkLens.ready,
+                    onTap: () => _selectLens(_WorkLens.ready),
+                  ),
+
+                  if (widget.approvals.isNotEmpty) ...[
+                    const SizedBox(width: 8),
                     _LensChip(
-                      label: 'Responsibilities',
-                      count: widget.modules.length,
-                      selected: _lens == _WorkLens.responsibilities,
-                      onTap: () => _selectLens(_WorkLens.responsibilities),
+                      label: 'Decisions',
+                      count: widget.approvals.length,
+                      selected: _lens == _WorkLens.decisions,
+                      onTap: () => _selectLens(_WorkLens.decisions),
                     ),
-
-                    if (widget.readyWork.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      _LensChip(
-                        label: 'To do',
-                        count: widget.readyWork.length,
-                        selected: _lens == _WorkLens.ready,
-                        onTap: () => _selectLens(_WorkLens.ready),
-                      ),
-                    ],
-
-                    if (widget.approvals.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      _LensChip(
-                        label: 'Decisions',
-                        count: widget.approvals.length,
-                        selected: _lens == _WorkLens.decisions,
-                        onTap: () => _selectLens(_WorkLens.decisions),
-                      ),
-                    ],
-
-                    if (widget.blockedWork.isNotEmpty) ...[
-                      const SizedBox(width: 8),
-                      _LensChip(
-                        label: 'Waiting',
-                        count: widget.blockedWork.length,
-                        selected: _lens == _WorkLens.waiting,
-                        onTap: () => _selectLens(_WorkLens.waiting),
-                      ),
-                    ],
                   ],
-                ),
-              ),
 
-              const SizedBox(height: 30),
-            ] else
-              const SizedBox(height: 8),
+                  if (widget.blockedWork.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    _LensChip(
+                      label: 'Waiting',
+                      count: widget.blockedWork.length,
+                      selected: _lens == _WorkLens.waiting,
+                      onTap: () => _selectLens(_WorkLens.waiting),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 30),
 
             _buildLens(context),
           ],
@@ -218,8 +210,8 @@ class _PremiumWorkTabState extends State<PremiumWorkTab> {
 
       case _WorkLens.ready:
         return _WorkQueue(
-          eyebrow: 'TO DO',
-          title: 'What needs doing now.',
+          eyebrow: 'READY WHEN YOU ARE',
+          title: 'Pick up your next step.',
           emptyText: 'Nothing is waiting for you right now.',
           items: _filterWork(widget.readyWork),
           mode: _QueueMode.ready,
@@ -305,14 +297,9 @@ class _PremiumWorkTabState extends State<PremiumWorkTab> {
         Padding(
           padding: const EdgeInsets.only(left: 22),
           child: SizedBox(
-            // BRIXTA_WORK_NAV_FLOW_V2
-            height: (MediaQuery.sizeOf(context).height * .64)
-                .clamp(470.0, 620.0)
-                .toDouble(),
+            height: 450,
             child: PageView.builder(
               controller: _pages,
-              allowImplicitScrolling: true,
-              physics: const BouncingScrollPhysics(parent: PageScrollPhysics()),
               padEnds: false,
               itemCount: modules.length,
               itemBuilder: (context, index) {
@@ -446,20 +433,21 @@ class _PremiumSearch extends StatelessWidget {
         decoration: InputDecoration(
           hintText: 'Search responsibilities',
           prefixIcon: const Icon(Icons.search_rounded, size: 25),
-
-          // No fake filter button.
-          // This button exists only when it has a real job.
-          suffixIcon: controller.text.isNotEmpty
-              ? IconButton(
-                  tooltip: 'Clear search',
-                  onPressed: () async {
-                    await BrixtaFeedback.selection();
-                    controller.clear();
-                  },
-                  icon: const Icon(Icons.close_rounded, size: 20),
-                )
-              : null,
-
+          suffixIcon: Padding(
+            padding: const EdgeInsets.all(7),
+            child: Container(
+              width: 46,
+              decoration: const BoxDecoration(
+                color: AppDesign.ink,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.tune_rounded,
+                size: 19,
+                color: AppDesign.white,
+              ),
+            ),
+          ),
           filled: false,
           border: InputBorder.none,
           enabledBorder: InputBorder.none,
@@ -491,10 +479,7 @@ class _LensChip extends StatelessWidget {
       borderRadius: BorderRadius.circular(999),
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
-        onTap: () async {
-          await BrixtaFeedback.selection();
-          onTap();
-        },
+        onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 12),
@@ -567,10 +552,7 @@ class _ResponsibilityHeroCard extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(AppDesign.heroRadius),
-          onTap: () async {
-            await BrixtaFeedback.action();
-            onTap();
-          },
+          onTap: onTap,
           child: ClipRRect(
             borderRadius: BorderRadius.circular(AppDesign.heroRadius),
             child: Stack(
@@ -846,12 +828,7 @@ class _QueueCard extends StatelessWidget {
       color: AppDesign.white,
       borderRadius: BorderRadius.circular(24),
       child: InkWell(
-        onTap: onTap == null
-            ? null
-            : () async {
-                await BrixtaFeedback.action();
-                onTap!();
-              },
+        onTap: onTap,
         borderRadius: BorderRadius.circular(24),
         child: Container(
           padding: const EdgeInsets.all(17),

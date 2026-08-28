@@ -5,10 +5,10 @@ import 'package:flutter_lucide/flutter_lucide.dart';
 
 import '../../../core/design/app_design.dart';
 import '../../../core/design/app_icons.dart';
-import '../../../core/design/brixta_feedback.dart';
 import '../../../core/device/device_identity.dart';
 import '../../../core/services/runtime/responsibility_runtime_api.dart';
 import '../../../core/session/app_session_controller.dart';
+import '../../../core/widgets/runtime_connection_banner.dart';
 import '../../tracking/presentation/tracking_controller.dart';
 
 class EmployeeProfileTab extends StatefulWidget {
@@ -96,6 +96,41 @@ class _EmployeeProfileTabState extends State<EmployeeProfileTab> {
 
             const SizedBox(height: 18),
 
+            RuntimeConnectionBanner(controller: widget.controller),
+
+            const SizedBox(height: 30),
+
+            const _SectionLabel('TODAY'),
+            const SizedBox(height: 12),
+            _Card(
+              child: Column(
+                children: [
+                  _FactRow(
+                    icon: AppIcons.attendance,
+                    label: 'Work session',
+                    value: _sessionLabel(widget.workSession),
+                  ),
+                  const Divider(height: 24),
+                  AnimatedBuilder(
+                    animation: widget.tracker,
+                    builder: (_, _) => _FactRow(
+                      icon: AppIcons.journey,
+                      label: 'Travel meter',
+                      value: widget.tracker.active
+                          ? '${widget.tracker.distanceKm.toStringAsFixed(1)} km · Active'
+                          : '${widget.tracker.distanceKm.toStringAsFixed(1)} km · Standby',
+                    ),
+                  ),
+                  const Divider(height: 24),
+                  _FactRow(
+                    icon: LucideIcons.refresh_cw,
+                    label: 'Workspace',
+                    value: widget.controller.lastSyncLabel,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 32),
             Row(
               children: [
                 const Expanded(child: _SectionLabel('COMPANY DEVICES')),
@@ -134,10 +169,7 @@ class _EmployeeProfileTabState extends State<EmployeeProfileTab> {
               ],
             const SizedBox(height: 36),
             OutlinedButton.icon(
-              onPressed: () async {
-                await BrixtaFeedback.action();
-                widget.controller.logout();
-              },
+              onPressed: widget.controller.logout,
               icon: Icon(AppIcons.logout, size: 18),
               label: const Text('Sign out'),
             ),
@@ -145,6 +177,17 @@ class _EmployeeProfileTabState extends State<EmployeeProfileTab> {
         ),
       ),
     );
+  }
+
+  static String _sessionLabel(Map<String, Object?>? value) {
+    switch (value?['status']) {
+      case 'active':
+        return 'Active';
+      case 'completed':
+        return 'Complete';
+      default:
+        return 'Not started';
+    }
   }
 }
 
@@ -359,7 +402,40 @@ class _DeviceCard extends StatelessWidget {
   }
 }
 
-// _FactRow removed after Account de-clutter.
+class _FactRow extends StatelessWidget {
+  const _FactRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 19, color: AppDesign.muted),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(color: AppDesign.muted, fontSize: 13),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _Card extends StatelessWidget {
   const _Card({required this.child});

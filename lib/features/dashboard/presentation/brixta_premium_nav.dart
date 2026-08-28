@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/design/app_design.dart';
 import '../../../core/design/app_icons.dart';
+import '../../../core/design/brixta_feedback.dart';
 
 class BrixtaPremiumNav extends StatelessWidget {
   const BrixtaPremiumNav({
@@ -26,7 +27,6 @@ class BrixtaPremiumNav extends StatelessWidget {
         color: AppDesign.ink,
         borderRadius: BorderRadius.circular(34),
         clipBehavior: Clip.antiAlias,
-        elevation: 0,
         child: SizedBox(
           height: 68,
           child: Row(
@@ -34,45 +34,59 @@ class BrixtaPremiumNav extends StatelessWidget {
               final selected = index == selectedIndex;
 
               return Expanded(
-                child: InkWell(
-                  onTap: () => onChanged(index),
-                  child: Center(
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 240),
-                      curve: Curves.easeOutCubic,
-                      height: 48,
-                      constraints: const BoxConstraints(minWidth: 48),
-                      padding: EdgeInsets.symmetric(
-                        horizontal: selected ? 16 : 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: selected ? AppDesign.white : Colors.transparent,
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            icons[index],
-                            size: 20,
-                            color: selected
-                                ? AppDesign.ink
-                                : AppDesign.white.withValues(alpha: .72),
-                          ),
-                          if (selected) ...[
-                            const SizedBox(width: 9),
-                            Text(
-                              labels[index],
-                              style: AppDesign.mono(
-                                size: 8,
-                                color: AppDesign.ink,
-                                weight: FontWeight.w700,
-                                letterSpacing: 1.5,
-                              ),
+                child: BrixtaPressScale(
+                  scale: .94,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(30),
+                    onTap: () async {
+                      if (index == selectedIndex) {
+                        return;
+                      }
+
+                      await BrixtaFeedback.selection();
+
+                      onChanged(index);
+                    },
+                    child: Center(
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 240),
+                        curve: Curves.easeOutCubic,
+                        height: 48,
+                        constraints: const BoxConstraints(minWidth: 48),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: selected ? 16 : 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? AppDesign.white
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              icons[index],
+                              size: 20,
+                              color: selected
+                                  ? AppDesign.ink
+                                  : AppDesign.white.withValues(alpha: .72),
                             ),
+                            if (selected) ...[
+                              const SizedBox(width: 9),
+                              Text(
+                                labels[index],
+                                style: AppDesign.mono(
+                                  size: 8,
+                                  color: AppDesign.ink,
+                                  weight: FontWeight.w700,
+                                  letterSpacing: 1.5,
+                                ),
+                              ),
+                            ],
                           ],
-                        ],
+                        ),
                       ),
                     ),
                   ),

@@ -7,7 +7,6 @@ import '../../../core/config/field_api.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/design/app_design.dart';
 import '../../../core/design/app_icons.dart';
-import '../../../core/design/brixta_feedback.dart';
 import '../../../core/models/mobile_capability.dart';
 import '../../../core/offline/offline_attendance_queue.dart';
 import '../../../core/offline/offline_record_queue.dart';
@@ -585,8 +584,7 @@ class _HomeTab extends StatelessWidget {
       child: RefreshIndicator(
         onRefresh: onRefresh,
         child: ListView(
-          // BRIXTA_HOME_FLOATING_NAV_CLEARANCE
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 118),
+          padding: AppDesign.pageInset,
           children: [
             _Header(
               name: session.user.name,
@@ -788,12 +786,10 @@ class _LiveOverview extends StatelessWidget {
   Widget build(BuildContext context) {
     final active = sessionStatus == 'active' || tracker.active;
 
-    final hasSignals = readyCount > 0 || approvalCount > 0;
-
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppDesign.heroRadius),
       child: SizedBox(
-        height: 315,
+        height: 330,
         child: Stack(
           fit: StackFit.expand,
           children: [
@@ -803,7 +799,6 @@ class _LiveOverview extends StatelessWidget {
               cacheWidth: 1000,
               filterQuality: FilterQuality.medium,
             ),
-
             const DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -812,13 +807,12 @@ class _LiveOverview extends StatelessWidget {
                   colors: [
                     Color(0x08000000),
                     Color(0x26000000),
-                    Color(0xE5000000),
+                    Color(0xD9000000),
                   ],
-                  stops: [0, .46, 1],
+                  stops: [0, .45, 1],
                 ),
               ),
             ),
-
             Positioned(
               top: 20,
               left: 20,
@@ -856,11 +850,10 @@ class _LiveOverview extends StatelessWidget {
                 ),
               ),
             ),
-
             Positioned(
               left: 22,
               right: 22,
-              bottom: 22,
+              bottom: 20,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -874,16 +867,13 @@ class _LiveOverview extends StatelessWidget {
                       letterSpacing: -.7,
                     ),
                   ),
-
                   const SizedBox(height: 8),
-
                   AnimatedBuilder(
                     animation: tracker,
                     builder: (_, _) => Text(
                       tracker.active
                           ? '${tracker.distanceKm.toStringAsFixed(1)} km recorded today'
-                          : '$responsibilityCount '
-                                '${responsibilityCount == 1 ? 'Responsibility' : 'Responsibilities'} available',
+                          : '$responsibilityCount Responsibilities available',
                       style: AppDesign.sans(
                         size: 13,
                         color: AppDesign.white.withValues(alpha: .74),
@@ -891,26 +881,28 @@ class _LiveOverview extends StatelessWidget {
                       ),
                     ),
                   ),
-
-                  if (hasSignals) ...[
-                    const SizedBox(height: 18),
-
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        if (readyCount > 0)
-                          _HomeSignal(label: '$readyCount TO DO'),
-
-                        if (approvalCount > 0)
-                          _HomeSignal(
-                            label:
-                                '$approvalCount '
-                                '${approvalCount == 1 ? 'DECISION' : 'DECISIONS'}',
-                          ),
-                      ],
-                    ),
-                  ],
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _Metric(value: '$readyCount', label: 'READY'),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _Metric(
+                          value: '$approvalCount',
+                          label: 'DECISIONS',
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _Metric(
+                          value: '$responsibilityCount',
+                          label: 'WORK',
+                        ),
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -921,34 +913,49 @@ class _LiveOverview extends StatelessWidget {
   }
 }
 
-class _HomeSignal extends StatelessWidget {
-  const _HomeSignal({required this.label});
+class _Metric extends StatelessWidget {
+  const _Metric({required this.value, required this.label});
 
+  final String value;
   final String label;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 9),
+      height: 64,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
       decoration: BoxDecoration(
-        color: AppDesign.ink.withValues(alpha: .70),
-        borderRadius: BorderRadius.circular(AppDesign.pillRadius),
+        color: AppDesign.ink.withValues(alpha: .62),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppDesign.white.withValues(alpha: .12)),
       ),
-      child: Text(
-        label,
-        style: AppDesign.mono(
-          size: 7,
-          color: AppDesign.white,
-          weight: FontWeight.w600,
-          letterSpacing: 1,
-        ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            value,
+            style: AppDesign.sans(
+              size: 19,
+              color: AppDesign.white,
+              weight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            style: AppDesign.mono(
+              size: 6.5,
+              color: AppDesign.white.withValues(alpha: .62),
+              weight: FontWeight.w600,
+              letterSpacing: 1,
+            ),
+          ),
+        ],
       ),
     );
   }
 }
-
-// _Metric removed during BRIXTA de-clutter pass.
 
 class _QuickResponsibilityGrid extends StatelessWidget {
   const _QuickResponsibilityGrid({required this.modules, required this.onTap});
@@ -958,142 +965,83 @@ class _QuickResponsibilityGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (modules.isEmpty) {
-      return const SizedBox.shrink();
-    }
+    return SizedBox(
+      height: 154,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        clipBehavior: Clip.none,
+        itemCount: modules.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 11),
+        itemBuilder: (context, index) {
+          final module = modules[index];
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const gap = 12.0;
-
-        final tileWidth = (constraints.maxWidth - gap) / 2;
-
-        return Wrap(
-          spacing: gap,
-          runSpacing: gap,
-          children: [
-            for (final module in modules)
-              SizedBox(
-                width: tileWidth,
-                height: 174,
-                child: _ResponsibilityTile(
-                  module: module,
-                  onTap: () => onTap(module),
+          return SizedBox(
+            width: 190,
+            child: Material(
+              color: AppDesign.white,
+              borderRadius: BorderRadius.circular(24),
+              clipBehavior: Clip.antiAlias,
+              child: InkWell(
+                onTap: () => onTap(module),
+                child: Container(
+                  padding: const EdgeInsets.all(17),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: AppDesign.line.withValues(alpha: .7),
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: AppDesign.softGreen,
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              AppIcons.forCapability(module),
+                              color: AppDesign.green,
+                              size: 19,
+                            ),
+                          ),
+                          const Spacer(),
+                          const Icon(
+                            Icons.arrow_outward_rounded,
+                            size: 18,
+                            color: AppDesign.muted,
+                          ),
+                        ],
+                      ),
+                      const Spacer(),
+                      Text(
+                        module.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppDesign.sans(
+                          size: 15,
+                          weight: FontWeight.w600,
+                          height: 1.15,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        module.kernelAvailable
+                            ? 'Live Responsibility'
+                            : 'Available',
+                        style: AppDesign.sans(size: 11, color: AppDesign.muted),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _ResponsibilityTile extends StatelessWidget {
-  const _ResponsibilityTile({required this.module, required this.onTap});
-
-  final MobileCapability module;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppDesign.white,
-      borderRadius: BorderRadius.circular(26),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () async {
-          await BrixtaFeedback.action();
-          onTap();
+            ),
+          );
         },
-        borderRadius: BorderRadius.circular(26),
-        child: Container(
-          padding: const EdgeInsets.all(18),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(26),
-            border: Border.all(color: AppDesign.line.withValues(alpha: .72)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 46,
-                    height: 46,
-                    decoration: const BoxDecoration(
-                      color: AppDesign.softGreen,
-                      shape: BoxShape.circle,
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      AppIcons.forCapability(module),
-                      color: AppDesign.green,
-                      size: 21,
-                    ),
-                  ),
-
-                  const Spacer(),
-
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: AppDesign.softGray.withValues(alpha: .7),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.arrow_outward_rounded,
-                      size: 18,
-                      color: AppDesign.muted,
-                    ),
-                  ),
-                ],
-              ),
-
-              const Spacer(),
-
-              Text(
-                module.title,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppDesign.sans(
-                  size: 16,
-                  weight: FontWeight.w600,
-                  height: 1.12,
-                  letterSpacing: -.2,
-                ),
-              ),
-
-              const SizedBox(height: 7),
-
-              Row(
-                children: [
-                  Container(
-                    width: 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: module.kernelAvailable
-                          ? AppDesign.green
-                          : AppDesign.faint,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-
-                  const SizedBox(width: 7),
-
-                  Expanded(
-                    child: Text(
-                      module.kernelAvailable ? 'Ready to open' : 'Available',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppDesign.sans(size: 11, color: AppDesign.muted),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -1121,10 +1069,7 @@ class _NextCard extends StatelessWidget {
       description: _workSubtitle(item),
       icon: LucideIcons.circle_play,
       tone: AppDesign.green,
-      onTap: () async {
-        await BrixtaFeedback.action();
-        onTap();
-      },
+      onTap: onTap,
     );
   }
 

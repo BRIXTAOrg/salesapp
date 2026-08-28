@@ -146,6 +146,17 @@ class _EmployeeProfileTabState extends State<EmployeeProfileTab> {
       ),
     );
   }
+
+  static String _sessionLabel(Map<String, Object?>? value) {
+    switch (value?['status']) {
+      case 'active':
+        return 'Active';
+      case 'completed':
+        return 'Complete';
+      default:
+        return 'Not started';
+    }
+  }
 }
 
 class _ProfileHero extends StatelessWidget {
@@ -359,7 +370,40 @@ class _DeviceCard extends StatelessWidget {
   }
 }
 
-// _FactRow removed after Account de-clutter.
+class _FactRow extends StatelessWidget {
+  const _FactRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 19, color: AppDesign.muted),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: const TextStyle(color: AppDesign.muted, fontSize: 13),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+          ),
+        ),
+      ],
+    );
+  }
+}
 
 class _Card extends StatelessWidget {
   const _Card({required this.child});
