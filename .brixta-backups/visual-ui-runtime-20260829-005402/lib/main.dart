@@ -1,6 +1,5 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
-import 'package:stac/stac.dart';
 
 import 'app/brixta_app.dart';
 import 'core/config/remote_config_service.dart';
@@ -13,29 +12,20 @@ import 'core/services/sync/local_sync_gateway.dart';
 import 'core/services/sync/sync_transport.dart';
 import 'core/session/app_session_controller.dart';
 import 'firebase_options.dart';
-import 'features/dynamic/presentation/brixta_stac_ui.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  /*
-   * BRIXTA_STAC_LOCAL_RUNTIME_V1
-   *
-   * Local JSON renderer only.
-   * No Stac Cloud account/API is required.
-   */
-  await Stac.initialize(parsers: const [BrixtaScreenParser()]);
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   await RemoteConfigService.initialize();
   await AppDatabase.instance.initialize();
   await AppDeviceIdentity.instance.initialize();
 
   final connectivity = await DeviceConnectivityGateway.create();
   final authGateway = BackendAuthGateway(database: AppDatabase.instance);
-  final cachedSession = await authGateway.restoreCachedSession(
-    TenantConfig.demo,
-  );
+  final cachedSession = await authGateway.restoreCachedSession(TenantConfig.demo);
 
   late final AppSessionController controller;
 

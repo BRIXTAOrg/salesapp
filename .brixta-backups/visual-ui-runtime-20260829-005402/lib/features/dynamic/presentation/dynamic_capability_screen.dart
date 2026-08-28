@@ -15,7 +15,6 @@ import '../../../core/offline/offline_record_queue.dart';
 import '../../../core/services/media/local_photo_store.dart';
 import '../../../core/services/runtime/responsibility_runtime_api.dart';
 import '../../../core/session/app_session_controller.dart';
-import 'brixta_stac_ui.dart';
 
 /// Generic Responsibility app renderer.
 ///
@@ -105,31 +104,6 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     }
 
     return widget.capability;
-  }
-
-  Map<String, dynamic>? get _uiDocument {
-    final app = _capability.appDefinition;
-
-    final rawConfig = app['config'];
-
-    final config = rawConfig is Map
-        ? Map<String, dynamic>.from(rawConfig)
-        : <String, dynamic>{};
-
-    final raw = config['uiDocument'];
-
-    if (raw is! Map) {
-      return null;
-    }
-
-    final document = Map<String, dynamic>.from(raw);
-
-    if (document['version']?.toString() != '1' ||
-        document['engine']?.toString() != 'brixta_stac_v1') {
-      return null;
-    }
-
-    return document;
   }
 
   String get _cacheKey =>
@@ -1179,72 +1153,56 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
           ),
         ],
       ),
-      body: _uiDocument != null
-          ? BrixtaStacUi(
-              document: _uiDocument!,
-              record: _records.isEmpty ? null : _records.first,
-              stateId: latestStatus,
-              actions: visibleActions,
-              submittingActionKey: _submittingActionKey,
-              onRunAction: _runAction,
-              onRefresh: () async {
-                await widget.controller.refreshWorkspace();
-                await _loadRecords();
-              },
-            )
-          : RefreshIndicator(
-              onRefresh: () async {
-                await widget.controller.refreshWorkspace();
-                await _loadRecords();
-              },
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(24, 16, 24, 48),
-                children: [
-                  _ResponsibilityIntro(
-                    capability: capability,
-                    actionCount: actions.length,
-                    latestStatus: latestStatus,
-                  ),
-                  const SizedBox(height: 32),
-                  if (_loading)
-                    const LinearProgressIndicator(minHeight: 2)
-                  else if (visibleActions.isEmpty)
-                    const _QuietState()
-                  else
-                    for (var i = 0; i < visibleActions.length; i++) ...[
-                      _ActionCard(
-                        action: visibleActions[i],
-                        fields: fields,
-                        submitting:
-                            _submittingActionKey ==
-                            visibleActions[i]['key']?.toString(),
-                        buildField: _buildField,
-                        onRun: () => _runAction(visibleActions[i]),
-                      ),
-                      if (i != visibleActions.length - 1)
-                        const SizedBox(height: 20),
-                    ],
-                  if (_runtimeOutputs.isNotEmpty) ...[
-                    const SizedBox(height: 40),
-                    for (var i = 0; i < _runtimeOutputs.length; i++) ...[
-                      _buildRuntimeOutput(_runtimeOutputs[i]),
-                      if (i != _runtimeOutputs.length - 1)
-                        const SizedBox(height: 28),
-                    ],
-                  ],
-
-                  if (_runtimeOutputs.isEmpty &&
-                      employeeOwnHistoryVisible &&
-                      _records.isNotEmpty) ...[
-                    const SizedBox(height: 40),
-                    const _SectionLabel('RECENT'),
-                    const SizedBox(height: 12),
-                    for (final record in _records.take(5))
-                      _RecordRow(record: record),
-                  ],
-                ],
-              ),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          await widget.controller.refreshWorkspace();
+          await _loadRecords();
+        },
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 48),
+          children: [
+            _ResponsibilityIntro(
+              capability: capability,
+              actionCount: actions.length,
+              latestStatus: latestStatus,
             ),
+            const SizedBox(height: 32),
+            if (_loading)
+              const LinearProgressIndicator(minHeight: 2)
+            else if (visibleActions.isEmpty)
+              const _QuietState()
+            else
+              for (var i = 0; i < visibleActions.length; i++) ...[
+                _ActionCard(
+                  action: visibleActions[i],
+                  fields: fields,
+                  submitting:
+                      _submittingActionKey ==
+                      visibleActions[i]['key']?.toString(),
+                  buildField: _buildField,
+                  onRun: () => _runAction(visibleActions[i]),
+                ),
+                if (i != visibleActions.length - 1) const SizedBox(height: 20),
+              ],
+            if (_runtimeOutputs.isNotEmpty) ...[
+              const SizedBox(height: 40),
+              for (var i = 0; i < _runtimeOutputs.length; i++) ...[
+                _buildRuntimeOutput(_runtimeOutputs[i]),
+                if (i != _runtimeOutputs.length - 1) const SizedBox(height: 28),
+              ],
+            ],
+
+            if (_runtimeOutputs.isEmpty &&
+                employeeOwnHistoryVisible &&
+                _records.isNotEmpty) ...[
+              const SizedBox(height: 40),
+              const _SectionLabel('RECENT'),
+              const SizedBox(height: 12),
+              for (final record in _records.take(5)) _RecordRow(record: record),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
