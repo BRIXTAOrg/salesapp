@@ -35,7 +35,7 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
 
   List<Map<String, dynamic>> _readyWork = const [];
   List<Map<String, dynamic>> _blockedWork = const [];
-  List<Map<String, dynamic>> _approvals = const [];
+  final List<Map<String, dynamic>> _approvals = const [];
   Map<String, Object?>? _workSession;
   bool _loadingWork = true;
   int _tab = 0;
@@ -164,9 +164,12 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
           setState(() {
             _readyWork = ready;
             _blockedWork = blocked;
-            // Backend authority resolution is authoritative.
-            // Only approvals this user may actually decide are returned.
-            _approvals = approvals;
+            // Approvals are decided in the CMS dashboard only. Rendering
+            // them here was also surfacing a submitter's own request
+            // back to their own account as something to "approve" --
+            // never intentional. Leave _approvals at its default empty
+            // list instead of wiring the backend response into it.
+            // _approvals = approvals;
           });
         }
       } else {
@@ -209,7 +212,8 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
       setState(() {
         _readyWork = _mapList(map['ready']);
         _blockedWork = _mapList(map['blocked']);
-        _approvals = _mapList(map['approvals']);
+        // See _refreshWork -- approvals are CMS-only, never rendered here.
+        // _approvals = _mapList(map['approvals']);
       });
     }
   }
@@ -255,9 +259,7 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
         approvals: _approvals,
         onRefresh: () => _refreshAll(refreshWorkspace: true),
         onCapabilityTap: _openCapability,
-        onReadyTap: (item) {
-          unawaited(_openReadyWork(item));
-        },
+        onReadyTap: _openReadyWork,
         onApprovalTap: _reviewApproval,
       ),
       EmployeeProfileTab(
@@ -300,8 +302,6 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
     final screen = DynamicCapabilityScreen(
       controller: widget.controller,
       capability: capability,
-      initialRecordId: recordId,
-      workflowInstanceId: workflowInstanceId,
     );
 
     if (widget.controller.isOnline) {
@@ -325,29 +325,15 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
         .then((_) => _refreshAll());
   }
 
-  Future<void> _openReadyWork(Map<String, dynamic> item) async {
-    // BRIXTA_DYNAMIC_PARTICIPANT_WORK_OPEN
-    final responsibility = _map(item['responsibility']);
-
-    final payload = _map(item['payload']);
-
+  void _openReadyWork(Map<String, dynamic> item) {
     final capabilityId =
-        item['capabilityId']?.toString() ?? responsibility['id']?.toString();
-
+        item['capabilityId']?.toString() ??
+        _map(item['responsibility'])['id']?.toString();
     final responsibilityKey =
-        responsibility['key']?.toString() ??
-        payload['responsibilityKey']?.toString() ??
+        _map(item['responsibility'])['key']?.toString() ??
         _responsibilityKeyFromAction(item['actionKey']?.toString());
 
-    final recordId =
-        payload['recordId']?.toString() ??
-        item['sourceId']?.toString() ??
-        item['contextId']?.toString();
-
-    final workflowInstanceId = item['workflowInstanceId']?.toString();
-
     MobileCapability? capability;
-
     for (final module in _modules) {
       if ((capabilityId != null && module.id.toString() == capabilityId) ||
           (responsibilityKey != null && module.key == responsibilityKey)) {
@@ -356,90 +342,19 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
       }
     }
 
-    /*
-     * The actor may be involved only in THIS RECORD and therefore not
-     * own the whole Responsibility in their normal module list.
-     */
-    if (capability == null &&
-        responsibilityKey != null &&
-        responsibilityKey.isNotEmpty &&
-        widget.controller.isOnline) {
-      try {
-        final response =
-            await FieldApi(
-              accessToken: widget.controller.session!.accessToken,
-            ).getJson(
-              '/api/salesApp/responsibilities/'
-              '${Uri.encodeComponent(responsibilityKey)}'
-              '/manifest',
-            );
-
-        final manifest = _map(response['manifest']);
-
-        final baseDefinition = _map(manifest['baseDefinition']);
-
-        final resolvedId =
-            int.tryParse(
-              capabilityId ?? responsibility['id']?.toString() ?? '',
-            ) ??
-            0;
-
-        capability = MobileCapability.fromJson({
-          'id': resolvedId,
-
-          'key': responsibilityKey,
-
-          'title': responsibility['title']?.toString() ?? responsibilityKey,
-
-          'type': 'record',
-
-          'description': responsibility['description']?.toString(),
-
-          'config': baseDefinition,
-
-          'definition': baseDefinition,
-
-          'runtimeManifest': {
-            'kernelAvailable': response['kernelAvailable'] == true,
-
-            'version': response['version'],
-
-            'hash': response['manifestHash'],
-
-            'source': response['source'],
-
-            'manifest': manifest,
-          },
-        });
-      } catch (error) {
-        if (!mounted) return;
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open delegated work: $error')),
-        );
-
-        return;
-      }
-    }
-
     if (capability == null) {
-      if (!mounted) return;
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'This work item has no published Responsibility manifest.',
-          ),
+          content: Text('This work item is not available on this device yet.'),
         ),
       );
-
       return;
     }
 
     _openCapability(
       capability,
-      workflowInstanceId: workflowInstanceId,
-      recordId: recordId,
+      workflowInstanceId: item['workflowInstanceId']?.toString(),
+      recordId: item['sourceId']?.toString() ?? item['contextId']?.toString(),
     );
   }
 

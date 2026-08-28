@@ -13,7 +13,6 @@ import '../../../core/design/app_icons.dart';
 import '../../../core/models/mobile_capability.dart';
 import '../../../core/offline/offline_record_queue.dart';
 import '../../../core/services/media/local_photo_store.dart';
-import '../../../core/services/runtime/responsibility_runtime_api.dart';
 import '../../../core/session/app_session_controller.dart';
 
 /// Generic Responsibility app renderer.
@@ -29,18 +28,10 @@ class DynamicCapabilityScreen extends StatefulWidget {
     super.key,
     required this.controller,
     required this.capability,
-    this.initialRecordId,
-    this.workflowInstanceId,
   });
 
   final AppSessionController controller;
   final MobileCapability capability;
-
-  /// Concrete Responsibility record supplied by My Work / actor delegation.
-  final String? initialRecordId;
-
-  /// Preserved when the Responsibility is participating in a workflow.
-  final String? workflowInstanceId;
 
   @override
   State<DynamicCapabilityScreen> createState() =>
@@ -57,17 +48,6 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
   final Map<String, Map<String, dynamic>> _manualLocations = {};
 
   List<Map<String, dynamic>> _records = const [];
-
-  // BRIXTA_PIXEL_REALITY_ACTOR_PROJECTION
-  //
-  // These are calculated by the Kernel for:
-  //
-  // current user + current Responsibility + current record + current state.
-  //
-  // They are authoritative while online.
-  List<Map<String, dynamic>> _runtimeActions = const [];
-  List<Map<String, dynamic>> _runtimeOutputs = const [];
-
   bool _loading = true;
   String? _submittingActionKey;
   String _lastWorkspaceRevision = '';
@@ -92,96 +72,7 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
 
   List<Map<String, dynamic>> get fields => _capability.fields;
 
-  Map<String, dynamic> _runtimeActionToAppAction(Map<String, dynamic> action) {
-    final kind = (action['kind'] ?? 'update').toString();
-
-    final configRaw = action['config'];
-    final config = configRaw is Map
-        ? Map<String, dynamic>.from(configRaw)
-        : <String, dynamic>{};
-
-    final captureIds = action['captureIds'] is List
-        ? (action['captureIds'] as List).map((item) => item.toString()).toList()
-        : <String>[];
-
-    // Kernel capture IDs are semantic IDs. Flutter form actions operate
-    // on the compiled field key, so map the two properly.
-    final fieldKeys = captureIds.map((captureId) {
-      for (final field in fields) {
-        final fieldConfig = _config(field);
-
-        if (_fieldKey(field) == captureId ||
-            fieldConfig['kernelPossibilityId']?.toString() == captureId) {
-          return _fieldKey(field);
-        }
-      }
-
-      return captureId;
-    }).toList();
-
-    final requiredFieldKeys = fieldKeys.where((fieldKey) {
-      for (final field in fields) {
-        if (_fieldKey(field) == fieldKey) {
-          return field['required'] == true;
-        }
-      }
-      return false;
-    }).toList();
-
-    final explicitResult = config['resultingState']?.toString();
-
-    final createKind = kind == 'create' || kind == 'submit' || kind == 'start';
-
-    /*
-     * If there is already a concrete record, a submit/start action is
-     * operating that record rather than creating an unrelated second one.
-     */
-    final operation = createKind && _records.isEmpty ? 'create' : 'update';
-
-    return {
-      'key': (action['id'] ?? action['key'] ?? kind).toString(),
-
-      'label': (action['label'] ?? kind).toString(),
-
-      'operation': operation,
-
-      'status': explicitResult ?? kind,
-
-      'style': const {'reject', 'cancel', 'delete'}.contains(kind)
-          ? 'danger'
-          : const {'approve', 'submit', 'start', 'complete'}.contains(kind)
-          ? 'primary'
-          : 'secondary',
-
-      'fieldKeys': fieldKeys,
-
-      'requiredFieldKeys': requiredFieldKeys,
-
-      // Kernel has ALREADY evaluated actor/state/condition visibility.
-      'visibility': {'mode': 'always'},
-
-      if (operation == 'update') 'target': {'strategy': 'latest_record'},
-
-      'successMessage':
-          config['successMessage']?.toString() ??
-          '${action['label'] ?? kind} completed.',
-    };
-  }
-
   List<Map<String, dynamic>> get actions {
-    if (_runtimeActions.isNotEmpty) {
-      return _runtimeActions.map(_runtimeActionToAppAction).toList();
-    }
-
-    /*
-     * A delegated participant MUST NOT fall back to the employee's
-     * static/global action list. If Kernel runtime isn't available,
-     * delegated work becomes read-only instead of leaking authority.
-     */
-    if (widget.initialRecordId != null && widget.initialRecordId!.isNotEmpty) {
-      return const [];
-    }
-
     final app = _capability.appDefinition;
     final raw = app['actions'];
 
@@ -293,9 +184,7 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
   /// India runs one fixed UTC+5:30 offset year-round (no DST), so a plain
   /// offset add is correct here without pulling in the `timezone` package.
   static String _formatIstNow({required bool withTime}) {
-    final ist = DateTime.now().toUtc().add(
-      const Duration(hours: 5, minutes: 30),
-    );
+    final ist = DateTime.now().toUtc().add(const Duration(hours: 5, minutes: 30));
     final datePart =
         '${ist.year.toString().padLeft(4, '0')}-'
         '${ist.month.toString().padLeft(2, '0')}-'
@@ -344,92 +233,17 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     final session = widget.controller.session;
     if (session == null) return;
 
-    if (mounted) {
-      setState(() => _loading = true);
-    }
+    if (mounted) setState(() => _loading = true);
 
     try {
       if (widget.controller.isOnline) {
         await OfflineRecordQueue.flush(session.accessToken);
 
-        final runtimeApi = ResponsibilityRuntimeApi(
-          accessToken: session.accessToken,
-        );
-
-        /*
-         * BRIXTA_PIXEL_REALITY_RUNTIME_LOAD
-         *
-         * DYNAMIC PARTICIPANT PATH
-         *
-         * Manager / reviewer / other actor opens one concrete record.
-         * Do NOT use /records because that legacy endpoint is "my own records".
-         */
-        if (widget.initialRecordId != null &&
-            widget.initialRecordId!.isNotEmpty) {
-          final runtime = await runtimeApi.runtime(
-            _capability.key,
-            recordId: widget.initialRecordId,
-          );
-
-          final recordRaw = runtime['record'];
-
-          final record = recordRaw is Map
-              ? Map<String, dynamic>.from(recordRaw)
-              : <String, dynamic>{};
-
-          final possibilitiesRaw = runtime['possibilities'];
-
-          final possibilities = possibilitiesRaw is Map
-              ? Map<String, dynamic>.from(possibilitiesRaw)
-              : <String, dynamic>{};
-
-          final actionRaw = possibilities['actions'];
-
-          final outputRaw = possibilities['outputs'];
-
-          final runtimeActions = actionRaw is List
-              ? actionRaw
-                    .whereType<Map>()
-                    .map((item) => Map<String, dynamic>.from(item))
-                    .toList()
-              : <Map<String, dynamic>>[];
-
-          final runtimeOutputs = outputRaw is List
-              ? outputRaw
-                    .whereType<Map>()
-                    .map((item) => Map<String, dynamic>.from(item))
-                    .toList()
-              : <Map<String, dynamic>>[];
-
-          final records = record.isEmpty ? <Map<String, dynamic>>[] : [record];
-
-          await AppDatabase.instance.putCache(_cacheKey, records);
-
-          if (mounted) {
-            setState(() {
-              _records = records;
-              _runtimeActions = runtimeActions;
-              _runtimeOutputs = runtimeOutputs;
-            });
-          }
-
-          return;
-        }
-
-        /*
-         * NORMAL ASSIGNED EMPLOYEE PATH
-         *
-         * Keep existing own-record history for compatibility,
-         * but get AVAILABLE ACTIONS + OUTPUTS from Kernel.
-         */
         final body = await FieldApi(accessToken: session.accessToken).getJson(
-          '/api/salesApp/records/'
-          '${Uri.encodeComponent(_capability.key)}'
-          '?limit=50',
+          '/api/salesApp/records/${Uri.encodeComponent(_capability.key)}?limit=50',
         );
 
         final raw = body['records'];
-
         final records = raw is List
             ? raw
                   .whereType<Map>()
@@ -437,80 +251,15 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
                   .toList()
             : <Map<String, dynamic>>[];
 
-        List<Map<String, dynamic>> runtimeActions = const [];
-
-        List<Map<String, dynamic>> runtimeOutputs = const [];
-
-        try {
-          final runtime = await runtimeApi.runtime(
-            _capability.key,
-            recordId: records.isNotEmpty
-                ? records.first['id']?.toString()
-                : null,
-          );
-
-          final possibilitiesRaw = runtime['possibilities'];
-
-          final possibilities = possibilitiesRaw is Map
-              ? Map<String, dynamic>.from(possibilitiesRaw)
-              : <String, dynamic>{};
-
-          final actionRaw = possibilities['actions'];
-
-          final outputRaw = possibilities['outputs'];
-
-          runtimeActions = actionRaw is List
-              ? actionRaw
-                    .whereType<Map>()
-                    .map((item) => Map<String, dynamic>.from(item))
-                    .toList()
-              : const [];
-
-          runtimeOutputs = outputRaw is List
-              ? outputRaw
-                    .whereType<Map>()
-                    .map((item) => Map<String, dynamic>.from(item))
-                    .toList()
-              : const [];
-        } catch (_) {
-          /*
-           * Legacy Responsibilities can still use their compiled static
-           * action contract while migration is in progress.
-           */
-        }
-
         await AppDatabase.instance.putCache(_cacheKey, records);
-
-        if (mounted) {
-          setState(() {
-            _records = records;
-            _runtimeActions = runtimeActions;
-            _runtimeOutputs = runtimeOutputs;
-          });
-        }
+        if (mounted) setState(() => _records = records);
       } else {
         await _loadCachedRecords();
       }
-    } catch (error) {
-      /*
-       * Delegated authority is online/Kernel-authoritative.
-       * Never invent manager actions from stale/static UI while offline.
-       */
-      if (widget.initialRecordId != null &&
-          widget.initialRecordId!.isNotEmpty) {
-        if (mounted) {
-          setState(() {
-            _runtimeActions = const [];
-            _runtimeOutputs = const [];
-          });
-        }
-      }
-
+    } catch (_) {
       await _loadCachedRecords();
     } finally {
-      if (mounted) {
-        setState(() => _loading = false);
-      }
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -746,14 +495,22 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
       // Generated Responsibility actions must execute through the
       // canonical Kernel endpoint. Pixel Logic is attached to the
       // exact same action execution lifecycle.
-      final target = operation == 'update' ? _targetRecord(action) : null;
+      final target =
+          operation == 'update'
+              ? _targetRecord(action)
+              : null;
 
-      if (operation == 'update' && (target == null || target['id'] == null)) {
-        _message('There is no matching record to update yet.');
+      if (operation == 'update' &&
+          (target == null ||
+              target['id'] == null)) {
+        _message(
+          'There is no matching record to update yet.',
+        );
         return;
       }
 
-      final method = 'POST';
+      final method =
+          'POST';
 
       final path =
           '/api/salesApp/responsibilities/'
@@ -761,25 +518,37 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
           '/actions/'
           '${Uri.encodeComponent(actionKey)}';
 
-      final body = <String, dynamic>{
-        'recordId': target?['id']?.toString(),
+      final body =
+          <String, dynamic>{
+            'recordId':
+                target?['id']
+                    ?.toString(),
 
-        'workflowInstanceId': widget.workflowInstanceId,
+            'clientMutationId':
+                operation == 'update'
+                    ? null
+                    : AppDatabase
+                        .instance
+                        .newId(),
 
-        'clientMutationId': operation == 'update'
-            ? null
-            : AppDatabase.instance.newId(),
+            'clientCreatedAt':
+                now,
 
-        'clientCreatedAt': now,
+            'payload':
+                payload,
 
-        'payload': payload,
+            // These remain useful to the optimistic/offline
+            // mobile renderer. Server Kernel state is authoritative.
+            'status':
+                status,
 
-        // These remain useful to the optimistic/offline
-        // mobile renderer. Server Kernel state is authoritative.
-        'status': status,
-
-        'appActionKey': actionKey,
-      }..removeWhere((_, value) => value == null);
+            'appActionKey':
+                actionKey,
+          }
+            ..removeWhere(
+              (_, value) =>
+                  value == null,
+            );
 
       Map<String, dynamic>? response;
 
@@ -851,22 +620,44 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
       }
 
       // BRIXTA_RUNTIME_EFFECT_MESSAGES_V1
-      final runtimeMessages = <String>[];
+      final runtimeMessages =
+          <String>[];
 
-      final rawEffects = response == null ? null : response['effects'];
+      final rawEffects =
+          response == null
+              ? null
+              : response['effects'];
 
       if (rawEffects is List) {
-        for (final raw in rawEffects.whereType<Map>()) {
-          final effect = Map<String, dynamic>.from(raw);
+        for (
+          final raw
+          in rawEffects.whereType<Map>()
+        ) {
+          final effect =
+              Map<String, dynamic>.from(
+                raw,
+              );
 
-          if (effect['kind']?.toString() != 'notify_actor') {
+          if (
+            effect['kind']
+                    ?.toString() !=
+                'notify_actor'
+          ) {
             continue;
           }
 
-          final message = effect['message']?.toString().trim();
+          final message =
+              effect['message']
+                  ?.toString()
+                  .trim();
 
-          if (message != null && message.isNotEmpty) {
-            runtimeMessages.add(message);
+          if (
+            message != null &&
+            message.isNotEmpty
+          ) {
+            runtimeMessages.add(
+              message,
+            );
           }
         }
       }
@@ -879,7 +670,11 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
 
       // BRIXTA_PIXEL_MESSAGE_PRIORITY_V1
       if (runtimeMessages.isNotEmpty) {
-        _message(runtimeMessages.join('\n'));
+        _message(
+          runtimeMessages.join(
+            '\n',
+          ),
+        );
       } else {
         _message(
           (action['successMessage'] ??
@@ -1070,17 +865,7 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
                 ),
                 if (i != visibleActions.length - 1) const SizedBox(height: 20),
               ],
-            if (_runtimeOutputs.isNotEmpty) ...[
-              const SizedBox(height: 40),
-              for (var i = 0; i < _runtimeOutputs.length; i++) ...[
-                _buildRuntimeOutput(_runtimeOutputs[i]),
-                if (i != _runtimeOutputs.length - 1) const SizedBox(height: 28),
-              ],
-            ],
-
-            if (_runtimeOutputs.isEmpty &&
-                employeeOwnHistoryVisible &&
-                _records.isNotEmpty) ...[
+            if (employeeOwnHistoryVisible && _records.isNotEmpty) ...[
               const SizedBox(height: 40),
               const _SectionLabel('RECENT'),
               const SizedBox(height: 12),
@@ -1089,153 +874,6 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
           ],
         ),
       ),
-    );
-  }
-
-  String _runtimeDisplayValue(dynamic value) {
-    if (value == null || value == '') {
-      return '—';
-    }
-
-    if (value is bool) {
-      return value ? 'Yes' : 'No';
-    }
-
-    if (value is List) {
-      return value.map((item) => item.toString()).join(', ');
-    }
-
-    if (value is Map) {
-      return value.entries
-          .map((entry) => '${entry.key}: ${entry.value}')
-          .join(' · ');
-    }
-
-    return value.toString();
-  }
-
-  Widget _buildRuntimeOutput(Map<String, dynamic> output) {
-    final label = output['label']?.toString() ?? 'Output';
-
-    final kind = output['kind']?.toString() ?? 'detail';
-
-    final stateRaw = output['stateIds'];
-
-    final stateIds = stateRaw is List
-        ? stateRaw.map((item) => item.toString()).toSet()
-        : <String>{};
-
-    final keysRaw = output['visibleKeys'];
-
-    final visibleKeys = keysRaw is List
-        ? keysRaw.map((item) => item.toString()).toSet()
-        : <String>{};
-
-    final matchingRecords = _records
-        .where(
-          (record) =>
-              stateIds.isEmpty ||
-              stateIds.contains(record['status']?.toString()),
-        )
-        .toList();
-
-    if (matchingRecords.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    final outputFields = visibleKeys.isEmpty
-        ? visibleFields
-        : visibleFields
-              .where((field) => visibleKeys.contains(_fieldKey(field)))
-              .toList();
-
-    if (kind == 'metric') {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionLabel(label.toUpperCase()),
-          const SizedBox(height: 12),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: AppDesign.surface,
-              border: Border.all(color: AppDesign.line),
-              borderRadius: BorderRadius.circular(AppDesign.radius),
-            ),
-            child: Text(
-              matchingRecords.length.toString(),
-              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
-            ),
-          ),
-        ],
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SectionLabel(label.toUpperCase()),
-        const SizedBox(height: 12),
-        for (final record in matchingRecords.take(20))
-          Container(
-            width: double.infinity,
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppDesign.surface,
-              border: Border.all(color: AppDesign.line),
-              borderRadius: BorderRadius.circular(AppDesign.radius),
-            ),
-            child: Builder(
-              builder: (context) {
-                final rawPayload = record['payload'];
-
-                final payload = rawPayload is Map
-                    ? Map<String, dynamic>.from(rawPayload)
-                    : <String, dynamic>{};
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            record['status']?.toString() ?? 'Record',
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        Text(
-                          kind.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 10,
-                            color: AppDesign.muted,
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (outputFields.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      for (final field in outputFields) ...[
-                        Text(
-                          _fieldLabel(field),
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: AppDesign.muted,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(_runtimeDisplayValue(payload[_fieldKey(field)])),
-                        const SizedBox(height: 8),
-                      ],
-                    ],
-                  ],
-                );
-              },
-            ),
-          ),
-      ],
     );
   }
 
