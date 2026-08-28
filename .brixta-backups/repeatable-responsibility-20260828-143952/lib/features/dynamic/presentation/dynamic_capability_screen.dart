@@ -92,59 +92,6 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
 
   List<Map<String, dynamic>> get fields => _capability.fields;
 
-  // BRIXTA_RESPONSIBILITY_INSTANCE_MODE_V1
-  //
-  // continuing:
-  //   operate the current/latest business record.
-  //
-  // repeatable:
-  //   opening the Responsibility represents a NEW instance even when
-  //   historical records already exist.
-  //
-  // A concrete initialRecordId always wins. That is how manager/reviewer
-  // delegation and returned-record editing remain record-specific.
-  String get _instanceMode {
-    final rawConfig = _capability.appDefinition['config'];
-
-    final config = rawConfig is Map
-        ? Map<String, dynamic>.from(rawConfig)
-        : <String, dynamic>{};
-
-    final value = config['instanceMode']?.toString().trim().toLowerCase();
-
-    return value == 'repeatable' ? 'repeatable' : 'continuing';
-  }
-
-  bool get _hasConcreteRecordContext =>
-      widget.initialRecordId != null &&
-      widget.initialRecordId!.trim().isNotEmpty;
-
-  bool get _isRepeatableRootContext =>
-      !_hasConcreteRecordContext && _instanceMode == 'repeatable';
-
-  String? get _initialState {
-    final rawConfig = _capability.appDefinition['config'];
-
-    final config = rawConfig is Map
-        ? Map<String, dynamic>.from(rawConfig)
-        : <String, dynamic>{};
-
-    final value = config['initialState']?.toString().trim();
-
-    return value == null || value.isEmpty ? null : value;
-  }
-
-  /*
-   * Action visibility is NOT necessarily the same thing as historical
-   * latest-record status.
-   *
-   * For a repeatable Responsibility, the root screen represents a fresh
-   * instance, so actions evaluate from the initial state even though
-   * RECENT/history can contain pending/approved/rejected records.
-   */
-  String? get _actionStatus =>
-      _isRepeatableRootContext ? _initialState : latestStatus;
-
   Map<String, dynamic> _runtimeActionToAppAction(Map<String, dynamic> action) {
     final kind = (action['kind'] ?? 'update').toString();
 
@@ -186,24 +133,10 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     final createKind = kind == 'create' || kind == 'submit' || kind == 'start';
 
     /*
-     * Record existence alone must NEVER decide whether a business action
-     * creates a new instance.
-     *
-     * repeatable root:
-     *   historical records may exist, but submit/start/create means NEW.
-     *
-     * concrete delegated/history record:
-     *   submit/start may represent resubmit/restart of THAT record.
-     *
-     * continuing root:
-     *   preserve the previous latest-record behaviour.
+     * If there is already a concrete record, a submit/start action is
+     * operating that record rather than creating an unrelated second one.
      */
-    final operation = createKind
-        ? (_hasConcreteRecordContext ||
-                  (!_isRepeatableRootContext && _records.isNotEmpty)
-              ? 'update'
-              : 'create')
-        : 'update';
+    final operation = createKind && _records.isEmpty ? 'create' : 'update';
 
     return {
       'key': (action['id'] ?? action['key'] ?? kind).toString(),
@@ -509,18 +442,9 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
         List<Map<String, dynamic>> runtimeOutputs = const [];
 
         try {
-          /*
-           * A repeatable Responsibility's root screen is a NEW-instance
-           * projection. Historical records remain loaded below for history,
-           * but must not become the Kernel action context.
-           *
-           * Continuing Responsibilities preserve latest-record semantics.
-           */
           final runtime = await runtimeApi.runtime(
             _capability.key,
-            recordId: _isRepeatableRootContext
-                ? null
-                : records.isNotEmpty
+            recordId: records.isNotEmpty
                 ? records.first['id']?.toString()
                 : null,
           );
@@ -724,12 +648,7 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
 
     final mode = (visibility['mode'] ?? 'always').toString();
     final expected = visibility['status']?.toString();
-
-    /*
-     * For repeatable root screens, the actionable state is the initial
-     * state of a NEW instance, not the status of the newest history row.
-     */
-    final latest = _actionStatus;
+    final latest = latestStatus;
 
     switch (mode) {
       case 'no_record':
