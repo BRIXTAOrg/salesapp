@@ -25,7 +25,6 @@ dependencies:
   stac: ^1.5.0
   flutter_animate: ^4.5.2
   lottie: ^3.5.1
-  audioplayers: ^6.8.1
 
 dev_dependencies:
   flutter_test:
@@ -35,5 +34,4 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/sounds/
     - assets/images/

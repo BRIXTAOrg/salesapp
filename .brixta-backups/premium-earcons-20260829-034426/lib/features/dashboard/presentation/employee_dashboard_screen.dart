@@ -53,10 +53,6 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
   @override
   void initState() {
     super.initState();
-
-    // BRIXTA_SONIC_WARMUP_V1
-    // Preload tiny UI earcons before first interaction.
-    unawaited(BrixtaFeedback.warmUp());
     WidgetsBinding.instance.addObserver(this);
     widget.controller.addListener(_onControllerChanged);
     _lastRevision = widget.controller.workspaceRevision;
@@ -75,9 +71,6 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
     WidgetsBinding.instance.removeObserver(this);
     widget.controller.removeListener(_onControllerChanged);
     tracker.dispose();
-
-    unawaited(BrixtaFeedback.shutdown());
-
     super.dispose();
   }
 
@@ -508,22 +501,16 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
                     children: [
                       Expanded(
                         child: OutlinedButton(
-                          onPressed: () {
-                            unawaited(BrixtaFeedback.decision());
-
-                            Navigator.pop(sheetContext, 'rejected');
-                          },
+                          onPressed: () =>
+                              Navigator.pop(sheetContext, 'rejected'),
                           child: const Text('Reject'),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: FilledButton(
-                          onPressed: () {
-                            unawaited(BrixtaFeedback.decision());
-
-                            Navigator.pop(sheetContext, 'approved');
-                          },
+                          onPressed: () =>
+                              Navigator.pop(sheetContext, 'approved'),
                           child: const Text('Approve'),
                         ),
                       ),
@@ -546,13 +533,6 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
       );
 
       if (!mounted) return;
-
-      // BRIXTA_DECISION_SUCCESS_SOUND
-      //
-      // Sonic feedback is presentation-only and must never delay
-      // navigation, state refresh or user feedback.
-      unawaited(BrixtaFeedback.success());
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(decision == 'approved' ? 'Approved.' : 'Rejected.'),

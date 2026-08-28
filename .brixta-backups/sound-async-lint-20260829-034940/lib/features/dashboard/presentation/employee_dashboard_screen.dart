@@ -548,10 +548,7 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
       if (!mounted) return;
 
       // BRIXTA_DECISION_SUCCESS_SOUND
-      //
-      // Sonic feedback is presentation-only and must never delay
-      // navigation, state refresh or user feedback.
-      unawaited(BrixtaFeedback.success());
+      await BrixtaFeedback.success();
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

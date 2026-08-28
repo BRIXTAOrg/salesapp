@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/design/app_design.dart';
-import '../../../core/design/brixta_feedback.dart';
 import '../../../core/services/auth/auth_gateway.dart';
 import '../../../core/session/app_session_controller.dart';
 import '../../../core/widgets/tenant_logo.dart';
@@ -50,9 +49,6 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
-
-    // BRIXTA_LOGIN_ACTION_SOUND
-    await BrixtaFeedback.action();
 
     setState(() {
       _loading = true;
