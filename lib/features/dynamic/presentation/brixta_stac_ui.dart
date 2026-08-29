@@ -275,6 +275,34 @@ class BrixtaStacUi extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // BRIXTA_PRE_STAC_SERIALIZED_GUARD_V1
+    //
+    // Reject pathological CMS payloads BEFORE:
+    //
+    //   BrixtaUiRuntime
+    //   ResponsibilityTheme
+    //   Stac.fromJson
+    //   BrixtaScreenParser
+    //   _BrixtaDocumentView
+    //   byId materialization
+    //
+    // List.length is O(1), so a two-million-entry serialized
+    // document is rejected without walking those entries.
+    final rawBlocks = document['blocks'];
+
+    if (rawBlocks is List && rawBlocks.length > 10000) {
+      return const _BrixtaPreStacResourceLimitView();
+    }
+
+    /*
+     * Root count is cheap to validate here for the same reason.
+     */
+    final rawRoots = document['rootIds'];
+
+    if (rawRoots is List && rawRoots.length > 256) {
+      return const _BrixtaPreStacResourceLimitView();
+    }
+
     final runtime = BrixtaUiRuntime(
       record: record,
       stateId: stateId,
@@ -311,6 +339,43 @@ class BrixtaStacUi extends StatelessWidget {
                   }, innerContext) ??
                   const SizedBox.shrink();
             },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _BrixtaPreStacResourceLimitView extends StatelessWidget {
+  const _BrixtaPreStacResourceLimitView();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.shield_outlined,
+                size: 32,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: 14),
+              Text(
+                'This Responsibility cannot be displayed safely.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Its published interface exceeds the device render safety limit.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
           ),
         ),
       ),
@@ -429,27 +494,51 @@ class _BrixtaDocumentView extends StatelessWidget {
   static const int _maxDirectChildren = 2048;
   static const int _maxExpandedRenderNodes = 4096;
 
+  // BRIXTA_SERIALIZED_DOCUMENT_ENVELOPE_V1
+  //
+  // IMPORTANT:
+  //
+  // This budget applies to the RAW serialized CMS document BEFORE
+  // we copy block Maps or manufacture the byId index.
+  //
+  // Without this preflight, millions of unreachable blocks can still
+  // cause seconds of allocation/GC work even though the reachable
+  // render graph is tiny.
+  static const int _maxSerializedBlocks = 10000;
+
   final Map<String, dynamic> document;
   final BrixtaUiRuntime runtime;
 
-  List<Map<String, dynamic>> get blocks {
+  Map<String, Map<String, dynamic>> get byId {
     final raw = document['blocks'];
 
     if (raw is! List) {
-      return const [];
+      return const <String, Map<String, dynamic>>{};
     }
 
-    return raw
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList();
-  }
+    final result = <String, Map<String, dynamic>>{};
 
-  Map<String, Map<String, dynamic>> get byId {
-    return {
-      for (final block in blocks)
-        if (block['id'] != null) block['id'].toString(): block,
-    };
+    /*
+     * Single-pass materialization.
+     *
+     * We intentionally do NOT manufacture an intermediate
+     * List<Map<String, dynamic>>.
+     */
+    for (final item in raw) {
+      if (item is! Map) {
+        continue;
+      }
+
+      final id = item['id']?.toString();
+
+      if (id == null || id.isEmpty) {
+        continue;
+      }
+
+      result[id] = Map<String, dynamic>.from(item);
+    }
+
+    return result;
   }
 
   List<String> get rootIds {
@@ -460,6 +549,37 @@ class _BrixtaDocumentView extends StatelessWidget {
     }
 
     return raw.map((item) => item.toString()).toList();
+  }
+
+  _BrixtaRenderGraphCheck? _validateSerializedEnvelope() {
+    /*
+     * O(1) REJECTION PATH.
+     *
+     * List.length does not iterate or copy the two-million-block
+     * document.
+     *
+     * This check MUST execute before `byId`.
+     */
+    final rawBlocks = document['blocks'];
+
+    if (rawBlocks is List && rawBlocks.length > _maxSerializedBlocks) {
+      return _BrixtaRenderGraphCheck.rejected(
+        'serialized_block_budget',
+        rawBlocks.length,
+      );
+    }
+
+    /*
+     * Root count receives the same treatment. Do not convert an
+     * attacker-controlled million-element rootIds list first.
+     */
+    final rawRoots = document['rootIds'];
+
+    if (rawRoots is List && rawRoots.length > _maxRenderRoots) {
+      return _BrixtaRenderGraphCheck.rejected('root_budget', rawRoots.length);
+    }
+
+    return null;
   }
 
   _BrixtaRenderGraphCheck _validateExpandedRenderGraph(
@@ -601,6 +721,18 @@ class _BrixtaDocumentView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    /*
+     * BRIXTA_SERIALIZED_PREFLIGHT_V1
+     *
+     * Never materialize/index an absurd CMS document merely to
+     * discover later that it is unsafe.
+     */
+    final serializedCheck = _validateSerializedEnvelope();
+
+    if (serializedCheck != null) {
+      return _resourceLimitView(context, serializedCheck);
+    }
+
     final map = byId;
 
     // BRIXTA_EXPANDED_GRAPH_PREFLIGHT_V1

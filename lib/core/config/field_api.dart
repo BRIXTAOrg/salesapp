@@ -6,19 +6,27 @@ import '../device/device_identity.dart';
 import 'api_config.dart';
 
 class FieldApi {
-  FieldApi({
-    required this.accessToken,
-    http.Client? client,
-  }) : _client = client ?? http.Client();
+  // BRIXTA_JSON_RESPONSE_BUDGET_V1
+  //
+  // A mobile JSON endpoint should never be allowed to hand the
+  // application an arbitrarily large response and then ask jsonDecode
+  // to manufacture the complete object graph.
+  //
+  // 8 MiB is deliberately generous for application JSON while still
+  // providing a hard memory/latency envelope.
+  static const int maxJsonResponseBytes = 8388608;
+
+  FieldApi({required this.accessToken, http.Client? client})
+    : _client = client ?? http.Client();
 
   final String accessToken;
   final http.Client _client;
 
   Map<String, String> get _headers => {
-        'authorization': 'Bearer $accessToken',
-        'content-type': 'application/json',
-        ...AppDeviceIdentity.instance.requestHeaders,
-      };
+    'authorization': 'Bearer $accessToken',
+    'content-type': 'application/json',
+    ...AppDeviceIdentity.instance.requestHeaders,
+  };
 
   Future<Map<String, dynamic>> getJson(String path) async {
     final response = await _client.get(
@@ -56,12 +64,10 @@ class FieldApi {
     String path, [
     Map<String, dynamic>? body,
   ]) async {
-    final request = http.Request(
-      'DELETE',
-      Uri.parse('${ApiConfig.baseUrl}$path'),
-    )
-      ..headers.addAll(_headers)
-      ..body = jsonEncode(body ?? const <String, dynamic>{});
+    final request =
+        http.Request('DELETE', Uri.parse('${ApiConfig.baseUrl}$path'))
+          ..headers.addAll(_headers)
+          ..body = jsonEncode(body ?? const <String, dynamic>{});
 
     final streamed = await _client.send(request);
     final response = await http.Response.fromStream(streamed);
@@ -79,9 +85,7 @@ class FieldApi {
     );
     request.headers['authorization'] = 'Bearer $accessToken';
     request.headers.addAll(AppDeviceIdentity.instance.requestHeaders);
-    request.files.add(
-      await http.MultipartFile.fromPath('file', filePath),
-    );
+    request.files.add(await http.MultipartFile.fromPath('file', filePath));
 
     final streamed = await request.send();
     final response = await http.Response.fromStream(streamed);
@@ -111,6 +115,26 @@ class FieldApi {
   }
 
   Map<String, dynamic> _decode(http.Response response) {
+    /*
+     * Check bytes BEFORE jsonDecode().
+     *
+     * `response.bodyBytes` already exists inside http.Response;
+     * this does not manufacture the decoded JSON object graph.
+     */
+    final responseBytes = response.bodyBytes.length;
+
+    if (responseBytes > maxJsonResponseBytes) {
+      throw FieldApiException(
+        'Server response exceeded the mobile JSON safety limit.',
+        code: 'RESPONSE_TOO_LARGE',
+        details: {
+          'responseBytes': responseBytes,
+          'maxResponseBytes': maxJsonResponseBytes,
+        },
+        statusCode: response.statusCode,
+      );
+    }
+
     Map<String, dynamic> body = {};
     try {
       final decoded = jsonDecode(response.body);
@@ -123,7 +147,8 @@ class FieldApi {
         response.statusCode >= 300 ||
         body['success'] == false) {
       throw FieldApiException(
-        (body['error'] ?? 'Request failed (${response.statusCode}).').toString(),
+        (body['error'] ?? 'Request failed (${response.statusCode}).')
+            .toString(),
         code: body['code']?.toString(),
         details: body['details'],
         statusCode: response.statusCode,

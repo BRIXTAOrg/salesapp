@@ -41,6 +41,34 @@ void main() {
     );
   }
 
+  Map<String, dynamic> depthDocument(int layoutDepth) {
+    final blocks = <Map<String, dynamic>>[];
+
+    for (var index = 0; index < layoutDepth; index++) {
+      blocks.add({
+        'id': 'node-$index',
+        'type': 'layout.column',
+        'children': [
+          index == layoutDepth - 1 ? 'terminal' : 'node-${index + 1}',
+        ],
+        'config': {'gap': 0},
+      });
+    }
+
+    blocks.add({
+      'id': 'terminal',
+      'type': 'display.text',
+      'config': {'text': 'SURVIVED DEEP GRAPH'},
+    });
+
+    return {
+      'version': 1,
+      'engine': 'brixta_stac_v1',
+      'rootIds': ['node-0'],
+      'blocks': blocks,
+    };
+  }
+
   testWidgets('QA03 control — normal CMS document renders', (tester) async {
     await pumpDocument(tester, {
       'version': 1,
@@ -105,7 +133,7 @@ void main() {
     });
   });
 
-  testWidgets('QA03 hostile — self-referencing layout does not crash', (
+  testWidgets('QA03 hostile — self-referencing layout terminates safely', (
     tester,
   ) async {
     await pumpDocument(tester, {
@@ -122,7 +150,9 @@ void main() {
     });
   });
 
-  testWidgets('QA03 hostile — two-node cycle does not crash', (tester) async {
+  testWidgets('QA03 hostile — two-node cycle terminates safely', (
+    tester,
+  ) async {
     await pumpDocument(tester, {
       'version': 1,
       'engine': 'brixta_stac_v1',
@@ -142,35 +172,100 @@ void main() {
     });
   });
 
-  testWidgets('QA03 stress — deeply nested CMS layout does not crash', (
-    tester,
-  ) async {
-    const depth = 250;
-
-    final blocks = <Map<String, dynamic>>[];
-
-    for (var index = 0; index < depth; index++) {
-      blocks.add({
-        'id': 'node-$index',
-        'type': 'layout.column',
-        'children': [index == depth - 1 ? 'terminal' : 'node-${index + 1}'],
-        'config': {'gap': 0},
-      });
-    }
-
-    blocks.add({
-      'id': 'terminal',
-      'type': 'display.text',
-      'config': {'text': 'SURVIVED DEEP GRAPH'},
-    });
-
-    await pumpDocument(tester, {
-      'version': 1,
-      'engine': 'brixta_stac_v1',
-      'rootIds': ['node-0'],
-      'blocks': blocks,
-    });
+  /*
+   * IMPORTANT BOUNDARY CONTRACT
+   *
+   * Renderer budget:
+   *
+   *     _maxRenderDepth = 64
+   *
+   * Root is depth 0.
+   *
+   * 63 layout nodes:
+   *
+   *     node-0       depth 0
+   *     ...
+   *     node-62      depth 62
+   *     terminal     depth 63
+   *
+   * This is valid.
+   */
+  testWidgets('QA03 boundary — depth 63 renders normally', (tester) async {
+    await pumpDocument(tester, depthDocument(63));
 
     expect(find.text('SURVIVED DEEP GRAPH'), findsOneWidget);
+
+    expect(
+      find.text('This Responsibility cannot be displayed safely.'),
+      findsNothing,
+    );
+  });
+
+  /*
+   * 64 layout nodes put terminal at depth 64.
+   *
+   * That crosses the declared device safety budget.
+   *
+   * The CORRECT behavior is therefore NOT:
+   *
+   *     "render it anyway"
+   *
+   * The correct behavior is:
+   *
+   *     fail closed
+   *     no Flutter exception
+   *     no recursive stack explosion
+   *     show explicit safety UI
+   */
+  testWidgets('QA03 boundary — depth 64 fails closed safely', (tester) async {
+    await pumpDocument(tester, depthDocument(64));
+
+    expect(find.text('SURVIVED DEEP GRAPH'), findsNothing);
+
+    expect(
+      find.text('This Responsibility cannot be displayed safely.'),
+      findsOneWidget,
+    );
+
+    expect(
+      find.text(
+        'Its published interface exceeds the device render safety limit.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  /*
+   * This replaces the OLD contradictory QA contract.
+   *
+   * The old test demanded that depth 250 actually render.
+   *
+   * That contradicted _maxRenderDepth = 64.
+   *
+   * Depth 250 remains a valuable hostile-input test,
+   * but its success criterion is now SAFE REJECTION.
+   */
+  testWidgets('QA03 hostile — depth 250 is rejected without crashing', (
+    tester,
+  ) async {
+    final stopwatch = Stopwatch()..start();
+
+    await pumpDocument(tester, depthDocument(250));
+
+    stopwatch.stop();
+
+    debugPrint(
+      'QA03_METRIC '
+      'case=depth_rejection '
+      'requested_depth=250 '
+      'elapsed_ms=${stopwatch.elapsedMilliseconds}',
+    );
+
+    expect(find.text('SURVIVED DEEP GRAPH'), findsNothing);
+
+    expect(
+      find.text('This Responsibility cannot be displayed safely.'),
+      findsOneWidget,
+    );
   });
 }
