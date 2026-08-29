@@ -7,11 +7,7 @@ import 'package:salesapp/core/config/field_api.dart';
 void main() {
   test('FieldApi accepts normal JSON responses', () async {
     final client = MockClient(
-      (_) async => http.Response(
-        '{"success":true,"value":42}',
-        200,
-        headers: {'content-type': 'application/json'},
-      ),
+      (_) async => http.Response('{"success":true,"value":42}', 200),
     );
 
     final api = FieldApi(accessToken: 'qa', client: client);
@@ -21,34 +17,53 @@ void main() {
     expect(response['value'], 42);
   });
 
-  test('FieldApi rejects oversized JSON before jsonDecode', () async {
-    /*
-       * The body does not need to be valid JSON.
-       *
-       * That is intentional:
-       * size rejection must happen BEFORE parsing is attempted.
-       */
+  test('oversized responses die before jsonDecode', () async {
     final oversized = 'X' * (FieldApi.maxJsonResponseBytes + 1);
 
-    final client = MockClient(
-      (_) async => http.Response(
-        oversized,
-        200,
-        headers: {'content-type': 'application/json'},
-      ),
-    );
+    final client = MockClient((_) async => http.Response(oversized, 200));
 
     final api = FieldApi(accessToken: 'qa', client: client);
 
     await expectLater(
-      api.getJson('/qa/oversized'),
+      api.getJson('/qa/large'),
       throwsA(
         isA<FieldApiException>().having(
-          (error) => error.code,
+          (e) => e.code,
           'code',
           'RESPONSE_TOO_LARGE',
         ),
       ),
     );
+  });
+
+  test('stalled HTTP request is killed at timeout', () async {
+    final client = MockClient((_) async {
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      return http.Response('{"success":true}', 200);
+    });
+
+    final api = FieldApi(
+      accessToken: 'qa',
+      client: client,
+      requestTimeout: const Duration(milliseconds: 25),
+    );
+
+    final stopwatch = Stopwatch()..start();
+
+    await expectLater(
+      api.getJson('/qa/stall'),
+      throwsA(
+        isA<FieldApiException>().having(
+          (e) => e.code,
+          'code',
+          'REQUEST_TIMEOUT',
+        ),
+      ),
+    );
+
+    stopwatch.stop();
+
+    expect(stopwatch.elapsedMilliseconds, lessThan(150));
   });
 }

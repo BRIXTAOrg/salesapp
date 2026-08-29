@@ -1,38 +1,91 @@
+import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 
 import '../config/field_api.dart';
 import '../database/app_database.dart';
 import '../services/media/local_photo_store.dart';
+import 'offline_sync_backoff.dart';
 
 class OfflineSubmissionQueue {
   OfflineSubmissionQueue._();
 
   static const _cacheKey = 'pending_dynamic_submissions';
+
   static const localPhotoKey = '__localPhotoPath';
 
-  static Future<void> enqueue(Map<String, dynamic> submission) async {
-    final existing = await AppDatabase.instance.getCache(_cacheKey);
+  static const _queueName = 'dynamic_submissions';
 
-    final queue = <Map<String, dynamic>>[
-      if (existing is List)
-        ...existing.whereType<Map>().map(
-              (item) => Map<String, dynamic>.from(item),
-            ),
-    ];
+  static const _scope = 'global';
 
-    final id = submission['clientMutationId']?.toString();
-    if (id != null &&
-        queue.any((item) => item['clientMutationId']?.toString() == id)) {
-      return;
+  static const _flushBatchSize = 100;
+
+  static bool _migrationComplete = false;
+
+  static Future<int>? _flushInFlight;
+
+  // BRIXTA_OFFLINE_SUBMISSION_BACKOFF_V1
+  static String? _lastAccessToken;
+
+  static OfflineSyncBackoff? _backoffInstance;
+
+  static OfflineSyncBackoff get _backoff {
+    return _backoffInstance ??= OfflineSyncBackoff(
+      onRetry: () async {
+        final token = _lastAccessToken;
+
+        if (token == null || token.isEmpty) {
+          return;
+        }
+
+        await flush(token, bypassBackoff: true);
+      },
+    );
+  }
+
+  static Future<void> _ensureMigrated() async {
+    if (_migrationComplete) return;
+
+    final database = AppDatabase.instance;
+
+    final existing = await database.getCache(_cacheKey);
+
+    if (existing is List) {
+      for (final raw in existing.whereType<Map>()) {
+        final submission = Map<String, dynamic>.from(raw);
+
+        await database.enqueueOfflineQueueItem(
+          queueName: _queueName,
+          scope: _scope,
+          payload: submission,
+          clientMutationId: submission['clientMutationId']?.toString(),
+        );
+      }
     }
 
-    queue.add(submission);
-    await AppDatabase.instance.putCache(_cacheKey, queue);
+    await database.removeCache(_cacheKey);
+
+    _migrationComplete = true;
+  }
+
+  static Future<void> enqueue(Map<String, dynamic> submission) async {
+    await _ensureMigrated();
+
+    await AppDatabase.instance.enqueueOfflineQueueItem(
+      queueName: _queueName,
+      scope: _scope,
+      payload: submission,
+      clientMutationId: submission['clientMutationId']?.toString(),
+    );
   }
 
   static Future<int> pendingCount() async {
-    final existing = await AppDatabase.instance.getCache(_cacheKey);
-    return existing is List ? existing.length : 0;
+    await _ensureMigrated();
+
+    return AppDatabase.instance.offlineQueueCount(
+      queueName: _queueName,
+      scope: _scope,
+    );
   }
 
   static Future<Map<String, dynamic>> prepareForUpload(
@@ -40,6 +93,7 @@ class OfflineSubmissionQueue {
     Map<String, dynamic> submission,
   ) async {
     final api = FieldApi(accessToken: accessToken);
+
     final resolved = await _resolveValue(api, submission);
 
     if (resolved is! Map) {
@@ -49,71 +103,139 @@ class OfflineSubmissionQueue {
     return Map<String, dynamic>.from(resolved);
   }
 
-  static Future<int> flush(String accessToken) async {
-    final existing = await AppDatabase.instance.getCache(_cacheKey);
-    if (existing is! List || existing.isEmpty) return 0;
+  // BRIXTA_OFFLINE_SUBMISSION_SINGLE_FLIGHT_V1
+  static Future<int> flush(String accessToken, {bool bypassBackoff = false}) {
+    _lastAccessToken = accessToken;
 
-    final queue = existing
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList();
+    if (!bypassBackoff && !_backoff.canAttempt) {
+      return pendingCount();
+    }
 
-    final remaining = <Map<String, dynamic>>[];
+    final running = _flushInFlight;
+
+    if (running != null) return running;
+
+    late final Future<int> future;
+
+    future = _flushOnce(accessToken).whenComplete(() {
+      if (identical(_flushInFlight, future)) {
+        _flushInFlight = null;
+      }
+    });
+
+    _flushInFlight = future;
+
+    return future;
+  }
+
+  static Future<int> _flushOnce(String accessToken) async {
+    await _ensureMigrated();
+
+    final database = AppDatabase.instance;
+
+    final rows = await database.offlineQueueBatch(
+      queueName: _queueName,
+      scope: _scope,
+      limit: _flushBatchSize,
+    );
+
+    if (rows.isEmpty) return 0;
+
     final api = FieldApi(accessToken: accessToken);
 
-    for (final original in queue) {
-      final localPaths = _collectLocalPhotoPaths(original);
+    final deleteIds = <String>[];
+
+    for (final row in rows) {
+      final itemId = row['id']?.toString();
+
+      if (itemId == null || itemId.isEmpty) {
+        continue;
+      }
+
+      Map<String, dynamic> submission;
 
       try {
-        final prepared = await prepareForUpload(
-          accessToken,
-          original,
-        );
+        final decoded = jsonDecode(row['payload_json']?.toString() ?? '');
 
-        await api.postJson('/api/salesApp/submissions', prepared);
+        if (decoded is! Map) {
+          deleteIds.add(itemId);
+          continue;
+        }
+
+        submission = Map<String, dynamic>.from(decoded);
+      } catch (_) {
+        deleteIds.add(itemId);
+        continue;
+      }
+
+      final localPaths = _collectLocalPhotoPaths(submission);
+
+      try {
+        final resolved = await _resolveValue(api, submission);
+
+        if (resolved is! Map) {
+          throw const FieldApiException('Invalid queued submission.');
+        }
+
+        await api.postJson(
+          '/api/salesApp/submissions',
+          Map<String, dynamic>.from(resolved),
+        );
 
         for (final path in localPaths) {
           await LocalPhotoStore.delete(path);
         }
+
+        _backoff.recordSuccess();
+
+        deleteIds.add(itemId);
       } catch (_) {
-        remaining.add(original);
+        // BRIXTA_OFFLINE_SUBMISSION_FAIL_FAST_V1
+        //
+        // Do not repeat a dead request for every queued row.
+        _backoff.recordTransientFailure();
+        break;
       }
     }
 
-    await AppDatabase.instance.putCache(_cacheKey, remaining);
-    return remaining.length;
+    await database.deleteOfflineQueueItems(deleteIds);
+
+    return database.offlineQueueCount(queueName: _queueName, scope: _scope);
   }
 
-  static Future<dynamic> _resolveValue(
-    FieldApi api,
-    dynamic value,
-  ) async {
+  static Future<dynamic> _resolveValue(FieldApi api, dynamic value) async {
     if (value is Map) {
       final map = Map<String, dynamic>.from(value);
 
       final localPath = map[localPhotoKey]?.toString();
+
       if (localPath != null && localPath.isNotEmpty) {
         if (!await File(localPath).exists()) {
           throw const FieldApiException(
             'An offline photo is no longer available on this phone.',
           );
         }
+
         return api.uploadPhoto(localPath);
       }
 
       final resolved = <String, dynamic>{};
+
       for (final entry in map.entries) {
         resolved[entry.key] = await _resolveValue(api, entry.value);
       }
+
       return resolved;
     }
 
     if (value is List) {
-      final resolved = <dynamic>[];
+      final result = <dynamic>[];
+
       for (final item in value) {
-        resolved.add(await _resolveValue(api, item));
+        result.add(await _resolveValue(api, item));
       }
-      return resolved;
+
+      return result;
     }
 
     return value;
@@ -124,14 +246,13 @@ class OfflineSubmissionQueue {
 
     void walk(dynamic current) {
       if (current is Map) {
-        final map = Map<String, dynamic>.from(current);
-        final path = map[localPhotoKey]?.toString();
+        final path = current[localPhotoKey]?.toString();
 
         if (path != null && path.isNotEmpty) {
           paths.add(path);
         }
 
-        for (final entry in map.entries) {
+        for (final entry in current.entries) {
           walk(entry.value);
         }
       } else if (current is List) {
@@ -142,6 +263,7 @@ class OfflineSubmissionQueue {
     }
 
     walk(value);
+
     return paths;
   }
 }

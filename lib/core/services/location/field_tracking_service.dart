@@ -18,6 +18,13 @@ class FieldTrackingService extends ChangeNotifier {
   double _distanceM = 0;
   String? _message;
 
+  // BRIXTA_TRACKING_SINGLE_FLIGHT_V1
+  static const Duration _minimumFlushInterval = Duration(seconds: 30);
+
+  Future<void>? _flushInFlight;
+  Timer? _flushTimer;
+  DateTime? _lastFlushStartedAt;
+
   bool get isTracking => _subscription != null;
   double get distanceKm => _distanceM / 1000;
   String? get message => _message;
@@ -66,6 +73,17 @@ class FieldTrackingService extends ChangeNotifier {
 
     _employeeId = employeeId;
     _accessToken = accessToken;
+
+    // BRIXTA_TRACKING_PRUNE_ON_START_V1
+    //
+    // Deletes ONLY:
+    //
+    //     synced = 1
+    //     recorded_at < 30 days
+    //
+    // Unsynced route evidence survives indefinitely.
+    await AppDatabase.instance.pruneSyncedTrackingPoints();
+
     _distanceM = await AppDatabase.instance.todayDistanceKm(employeeId) * 1000;
 
     final last = await AppDatabase.instance.lastTrackingPoint(employeeId);
@@ -91,29 +109,28 @@ class FieldTrackingService extends ChangeNotifier {
             ),
           )
         : defaultTargetPlatform == TargetPlatform.iOS
-            ? AppleSettings(
-                accuracy: LocationAccuracy.bestForNavigation,
-                activityType: ActivityType.automotiveNavigation,
-                distanceFilter: 15,
-                pauseLocationUpdatesAutomatically: true,
-                showBackgroundLocationIndicator: true,
-              )
-            : const LocationSettings(
-                accuracy: LocationAccuracy.high,
-                distanceFilter: 15,
-              );
+        ? AppleSettings(
+            accuracy: LocationAccuracy.bestForNavigation,
+            activityType: ActivityType.automotiveNavigation,
+            distanceFilter: 15,
+            pauseLocationUpdatesAutomatically: true,
+            showBackgroundLocationIndicator: true,
+          )
+        : const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            distanceFilter: 15,
+          );
 
-    _subscription = Geolocator.getPositionStream(
-      locationSettings: settings,
-    ).listen(
-      _handlePosition,
-      onError: (Object error) {
-        _message = 'Tracking needs attention: $error';
-        notifyListeners();
-      },
-    );
+    _subscription = Geolocator.getPositionStream(locationSettings: settings)
+        .listen(
+          _handlePosition,
+          onError: (Object error) {
+            _message = 'Tracking needs attention: $error';
+            notifyListeners();
+          },
+        );
 
-    await _flush();
+    await _requestFlush(force: true);
   }
 
   Future<void> _handlePosition(Position p) async {
@@ -133,7 +150,8 @@ class FieldTrackingService extends ChangeNotifier {
         p.longitude,
       );
 
-      final seconds = p.timestamp.difference(previous.timestamp).inMilliseconds / 1000;
+      final seconds =
+          p.timestamp.difference(previous.timestamp).inMilliseconds / 1000;
       final impliedSpeed = seconds > 0 ? segment / seconds : 0;
 
       // Ignore tiny GPS jitter and implausible jumps.
@@ -155,14 +173,66 @@ class FieldTrackingService extends ChangeNotifier {
     );
 
     notifyListeners();
-    await _flush();
+
+    // GPS persistence stays immediate.
+    // Network work is detached and coalesced.
+    unawaited(_requestFlush());
   }
 
-  Future<void> _flush() async {
+  Future<void> _requestFlush({bool force = false}) async {
+    if (_accessToken == null) return;
+
+    final active = _flushInFlight;
+
+    if (active != null) {
+      await active;
+      return;
+    }
+
+    final now = DateTime.now();
+    final previous = _lastFlushStartedAt;
+
+    if (!force && previous != null) {
+      final elapsed = now.difference(previous);
+
+      if (elapsed < _minimumFlushInterval) {
+        final remaining = _minimumFlushInterval - elapsed;
+
+        _flushTimer ??= Timer(remaining, () {
+          _flushTimer = null;
+          unawaited(_requestFlush(force: true));
+        });
+
+        return;
+      }
+    }
+
+    _flushTimer?.cancel();
+    _flushTimer = null;
+
+    _lastFlushStartedAt = now;
+
+    late final Future<void> future;
+
+    future = _flushOnce().whenComplete(() {
+      if (identical(_flushInFlight, future)) {
+        _flushInFlight = null;
+      }
+    });
+
+    _flushInFlight = future;
+
+    await future;
+  }
+
+  Future<void> _flushOnce() async {
     final token = _accessToken;
+
     if (token == null) return;
 
+    // BRIXTA_TRACKING_MEMORY_BUDGET_V1
     final rows = await AppDatabase.instance.unsyncedTrackingPoints(limit: 50);
+
     if (rows.isEmpty) return;
 
     try {
@@ -178,25 +248,30 @@ class FieldTrackingService extends ChangeNotifier {
                   'accuracy': row['accuracy'],
                   'speed': row['speed'],
                   'recordedAt': row['recorded_at'],
-                  'totalDistanceTravelled': (row['total_distance_m'] as num) / 1000,
+                  'totalDistanceTravelled':
+                      (row['total_distance_m'] as num) / 1000,
                 },
               )
-              .toList(),
+              .toList(growable: false),
         },
       );
 
       await AppDatabase.instance.markTrackingPointsSynced(
-        rows.map((e) => e['id'] as String),
+        rows.map((row) => row['id'] as String),
       );
     } catch (_) {
-      // Offline-safe: points remain in SQLite and flush on the next accepted point
-      // or the next time tracking starts.
+      // Remains offline-safe in SQLite.
     }
   }
 
   Future<void> stop() async {
     await _subscription?.cancel();
     _subscription = null;
+
+    _flushTimer?.cancel();
+    _flushTimer = null;
+    _lastFlushStartedAt = null;
+
     _lastAccepted = null;
     _message = null;
     notifyListeners();

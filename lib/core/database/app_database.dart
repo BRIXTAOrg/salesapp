@@ -20,7 +20,7 @@ class AppDatabase {
 
     _db = await openDatabase(
       'salesapp.db',
-      version: 3,
+      version: 4,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -28,6 +28,7 @@ class AppDatabase {
         await _createBaseTables(db);
         await _createTrackingTable(db);
         await _createCacheTable(db);
+        await _createOfflineQueueTables(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -35,6 +36,10 @@ class AppDatabase {
         }
         if (oldVersion < 3) {
           await _createCacheTable(db);
+        }
+
+        if (oldVersion < 4) {
+          await _createOfflineQueueTables(db);
         }
       },
     );
@@ -131,6 +136,51 @@ class AppDatabase {
     );
   }
 
+  // BRIXTA_ROW_OFFLINE_QUEUE_V1
+  //
+  // One offline mutation == one SQLite row.
+  //
+  // This prevents queue enqueue cost from growing with the
+  // complete offline backlog.
+  Future<void> _createOfflineQueueTables(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS offline_queue_items (
+        id TEXT PRIMARY KEY,
+        queue_name TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        method TEXT,
+        path TEXT,
+        payload_json TEXT NOT NULL,
+        client_mutation_id TEXT,
+        produces_record_key TEXT,
+        record_reference_key TEXT,
+        queued_at TEXT NOT NULL
+      )
+    ''');
+
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_offline_queue_order '
+      'ON offline_queue_items(queue_name, scope, queued_at)',
+    );
+
+    await db.execute(
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_offline_queue_mutation '
+      'ON offline_queue_items('
+      'queue_name, scope, client_mutation_id'
+      ')',
+    );
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS offline_queue_resolutions (
+        queue_name TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        reference_key TEXT NOT NULL,
+        record_id TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        PRIMARY KEY(queue_name, scope, reference_key)
+      )
+    ''');
+  }
 
   Future<void> _createCacheTable(DatabaseExecutor db) async {
     await db.execute('''
@@ -143,15 +193,11 @@ class AppDatabase {
   }
 
   Future<void> putCache(String key, Object? value) async {
-    await db.insert(
-      'app_cache',
-      {
-        'cache_key': key,
-        'value_json': jsonEncode(value),
-        'updated_at': DateTime.now().toUtc().toIso8601String(),
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('app_cache', {
+      'cache_key': key,
+      'value_json': jsonEncode(value),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<Object?> getCache(String key) async {
@@ -171,11 +217,116 @@ class AppDatabase {
   }
 
   Future<void> removeCache(String key) async {
-    await db.delete(
-      'app_cache',
-      where: 'cache_key = ?',
-      whereArgs: [key],
+    await db.delete('app_cache', where: 'cache_key = ?', whereArgs: [key]);
+  }
+
+  Future<bool> enqueueOfflineQueueItem({
+    required String queueName,
+    required String scope,
+    String? method,
+    String? path,
+    required Map<String, dynamic> payload,
+    String? clientMutationId,
+    String? producesRecordKey,
+    String? recordReferenceKey,
+    String? queuedAt,
+  }) async {
+    final normalizedMutationId =
+        clientMutationId == null || clientMutationId.trim().isEmpty
+        ? null
+        : clientMutationId.trim();
+
+    final inserted = await db.insert('offline_queue_items', {
+      'id': newId(),
+      'queue_name': queueName,
+      'scope': scope,
+      'method': method,
+      'path': path,
+      'payload_json': jsonEncode(payload),
+      'client_mutation_id': normalizedMutationId,
+      'produces_record_key': producesRecordKey,
+      'record_reference_key': recordReferenceKey,
+      'queued_at': queuedAt ?? DateTime.now().toUtc().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+    return inserted != 0;
+  }
+
+  Future<int> offlineQueueCount({
+    required String queueName,
+    required String scope,
+  }) async {
+    final rows = await db.rawQuery(
+      '''
+      SELECT COUNT(*) AS count
+      FROM offline_queue_items
+      WHERE queue_name = ? AND scope = ?
+      ''',
+      [queueName, scope],
     );
+
+    return Sqflite.firstIntValue(rows) ?? 0;
+  }
+
+  Future<List<Map<String, Object?>>> offlineQueueBatch({
+    required String queueName,
+    required String scope,
+    int limit = 100,
+  }) {
+    return db.query(
+      'offline_queue_items',
+      where: 'queue_name = ? AND scope = ?',
+      whereArgs: [queueName, scope],
+      orderBy: 'queued_at ASC, id ASC',
+      limit: limit,
+    );
+  }
+
+  Future<void> deleteOfflineQueueItems(Iterable<String> ids) async {
+    final values = ids.toList(growable: false);
+
+    if (values.isEmpty) return;
+
+    final placeholders = List.filled(values.length, '?').join(',');
+
+    await db.delete(
+      'offline_queue_items',
+      where: 'id IN ($placeholders)',
+      whereArgs: values,
+    );
+  }
+
+  Future<String?> offlineQueueResolution({
+    required String queueName,
+    required String scope,
+    required String referenceKey,
+  }) async {
+    final rows = await db.query(
+      'offline_queue_resolutions',
+      columns: ['record_id'],
+      where: 'queue_name = ? AND scope = ? AND reference_key = ?',
+      whereArgs: [queueName, scope, referenceKey],
+      limit: 1,
+    );
+
+    if (rows.isEmpty) return null;
+
+    return rows.first['record_id']?.toString();
+  }
+
+  Future<void> putOfflineQueueResolution({
+    required String queueName,
+    required String scope,
+    required String referenceKey,
+    required String recordId,
+  }) async {
+    await db.insert('offline_queue_resolutions', {
+      'queue_name': queueName,
+      'scope': scope,
+      'reference_key': referenceKey,
+      'record_id': recordId,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Database get db {
@@ -213,9 +364,7 @@ class AppDatabase {
     });
   }
 
-  Future<List<Map<String, Object?>>> unsyncedTrackingPoints({
-    int limit = 100,
-  }) {
+  Future<List<Map<String, Object?>>> unsyncedTrackingPoints({int limit = 100}) {
     return db.query(
       'tracking_points',
       where: 'synced = 0',
@@ -224,15 +373,40 @@ class AppDatabase {
     );
   }
 
+  // BRIXTA_TRACKING_BATCH_ACK_V1
   Future<void> markTrackingPointsSynced(Iterable<String> ids) async {
-    for (final id in ids) {
-      await db.update(
-        'tracking_points',
-        {'synced': 1},
-        where: 'id = ?',
-        whereArgs: [id],
-      );
-    }
+    final values = ids.toList(growable: false);
+
+    if (values.isEmpty) return;
+
+    final placeholders = List.filled(values.length, '?').join(',');
+
+    await db.update(
+      'tracking_points',
+      {'synced': 1},
+      where: 'id IN ($placeholders)',
+      whereArgs: values,
+    );
+  }
+
+  // BRIXTA_TRACKING_RETENTION_V1
+  //
+  // Unsynced route evidence is NEVER deleted.
+  //
+  // Only server-acknowledged points older than the
+  // retention window are eligible for cleanup.
+  Future<int> pruneSyncedTrackingPoints({
+    Duration retention = const Duration(days: 30),
+  }) {
+    final cutoff = DateTime.now().toUtc().subtract(retention).toIso8601String();
+
+    return db.delete(
+      'tracking_points',
+      where:
+          'synced = 1 '
+          'AND recorded_at < ?',
+      whereArgs: [cutoff],
+    );
   }
 
   Future<double> todayDistanceKm(String employeeId) async {
@@ -311,8 +485,9 @@ class AppDatabase {
     );
 
     final id = existing.isEmpty ? newId() : existing.first['id']! as String;
-    final createdAt =
-        existing.isEmpty ? now : existing.first['created_at']! as String;
+    final createdAt = existing.isEmpty
+        ? now
+        : existing.first['created_at']! as String;
 
     final payload = <String, Object?>{
       'id': id,
@@ -399,11 +574,7 @@ class AppDatabase {
     await db.transaction((txn) async {
       await txn.update(
         'work_sessions',
-        {
-          'check_out_at': now,
-          'status': 'completed',
-          'updated_at': now,
-        },
+        {'check_out_at': now, 'status': 'completed', 'updated_at': now},
         where: 'id = ?',
         whereArgs: [existing['id']],
       );
@@ -442,11 +613,7 @@ class AppDatabase {
 
     await db.transaction((txn) async {
       for (final id in ids) {
-        await txn.delete(
-          'sync_outbox',
-          where: 'id = ?',
-          whereArgs: [id],
-        );
+        await txn.delete('sync_outbox', where: 'id = ?', whereArgs: [id]);
       }
     });
 
@@ -465,10 +632,7 @@ class AppDatabase {
     final attempts = (rows.first['attempts'] as int? ?? 0) + 1;
     await db.update(
       'sync_outbox',
-      {
-        'attempts': attempts,
-        'last_error': error.toString(),
-      },
+      {'attempts': attempts, 'last_error': error.toString()},
       where: 'id = ?',
       whereArgs: [eventId],
     );

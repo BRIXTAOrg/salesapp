@@ -16,11 +16,32 @@ class FieldApi {
   // providing a hard memory/latency envelope.
   static const int maxJsonResponseBytes = 8388608;
 
-  FieldApi({required this.accessToken, http.Client? client})
-    : _client = client ?? http.Client();
+  // BRIXTA_REQUEST_TIMEOUT_V1
+  static const Duration defaultRequestTimeout = Duration(seconds: 20);
+
+  FieldApi({
+    required this.accessToken,
+    http.Client? client,
+    Duration requestTimeout = defaultRequestTimeout,
+  }) : _client = client ?? http.Client(),
+       _requestTimeout = requestTimeout;
 
   final String accessToken;
   final http.Client _client;
+  final Duration _requestTimeout;
+
+  Future<T> _bounded<T>(Future<T> operation) {
+    return operation.timeout(
+      _requestTimeout,
+      onTimeout: () {
+        throw const FieldApiException(
+          'The server took too long to respond.',
+          code: 'REQUEST_TIMEOUT',
+          statusCode: 408,
+        );
+      },
+    );
+  }
 
   Map<String, String> get _headers => {
     'authorization': 'Bearer $accessToken',
@@ -29,9 +50,8 @@ class FieldApi {
   };
 
   Future<Map<String, dynamic>> getJson(String path) async {
-    final response = await _client.get(
-      Uri.parse('${ApiConfig.baseUrl}$path'),
-      headers: _headers,
+    final response = await _bounded(
+      _client.get(Uri.parse('${ApiConfig.baseUrl}$path'), headers: _headers),
     );
     return _decode(response);
   }
@@ -40,10 +60,12 @@ class FieldApi {
     String path,
     Map<String, dynamic> body,
   ) async {
-    final response = await _client.post(
-      Uri.parse('${ApiConfig.baseUrl}$path'),
-      headers: _headers,
-      body: jsonEncode(body),
+    final response = await _bounded(
+      _client.post(
+        Uri.parse('${ApiConfig.baseUrl}$path'),
+        headers: _headers,
+        body: jsonEncode(body),
+      ),
     );
     return _decode(response);
   }
@@ -52,10 +74,12 @@ class FieldApi {
     String path,
     Map<String, dynamic> body,
   ) async {
-    final response = await _client.patch(
-      Uri.parse('${ApiConfig.baseUrl}$path'),
-      headers: _headers,
-      body: jsonEncode(body),
+    final response = await _bounded(
+      _client.patch(
+        Uri.parse('${ApiConfig.baseUrl}$path'),
+        headers: _headers,
+        body: jsonEncode(body),
+      ),
     );
     return _decode(response);
   }
@@ -69,8 +93,9 @@ class FieldApi {
           ..headers.addAll(_headers)
           ..body = jsonEncode(body ?? const <String, dynamic>{});
 
-    final streamed = await _client.send(request);
-    final response = await http.Response.fromStream(streamed);
+    final streamed = await _bounded(_client.send(request));
+
+    final response = await _bounded(http.Response.fromStream(streamed));
     return _decode(response);
   }
 
@@ -87,8 +112,9 @@ class FieldApi {
     request.headers.addAll(AppDeviceIdentity.instance.requestHeaders);
     request.files.add(await http.MultipartFile.fromPath('file', filePath));
 
-    final streamed = await request.send();
-    final response = await http.Response.fromStream(streamed);
+    final streamed = await _bounded(request.send());
+
+    final response = await _bounded(http.Response.fromStream(streamed));
     final body = _decode(response);
     final raw = body['media'];
 

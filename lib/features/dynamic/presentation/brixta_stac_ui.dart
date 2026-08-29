@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -455,23 +456,65 @@ class _BrixtaRenderGraphCheck {
     required this.allowed,
     required this.reason,
     required this.expandedNodes,
+    required this.animatedNodes,
   });
 
-  const _BrixtaRenderGraphCheck.allowed(int expandedNodes)
-    : this._(allowed: true, reason: '', expandedNodes: expandedNodes);
+  const _BrixtaRenderGraphCheck.allowed(
+    int expandedNodes, {
+    int animatedNodes = 0,
+  }) : this._(
+         allowed: true,
+         reason: '',
+         expandedNodes: expandedNodes,
+         animatedNodes: animatedNodes,
+       );
 
-  const _BrixtaRenderGraphCheck.rejected(String reason, int expandedNodes)
-    : this._(allowed: false, reason: reason, expandedNodes: expandedNodes);
+  const _BrixtaRenderGraphCheck.rejected(
+    String reason,
+    int expandedNodes, {
+    int animatedNodes = 0,
+  }) : this._(
+         allowed: false,
+         reason: reason,
+         expandedNodes: expandedNodes,
+         animatedNodes: animatedNodes,
+       );
 
   final bool allowed;
   final String reason;
   final int expandedNodes;
+  final int animatedNodes;
 }
 
 class _BrixtaRenderQueueEntry {
   const _BrixtaRenderQueueEntry({required this.id, required this.depth});
 
   final String id;
+  final int depth;
+}
+
+class _BrixtaRawStacCheck {
+  const _BrixtaRawStacCheck._({
+    required this.allowed,
+    required this.reason,
+    required this.nodes,
+  });
+
+  const _BrixtaRawStacCheck.allowed(int nodes)
+    : this._(allowed: true, reason: '', nodes: nodes);
+
+  const _BrixtaRawStacCheck.rejected(String reason, int nodes)
+    : this._(allowed: false, reason: reason, nodes: nodes);
+
+  final bool allowed;
+  final String reason;
+  final int nodes;
+}
+
+class _BrixtaRawStacQueueEntry {
+  const _BrixtaRawStacQueueEntry({required this.value, required this.depth});
+
+  final dynamic value;
   final int depth;
 }
 
@@ -493,6 +536,35 @@ class _BrixtaDocumentView extends StatelessWidget {
   static const int _maxRenderRoots = 256;
   static const int _maxDirectChildren = 2048;
   static const int _maxExpandedRenderNodes = 4096;
+
+  // BRIXTA_ANIMATION_RESOURCE_BUDGET_V1
+  //
+  // <= 512:
+  //     authored/runtime animations remain enabled.
+  //
+  // 513..1024:
+  //     business UI remains visible, but motion is disabled globally
+  //     for this Responsibility.
+  //
+  // > 1024:
+  //     fail closed before constructing animation controllers.
+  static const int _recommendedAnimatedNodes = 512;
+  static const int _maxAnimatedNodes = 1024;
+
+  // BRIXTA_RAW_STAC_RESOURCE_BUDGET_V1
+  //
+  // stac.raw bypasses the normal BRIXTA block graph, so it receives
+  // an independent structural envelope BEFORE Stac.fromJson().
+  static const int _maxRawStacNodes = 2048;
+  static const int _maxExpandedRawStacNodes = 4096;
+  static const int _maxRawStacDepth = 32;
+  static const int _maxRawStacDirectChildren = 256;
+  static const int _maxRawStacBytes = 512 * 1024;
+
+  // These cheap character limits execute BEFORE jsonEncode/utf8.encode
+  // so a single absurd String cannot itself become the preflight DoS.
+  static const int _maxRawStacStringChars = 128 * 1024;
+  static const int _maxRawStacAggregateChars = 256 * 1024;
 
   // BRIXTA_SERIALIZED_DOCUMENT_ENVELOPE_V1
   //
@@ -582,6 +654,145 @@ class _BrixtaDocumentView extends StatelessWidget {
     return null;
   }
 
+  bool _blockUsesAnimation(Map<String, dynamic> block) {
+    final blockId = block['id']?.toString() ?? '';
+
+    final type = block['type']?.toString() ?? '';
+
+    /*
+     * Lottie is animation even when no generic animation preset exists.
+     */
+    if (type == 'animation.lottie') {
+      return true;
+    }
+
+    final runtimePreset = blockId.isEmpty
+        ? null
+        : runtime.effectAnimationPreset(blockId);
+
+    if (runtimePreset != null && runtimePreset != 'none') {
+      return true;
+    }
+
+    final raw = block['animation'];
+
+    if (raw is! Map) {
+      return false;
+    }
+
+    final preset = raw['preset']?.toString() ?? 'none';
+
+    return preset != 'none';
+  }
+
+  _BrixtaRawStacCheck _validateRawStac(Map<String, dynamic> raw) {
+    /*
+     * BRIXTA_RAW_STAC_PREFLIGHT_V1
+     *
+     * IMPORTANT:
+     *
+     * This is ITERATIVE rather than recursive.
+     *
+     * A hostile raw STAC tree therefore cannot overflow the validator
+     * stack while we are trying to protect the Flutter renderer.
+     */
+    final queue = <_BrixtaRawStacQueueEntry>[
+      _BrixtaRawStacQueueEntry(value: raw, depth: 0),
+    ];
+
+    var cursor = 0;
+    var nodes = 0;
+    var aggregateChars = 0;
+
+    while (cursor < queue.length) {
+      final entry = queue[cursor];
+      cursor += 1;
+
+      if (entry.depth > _maxRawStacDepth) {
+        return _BrixtaRawStacCheck.rejected('depth_budget', nodes);
+      }
+
+      nodes += 1;
+
+      if (nodes > _maxRawStacNodes) {
+        return _BrixtaRawStacCheck.rejected('node_budget', nodes);
+      }
+
+      final value = entry.value;
+
+      if (value is Map) {
+        if (value.length > _maxRawStacDirectChildren) {
+          return _BrixtaRawStacCheck.rejected('fanout_budget', nodes);
+        }
+
+        for (final mapEntry in value.entries) {
+          final key = mapEntry.key.toString();
+
+          if (key.length > _maxRawStacStringChars) {
+            return _BrixtaRawStacCheck.rejected('string_budget', nodes);
+          }
+
+          aggregateChars += key.length;
+
+          if (aggregateChars > _maxRawStacAggregateChars) {
+            return _BrixtaRawStacCheck.rejected('character_budget', nodes);
+          }
+
+          queue.add(
+            _BrixtaRawStacQueueEntry(
+              value: mapEntry.value,
+              depth: entry.depth + 1,
+            ),
+          );
+        }
+
+        continue;
+      }
+
+      if (value is List) {
+        if (value.length > _maxRawStacDirectChildren) {
+          return _BrixtaRawStacCheck.rejected('fanout_budget', nodes);
+        }
+
+        for (final child in value) {
+          queue.add(
+            _BrixtaRawStacQueueEntry(value: child, depth: entry.depth + 1),
+          );
+        }
+
+        continue;
+      }
+
+      if (value is String) {
+        if (value.length > _maxRawStacStringChars) {
+          return _BrixtaRawStacCheck.rejected('string_budget', nodes);
+        }
+
+        aggregateChars += value.length;
+
+        if (aggregateChars > _maxRawStacAggregateChars) {
+          return _BrixtaRawStacCheck.rejected('character_budget', nodes);
+        }
+      }
+    }
+
+    /*
+     * Only after structural and String limits are proven safe do we
+     * calculate the exact UTF-8 serialized size.
+     */
+    try {
+      final bytes = utf8.encode(jsonEncode(raw)).length;
+
+      if (bytes > _maxRawStacBytes) {
+        return _BrixtaRawStacCheck.rejected('byte_budget', nodes);
+      }
+    } catch (_) {
+      return _BrixtaRawStacCheck.rejected('invalid_json', nodes);
+    }
+
+    return _BrixtaRawStacCheck.allowed(nodes);
+  }
+
   _BrixtaRenderGraphCheck _validateExpandedRenderGraph(
     Map<String, Map<String, dynamic>> map,
     List<String> roots,
@@ -609,6 +820,9 @@ class _BrixtaDocumentView extends StatelessWidget {
     var scheduled = queue.length;
     var cursor = 0;
 
+    var animatedNodes = 0;
+    var expandedRawStacNodes = 0;
+
     if (scheduled > _maxExpandedRenderNodes) {
       return _BrixtaRenderGraphCheck.rejected(
         'expanded_node_budget',
@@ -631,6 +845,61 @@ class _BrixtaDocumentView extends StatelessWidget {
        */
       if (block == null) {
         continue;
+      }
+
+      /*
+       * BRIXTA_ANIMATION_PREFLIGHT_V1
+       *
+       * Count EXPANDED animation occurrences rather than serialized
+       * block definitions. Repeated references therefore cannot turn
+       * one animated leaf into thousands of controllers.
+       */
+      if (_blockUsesAnimation(block)) {
+        animatedNodes += 1;
+
+        if (animatedNodes > _maxAnimatedNodes) {
+          return _BrixtaRenderGraphCheck.rejected(
+            'animation_budget',
+            scheduled,
+            animatedNodes: animatedNodes,
+          );
+        }
+      }
+
+      /*
+       * BRIXTA_RAW_STAC_EXPANDED_PREFLIGHT_V1
+       *
+       * stac.raw is validated here, BEFORE _renderBlock() can call
+       * Stac.fromJson().
+       *
+       * We also account repeated references to the same raw subtree.
+       */
+      if (block['type']?.toString() == 'stac.raw') {
+        final rawConfig = block['config'];
+
+        final rawJson = rawConfig is Map ? rawConfig['json'] : null;
+
+        if (rawJson is Map) {
+          final rawCheck = _validateRawStac(Map<String, dynamic>.from(rawJson));
+
+          if (!rawCheck.allowed) {
+            return _BrixtaRenderGraphCheck.rejected(
+              'raw_stac_${rawCheck.reason}',
+              scheduled,
+              animatedNodes: animatedNodes,
+            );
+          }
+
+          expandedRawStacNodes += rawCheck.nodes;
+
+          if (expandedRawStacNodes > _maxExpandedRawStacNodes) {
+            return _BrixtaRenderGraphCheck.rejected(
+              'raw_stac_expanded_node_budget',
+              scheduled,
+              animatedNodes: animatedNodes,
+            );
+          }
+        }
       }
 
       final rawChildren = block['children'];
@@ -670,7 +939,10 @@ class _BrixtaDocumentView extends StatelessWidget {
       }
     }
 
-    return _BrixtaRenderGraphCheck.allowed(scheduled);
+    return _BrixtaRenderGraphCheck.allowed(
+      scheduled,
+      animatedNodes: animatedNodes,
+    );
   }
 
   Widget _resourceLimitView(
@@ -745,6 +1017,17 @@ class _BrixtaDocumentView extends StatelessWidget {
       return _resourceLimitView(context, graphCheck);
     }
 
+    /*
+     * BRIXTA_ANIMATION_SOFT_LIMIT_V1
+     *
+     * Do NOT hide the business UI when we merely exceed the recommended
+     * motion budget.
+     *
+     * 513..1024 animated occurrences render statically.
+     */
+    final suppressAnimations =
+        graphCheck.animatedNodes > _recommendedAnimatedNodes;
+
     final normal = <Widget>[];
 
     final overlays = <Widget>[];
@@ -758,7 +1041,12 @@ class _BrixtaDocumentView extends StatelessWidget {
 
       final type = block['type']?.toString() ?? '';
 
-      final widget = _renderBlock(context, block, map);
+      final widget = _renderBlock(
+        context,
+        block,
+        map,
+        suppressAnimations: suppressAnimations,
+      );
 
       if (type == 'overlay.fullscreen') {
         overlays.add(Positioned.fill(child: widget));
@@ -799,6 +1087,7 @@ class _BrixtaDocumentView extends StatelessWidget {
     Map<String, Map<String, dynamic>> blockMap, {
     Set<String> ancestry = const <String>{},
     int depth = 0,
+    bool suppressAnimations = false,
   }) {
     final type = block['type']?.toString() ?? '';
 
@@ -849,6 +1138,7 @@ class _BrixtaDocumentView extends StatelessWidget {
             blockMap,
             ancestry: nextAncestry,
             depth: depth + 1,
+            suppressAnimations: suppressAnimations,
 
             vertical: true,
             gap: _double(config['gap'], 16),
@@ -866,6 +1156,7 @@ class _BrixtaDocumentView extends StatelessWidget {
             blockMap,
             ancestry: nextAncestry,
             depth: depth + 1,
+            suppressAnimations: suppressAnimations,
 
             vertical: false,
             gap: _double(config['gap'], 12),
@@ -888,6 +1179,7 @@ class _BrixtaDocumentView extends StatelessWidget {
               blockMap,
               ancestry: nextAncestry,
               depth: depth + 1,
+              suppressAnimations: suppressAnimations,
             );
           }).toList(),
         );
@@ -1086,9 +1378,17 @@ class _BrixtaDocumentView extends StatelessWidget {
         Widget lottie;
 
         if (url.startsWith('http')) {
-          lottie = Lottie.network(url, repeat: config['repeat'] != false);
+          lottie = Lottie.network(
+            url,
+            repeat: config['repeat'] != false,
+            animate: !suppressAnimations,
+          );
         } else if (asset.isNotEmpty) {
-          lottie = Lottie.asset(asset, repeat: config['repeat'] != false);
+          lottie = Lottie.asset(
+            asset,
+            repeat: config['repeat'] != false,
+            animate: !suppressAnimations,
+          );
         } else {
           lottie = const SizedBox.shrink();
         }
@@ -1123,7 +1423,12 @@ class _BrixtaDocumentView extends StatelessWidget {
         rendered = const SizedBox.shrink();
     }
 
-    return _animate(context, rendered, block);
+    return _animate(
+      context,
+      rendered,
+      block,
+      suppressAnimations: suppressAnimations,
+    );
   }
 
   List<Widget> _children(
@@ -1132,6 +1437,7 @@ class _BrixtaDocumentView extends StatelessWidget {
     Map<String, Map<String, dynamic>> map, {
     required Set<String> ancestry,
     required int depth,
+    required bool suppressAnimations,
     required bool vertical,
     required double gap,
   }) {
@@ -1152,6 +1458,7 @@ class _BrixtaDocumentView extends StatelessWidget {
         map,
         ancestry: ancestry,
         depth: depth,
+        suppressAnimations: suppressAnimations,
       );
 
       result.add(vertical ? child : Expanded(child: child));
@@ -1222,8 +1529,17 @@ class _BrixtaDocumentView extends StatelessWidget {
   Widget _animate(
     BuildContext context,
     Widget child,
-    Map<String, dynamic> block,
-  ) {
+    Map<String, dynamic> block, {
+    required bool suppressAnimations,
+  }) {
+    /*
+     * Above the recommended motion budget, preserve the business UI
+     * but manufacture ZERO flutter_animate controllers/effects.
+     */
+    if (suppressAnimations) {
+      return child;
+    }
+
     final blockId = block['id']?.toString() ?? '';
 
     final raw = block['animation'];
