@@ -55,6 +55,12 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
   final Map<String, bool> _checks = {};
   final Map<String, String> _photos = {};
   final Map<String, String> _selects = {};
+
+  // Display labels for Data Source references.
+  //
+  // Submitted value remains the canonical row ID.
+  final Map<String, String> _selectLabels = {};
+
   final Map<String, Set<String>> _multiSelects = {};
   final Map<String, Map<String, dynamic>> _manualLocations = {};
 
@@ -747,6 +753,65 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     }
   }
 
+  // BRIXTA_DATA_SOURCE_PICKER_V11
+  Future<void> _pickDataSourceReference(Map<String, dynamic> field) async {
+    final session = widget.controller.session;
+
+    if (session == null) {
+      _message('Sign in again to load this list.');
+
+      return;
+    }
+
+    final key = _fieldKey(field);
+
+    final config = _config(field);
+
+    final sourceKey = config['source']?.toString().trim() ?? '';
+
+    if (sourceKey.isEmpty) {
+      _message('This input has no Data Source configured yet.');
+
+      return;
+    }
+
+    final selected = await showModalBottomSheet<Map<String, String>>(
+      context: context,
+
+      isScrollControlled: true,
+
+      useSafeArea: true,
+
+      builder: (sheetContext) => _DataSourcePickerSheet(
+        accessToken: session.accessToken,
+
+        sourceKey: sourceKey,
+
+        title: _fieldLabel(field),
+
+        initialId: _selects[key],
+
+        initialLabel: _selectLabels[key],
+      ),
+    );
+
+    if (selected == null || !mounted) {
+      return;
+    }
+
+    final id = selected['id'];
+
+    if (id == null || id.isEmpty) {
+      return;
+    }
+
+    setState(() {
+      _selects[key] = id;
+
+      _selectLabels[key] = selected['label'] ?? id;
+    });
+  }
+
   Future<Map<String, dynamic>?> _currentLocation({
     bool required = false,
   }) async {
@@ -1236,6 +1301,7 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
         _controllers[key]?.clear();
         _checks.remove(key);
         _selects.remove(key);
+        _selectLabels.remove(key);
         _multiSelects.remove(key);
         _manualLocations.remove(key);
         _photos.remove(key);
@@ -1266,7 +1332,7 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
       return (_multiSelects[key] ?? <String>{}).toList();
     }
 
-    if (type == 'location_point') {
+    if (type == 'location_point' || type == 'gps') {
       return _manualLocations[key];
     }
 
@@ -1355,6 +1421,9 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
                     forceVisibleBlockIds: _uiForceVisibleBlockIds,
                     forceHiddenBlockIds: _uiForceHiddenBlockIds,
                     onRunAction: _runAction,
+
+                    onBuildCapture: _buildVisualCapture,
+
                     onRefresh: () async {
                       await widget.controller.refreshWorkspace();
 
@@ -1426,6 +1495,604 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
               ),
             ),
     );
+  }
+
+  // BRIXTA_VISUAL_CAPTURE_HOST_V11
+  //
+  // Resolve the uiDocument capture binding back to the EXISTING
+  // compiled Responsibility field.
+  Map<String, dynamic>? _fieldForVisualCapture(String captureKey) {
+    final normalized = _normalizeFieldBinding(captureKey);
+
+    for (final field in fields) {
+      final fieldKey = _fieldKey(field);
+
+      final config = _config(field);
+
+      /*
+       * Compiler already stores original Kernel capture ID here.
+       */
+      final kernelId = config['kernelPossibilityId']?.toString();
+
+      if (fieldKey == captureKey ||
+          kernelId == captureKey ||
+          _normalizeFieldBinding(fieldKey) == normalized) {
+        return field;
+      }
+    }
+
+    return null;
+  }
+
+  // BRIXTA_VISUAL_CAPTURE_RENDERER_V12B
+  //
+  // Presentation-specific renderer for brixta_ui_v1.
+  //
+  // IMPORTANT:
+  //
+  // It DOES NOT own new field state.
+  //
+  // It reads/writes the exact existing:
+  //
+  //   _controllers
+  //   _checks
+  //   _photos
+  //   _selects
+  //   _selectLabels
+  //   _multiSelects
+  //   _manualLocations
+  //
+  // _runAction() therefore submits the SAME canonical values.
+  Widget _buildVisualCapture(
+    String captureKey,
+    Map<String, dynamic> visualConfig,
+  ) {
+    final field = _fieldForVisualCapture(captureKey);
+
+    if (field == null) {
+      return Container(
+        width: double.infinity,
+
+        padding: const EdgeInsets.all(14),
+
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: Theme.of(context).colorScheme.error.withValues(alpha: 0.30),
+          ),
+
+          borderRadius: BorderRadius.circular(12),
+        ),
+
+        child: Text(
+          'Input "$captureKey" is not available in this published Responsibility.',
+        ),
+      );
+    }
+
+    final key = _fieldKey(field);
+
+    final label = _fieldLabel(field);
+
+    final type = _fieldType(field);
+
+    final config = _config(field);
+
+    final helpText = config['helpText']?.toString();
+
+    /*
+     * Migrated old value blocks set showLabel=false because the document
+     * already contains:
+     *
+     *     01 / DEALER
+     *
+     * Newly-placed inputs set showLabel=true.
+     *
+     * Missing property defaults false for already-existing V1.1 documents.
+     */
+    final showLabel = visualConfig['showLabel'] == true;
+
+    final theme = Theme.of(context);
+
+    final scheme = theme.colorScheme;
+
+    final subtleLine = scheme.outlineVariant.withValues(alpha: 0.72);
+
+    Widget underlineSurface({
+      required Widget child,
+      VoidCallback? onTap,
+      EdgeInsetsGeometry padding = const EdgeInsets.symmetric(vertical: 12),
+    }) {
+      final surface = Container(
+        width: double.infinity,
+
+        padding: padding,
+
+        decoration: BoxDecoration(
+          border: Border(bottom: BorderSide(color: subtleLine)),
+        ),
+
+        child: child,
+      );
+
+      if (onTap == null) {
+        return surface;
+      }
+
+      return Material(
+        color: Colors.transparent,
+
+        child: InkWell(onTap: onTap, child: surface),
+      );
+    }
+
+    Widget control;
+
+    // =======================================================================
+    // PHOTO / EVIDENCE
+    // =======================================================================
+
+    if (_isPhotoType(type)) {
+      final path = _photos[key];
+
+      final hasPhoto =
+          path != null && path.isNotEmpty && File(path).existsSync();
+
+      control = Material(
+        color: Colors.transparent,
+
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+
+          onTap: () => _capturePhoto(key),
+
+          child: Container(
+            width: double.infinity,
+
+            height: hasPhoto ? 184 : 118,
+
+            clipBehavior: Clip.antiAlias,
+
+            decoration: BoxDecoration(
+              color: scheme.surface.withValues(alpha: 0.22),
+
+              border: Border.all(color: subtleLine),
+
+              borderRadius: BorderRadius.circular(18),
+            ),
+
+            child: hasPhoto
+                ? Stack(
+                    fit: StackFit.expand,
+
+                    children: [
+                      Image.file(
+                        File(path),
+
+                        fit: BoxFit.cover,
+
+                        errorBuilder: (context, error, stackTrace) => Center(
+                          child: Text(
+                            'Photo captured',
+
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                        ),
+                      ),
+
+                      Positioned(
+                        right: 10,
+
+                        bottom: 10,
+
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 11,
+
+                            vertical: 7,
+                          ),
+
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.72),
+
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+
+                            children: [
+                              Icon(
+                                Icons.camera_alt_outlined,
+
+                                size: 16,
+
+                                color: Colors.white,
+                              ),
+
+                              SizedBox(width: 6),
+
+                              Text(
+                                'Retake',
+
+                                style: TextStyle(
+                                  color: Colors.white,
+
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  )
+                : Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+
+                      children: [
+                        Icon(
+                          Icons.camera_alt_outlined,
+
+                          size: 25,
+
+                          color: scheme.onSurfaceVariant,
+                        ),
+
+                        const SizedBox(height: 8),
+
+                        Text(
+                          'Take photo',
+
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+
+                        const SizedBox(height: 2),
+
+                        Text(
+                          'Tap to capture evidence',
+
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ),
+      );
+    }
+    // =======================================================================
+    // BOOLEAN
+    // =======================================================================
+    else if (type == 'checkbox' || type == 'toggle' || type == 'boolean') {
+      control = underlineSurface(
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                (_checks[key] ?? false) ? 'Yes' : 'No',
+
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+
+            Switch.adaptive(
+              value: _checks[key] ?? false,
+
+              onChanged: (value) {
+                setState(() => _checks[key] = value);
+              },
+            ),
+          ],
+        ),
+      );
+    } else {
+      final sourceKey = config['source']?.toString().trim() ?? '';
+
+      // =====================================================================
+      // EXISTING BUSINESS DATA / DEALER / ENTITY REFERENCE
+      // =====================================================================
+
+      if (sourceKey.isNotEmpty && sourceKey != 'employees') {
+        final selected = _selectLabels[key] ?? _selects[key];
+
+        final hasSelected = selected != null && selected.trim().isNotEmpty;
+
+        control = underlineSurface(
+          onTap: () => _pickDataSourceReference(field),
+
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  hasSelected
+                      ? selected
+                      : (config['placeholder']?.toString() ?? 'Choose $label'),
+
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: hasSelected
+                        ? scheme.onSurface
+                        : scheme.onSurfaceVariant,
+
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              Icon(Icons.search, size: 20, color: scheme.onSurfaceVariant),
+            ],
+          ),
+        );
+      }
+      // =====================================================================
+      // STATIC CHOICE
+      // =====================================================================
+      else if (type == 'select' || type == 'choice' || type == 'dropdown') {
+        final options = _stringList(config['options']);
+
+        control = DropdownButtonFormField<String>(
+          initialValue: _selects[key],
+
+          isExpanded: true,
+
+          dropdownColor: scheme.surface,
+
+          decoration: InputDecoration(
+            hintText: config['placeholder']?.toString() ?? 'Choose one',
+
+            filled: false,
+
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 0,
+
+              vertical: 10,
+            ),
+
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: subtleLine),
+            ),
+
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: scheme.primary, width: 1.5),
+            ),
+          ),
+
+          items: options
+              .map(
+                (option) => DropdownMenuItem<String>(
+                  value: option,
+
+                  child: Text(option),
+                ),
+              )
+              .toList(),
+
+          onChanged: (value) {
+            if (value != null) {
+              setState(() => _selects[key] = value);
+            }
+          },
+        );
+      }
+      // =====================================================================
+      // MULTI CHOICE
+      // =====================================================================
+      else if (type == 'multi_select') {
+        final options = _stringList(config['options']);
+
+        final selected = _multiSelects.putIfAbsent(key, () => <String>{});
+
+        control = Wrap(
+          spacing: 8,
+
+          runSpacing: 8,
+
+          children: options
+              .map(
+                (option) => FilterChip(
+                  label: Text(option),
+
+                  selected: selected.contains(option),
+
+                  onSelected: (value) {
+                    setState(() {
+                      if (value) {
+                        selected.add(option);
+                      } else {
+                        selected.remove(option);
+                      }
+                    });
+                  },
+                ),
+              )
+              .toList(),
+        );
+      }
+      // =====================================================================
+      // DATE
+      // =====================================================================
+      else if (type == 'date' || type == 'datetime') {
+        final withTime = type == 'datetime';
+
+        final current = _controllerFor(key).text.trim();
+
+        control = underlineSurface(
+          onTap: () => _pickDate(key, withTime: withTime),
+
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  current.isEmpty
+                      ? (withTime ? 'Choose date & time' : 'Choose date')
+                      : current,
+
+                  style: theme.textTheme.bodyLarge,
+                ),
+              ),
+
+              Icon(
+                withTime
+                    ? Icons.event_available_outlined
+                    : Icons.calendar_today_outlined,
+
+                size: 19,
+
+                color: scheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        );
+      }
+      // =====================================================================
+      // LOCATION
+      // =====================================================================
+      else if (type == 'location_point' || type == 'gps') {
+        final location = _manualLocations[key];
+
+        final captured = location != null;
+
+        String display = 'Use current location';
+
+        if (captured) {
+          final lat = location['lat'];
+
+          final lng = location['lng'];
+
+          if (lat != null && lng != null) {
+            display = '${lat.toString()}, ${lng.toString()}';
+          } else {
+            display = 'Location captured';
+          }
+        }
+
+        control = underlineSurface(
+          onTap: () => _captureManualLocation(key),
+
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  display,
+
+                  maxLines: 1,
+
+                  overflow: TextOverflow.ellipsis,
+
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              Icon(
+                captured ? Icons.location_on : Icons.location_on_outlined,
+
+                size: 20,
+
+                color: captured ? scheme.primary : scheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        );
+      }
+      // =====================================================================
+      // TEXT / QUANTITY / AMOUNT
+      // =====================================================================
+      else {
+        final longText =
+            type == 'textarea' || type == 'multiline' || type == 'notes';
+
+        final numeric =
+            type == 'number' || type == 'currency' || type == 'integer';
+
+        control = TextField(
+          controller: _controllerFor(key),
+
+          maxLines: longText ? 4 : 1,
+
+          keyboardType: numeric
+              ? const TextInputType.numberWithOptions(decimal: true)
+              : TextInputType.text,
+
+          style: theme.textTheme.bodyLarge?.copyWith(
+            fontWeight: FontWeight.w500,
+          ),
+
+          decoration: InputDecoration(
+            hintText:
+                config['placeholder']?.toString() ??
+                (numeric ? 'Enter value' : 'Enter $label'),
+
+            filled: false,
+
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 0,
+
+              vertical: 10,
+            ),
+
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: subtleLine),
+            ),
+
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: scheme.primary, width: 1.5),
+            ),
+          ),
+        );
+      }
+    }
+
+    return KeyedSubtree(
+      key: ValueKey('visual_capture:$captureKey'),
+
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+
+        children: [
+          if (showLabel) ...[
+            Text(
+              label,
+
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: scheme.onSurfaceVariant,
+
+                fontWeight: FontWeight.w600,
+
+                letterSpacing: 0.5,
+              ),
+            ),
+
+            const SizedBox(height: 6),
+          ],
+
+          control,
+
+          if (helpText != null && helpText.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+
+            Text(helpText, style: theme.textTheme.bodySmall),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static String _normalizeFieldBinding(String value) {
+    return value
+        .trim()
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
+        .replaceAll(RegExp(r'^_+|_+$'), '');
   }
 
   String _runtimeDisplayValue(dynamic value) {
@@ -1618,6 +2285,34 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     }
 
     if (type == 'select' || type == 'choice' || type == 'dropdown') {
+      final sourceKey = config['source']?.toString().trim() ?? '';
+
+      /*
+       * Existing Data Source / business-record reference.
+       *
+       * Example:
+       *
+       *   capture.kind   = entity_reference
+       *   config.source  = dealers
+       *
+       * becomes a real searchable Dealer picker.
+       */
+      if (sourceKey.isNotEmpty && sourceKey != 'employees') {
+        return _DataSourceReferenceField(
+          label: label,
+
+          valueLabel: _selectLabels[key] ?? _selects[key],
+
+          placeholder:
+              config['placeholder']?.toString() ??
+              'Search / choose ${label.toLowerCase()}',
+
+          helpText: helpText,
+
+          onTap: () => _pickDataSourceReference(field),
+        );
+      }
+
       final options = _stringList(config['options']);
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1796,6 +2491,336 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
   static List<String> _stringList(dynamic value) => value is List
       ? value.map((item) => item.toString()).toList()
       : <String>[];
+}
+
+class _DataSourceReferenceField extends StatelessWidget {
+  const _DataSourceReferenceField({
+    required this.label,
+    required this.valueLabel,
+    required this.placeholder,
+    required this.helpText,
+    required this.onTap,
+  });
+
+  final String label;
+
+  final String? valueLabel;
+
+  final String placeholder;
+
+  final String? helpText;
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = valueLabel != null && valueLabel!.trim().isNotEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+
+      children: [
+        _FieldLabel(label: label),
+
+        const SizedBox(height: 8),
+
+        SizedBox(
+          width: double.infinity,
+
+          child: OutlinedButton(
+            onPressed: onTap,
+
+            style: OutlinedButton.styleFrom(
+              alignment: Alignment.centerLeft,
+
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            ),
+
+            child: Row(
+              children: [
+                Expanded(child: Text(selected ? valueLabel! : placeholder)),
+
+                const SizedBox(width: 12),
+
+                const Icon(Icons.search, size: 19),
+              ],
+            ),
+          ),
+        ),
+
+        if (helpText != null) ...[
+          const SizedBox(height: 6),
+
+          Text(helpText!, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ],
+    );
+  }
+}
+
+class _DataSourcePickerSheet extends StatefulWidget {
+  const _DataSourcePickerSheet({
+    required this.accessToken,
+    required this.sourceKey,
+    required this.title,
+    this.initialId,
+    this.initialLabel,
+  });
+
+  final String accessToken;
+
+  final String sourceKey;
+
+  final String title;
+
+  final String? initialId;
+
+  final String? initialLabel;
+
+  @override
+  State<_DataSourcePickerSheet> createState() => _DataSourcePickerSheetState();
+}
+
+class _DataSourcePickerSheetState extends State<_DataSourcePickerSheet> {
+  final TextEditingController _search = TextEditingController();
+
+  Timer? _debounce;
+
+  bool _loading = true;
+
+  String? _error;
+
+  int _requestSerial = 0;
+
+  List<Map<String, dynamic>> _rows = const [];
+
+  @override
+  void initState() {
+    super.initState();
+
+    _search.addListener(_scheduleSearch);
+
+    unawaited(_load());
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+
+    _search.dispose();
+
+    super.dispose();
+  }
+
+  void _scheduleSearch() {
+    _debounce?.cancel();
+
+    _debounce = Timer(const Duration(milliseconds: 260), () {
+      if (mounted) {
+        unawaited(_load());
+      }
+    });
+  }
+
+  Future<void> _load() async {
+    if (!mounted) {
+      return;
+    }
+
+    final request = ++_requestSerial;
+
+    setState(() {
+      _loading = true;
+
+      _error = null;
+    });
+
+    try {
+      final q = _search.text.trim();
+
+      final path =
+          '/api/salesApp/data-sources/'
+          '${Uri.encodeComponent(widget.sourceKey)}'
+          '?q=${Uri.encodeQueryComponent(q)}'
+          '&limit=100';
+
+      final body = await FieldApi(
+        accessToken: widget.accessToken,
+      ).getJson(path);
+
+      final raw = body['rows'];
+
+      final rows = raw is List
+          ? raw
+                .whereType<Map>()
+                .map((item) => Map<String, dynamic>.from(item))
+                .toList()
+          : <Map<String, dynamic>>[];
+
+      if (!mounted || request != _requestSerial) {
+        return;
+      }
+
+      setState(() {
+        _rows = rows;
+
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted || request != _requestSerial) {
+        return;
+      }
+
+      setState(() {
+        _loading = false;
+
+        _error = error.toString();
+      });
+    }
+  }
+
+  String _subtitle(Map<String, dynamic> row) {
+    final raw = row['data'];
+
+    if (raw is! Map) {
+      return '';
+    }
+
+    final values = raw.entries
+        .where((entry) {
+          final value = entry.value;
+
+          return (value != null && value.toString().trim().isNotEmpty);
+        })
+        .map((entry) => entry.value.toString())
+        .take(3)
+        .toList();
+
+    return values.join(' · ');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final height = MediaQuery.sizeOf(context).height * 0.78;
+
+    return SizedBox(
+      height: height,
+
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+
+                    height: 4,
+
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.outlineVariant,
+
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                Text(
+                  widget.title,
+
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+
+                const SizedBox(height: 14),
+
+                TextField(
+                  controller: _search,
+
+                  autofocus: false,
+
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search),
+
+                    hintText: 'Search...',
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          if (_loading) const LinearProgressIndicator(minHeight: 2),
+
+          Expanded(
+            child: _error != null
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+
+                      child: Text(_error!, textAlign: TextAlign.center),
+                    ),
+                  )
+                : _rows.isEmpty
+                ? const Center(child: Text('No matching records.'))
+                : ListView.separated(
+                    keyboardDismissBehavior:
+                        ScrollViewKeyboardDismissBehavior.onDrag,
+
+                    itemCount: _rows.length,
+
+                    separatorBuilder: (context, index) =>
+                        const Divider(height: 1),
+
+                    itemBuilder: (context, index) {
+                      final row = _rows[index];
+
+                      final id = row['id']?.toString() ?? '';
+
+                      final label = row['label']?.toString() ?? id;
+
+                      final subtitle = _subtitle(row);
+
+                      final selected = id == widget.initialId;
+
+                      return ListTile(
+                        selected: selected,
+
+                        leading: selected
+                            ? const Icon(Icons.check_circle)
+                            : const Icon(Icons.circle_outlined),
+
+                        title: Text(label),
+
+                        subtitle: subtitle.isEmpty
+                            ? null
+                            : Text(
+                                subtitle,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+
+                        onTap: id.isEmpty
+                            ? null
+                            : () {
+                                Navigator.of(
+                                  context,
+                                ).pop({'id': id, 'label': label});
+                              },
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _ActionCard extends StatelessWidget {

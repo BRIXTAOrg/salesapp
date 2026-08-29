@@ -10,6 +10,19 @@ import '../../../core/design/responsibility_theme.dart';
 
 typedef BrixtaUiRunAction = Future<void> Function(Map<String, dynamic> action);
 
+// BRIXTA_VISUAL_CAPTURE_BRIDGE_V11
+//
+// The visual layer does NOT manufacture another form state.
+//
+// DynamicCapabilityScreen remains the owner of:
+//   TextEditingControllers
+//   selected values
+//   photo paths
+//   GPS values
+//   submission payload state
+typedef BrixtaUiCaptureBuilder =
+    Widget Function(String captureKey, Map<String, dynamic> visualConfig);
+
 class BrixtaUiRuntime {
   const BrixtaUiRuntime({
     required this.record,
@@ -17,6 +30,7 @@ class BrixtaUiRuntime {
     required this.actions,
     required this.submittingActionKey,
     required this.onRunAction,
+    this.onBuildCapture,
     this.onRefresh,
     this.effectNonces = const {},
     this.effectAnimationPresets = const {},
@@ -30,6 +44,7 @@ class BrixtaUiRuntime {
   final List<Map<String, dynamic>> actions;
   final String? submittingActionKey;
   final BrixtaUiRunAction onRunAction;
+  final BrixtaUiCaptureBuilder? onBuildCapture;
   final Future<void> Function()? onRefresh;
 
   final Map<String, int> effectNonces;
@@ -183,6 +198,30 @@ class BrixtaUiRuntime {
     return effectAnimationDurations[blockId];
   }
 
+  Widget buildCapture(String captureKey, Map<String, dynamic> visualConfig) {
+    final builder = onBuildCapture;
+
+    if (builder == null) {
+      return Container(
+        width: double.infinity,
+
+        padding: const EdgeInsets.all(14),
+
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.orange.withValues(alpha: 0.35)),
+
+          borderRadius: BorderRadius.circular(12),
+        ),
+
+        child: Text(
+          'Input "$captureKey" is not connected to the host capture runtime.',
+        ),
+      );
+    }
+
+    return builder(captureKey, visualConfig);
+  }
+
   static double _number(dynamic value) {
     if (value is num) {
       return value.toDouble();
@@ -252,6 +291,7 @@ class BrixtaStacUi extends StatelessWidget {
     required this.actions,
     required this.submittingActionKey,
     required this.onRunAction,
+    this.onBuildCapture,
     this.onRefresh,
     this.effectNonces = const {},
     this.effectAnimationPresets = const {},
@@ -266,6 +306,7 @@ class BrixtaStacUi extends StatelessWidget {
   final List<Map<String, dynamic>> actions;
   final String? submittingActionKey;
   final BrixtaUiRunAction onRunAction;
+  final BrixtaUiCaptureBuilder? onBuildCapture;
   final Future<void> Function()? onRefresh;
 
   final Map<String, int> effectNonces;
@@ -310,6 +351,7 @@ class BrixtaStacUi extends StatelessWidget {
       actions: actions,
       submittingActionKey: submittingActionKey,
       onRunAction: onRunAction,
+      onBuildCapture: onBuildCapture,
       onRefresh: onRefresh,
       effectNonces: effectNonces,
       effectAnimationPresets: effectAnimationPresets,
@@ -1249,6 +1291,41 @@ class _BrixtaDocumentView extends StatelessWidget {
             child: Text(_display(value)),
           ),
         );
+        break;
+
+      case 'interaction.capture':
+        final rawBinding = block['binding'];
+
+        final binding = rawBinding is Map
+            ? Map<String, dynamic>.from(rawBinding)
+            : <String, dynamic>{};
+
+        final scope = binding['scope']?.toString();
+
+        final captureKey = binding['key']?.toString();
+
+        if (scope != 'capture' || captureKey == null || captureKey.isEmpty) {
+          rendered = Container(
+            width: double.infinity,
+
+            padding: const EdgeInsets.all(14),
+
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: Theme.of(
+                  context,
+                ).colorScheme.error.withValues(alpha: 0.30),
+              ),
+
+              borderRadius: BorderRadius.circular(12),
+            ),
+
+            child: const Text('This visual input is not bound to a capture.'),
+          );
+        } else {
+          rendered = runtime.buildCapture(captureKey, config);
+        }
+
         break;
 
       case 'interaction.action_button':
