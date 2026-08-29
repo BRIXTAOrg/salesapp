@@ -1,0 +1,27 @@
+394:  // A malformed graph must never be able to recurse until the
+421:  List<String> get rootIds {
+422:    final raw = document['rootIds'];
+439:    for (final id in rootIds) {
+448:      final widget = _renderBlock(context, block, map);
+483:  Widget _renderBlock(
+486:    Map<String, Map<String, dynamic>> blockMap, {
+488:    int depth = 0,
+506:    if (depth >= _maxRenderDepth) {
+522:    final childIds = block['children'] is List
+533:          children: _children(
+535:            childIds,
+536:            blockMap,
+538:            depth: depth + 1,
+550:          children: _children(
+552:            childIds,
+553:            blockMap,
+555:            depth: depth + 1,
+565:          children: childIds.map((id) {
+566:            final child = blockMap[id];
+572:            return _renderBlock(
+575:              blockMap,
+577:              depth: depth + 1,
+816:  List<Widget> _children(
+821:    required int depth,
+836:      final child = _renderBlock(
+841:        depth: depth,

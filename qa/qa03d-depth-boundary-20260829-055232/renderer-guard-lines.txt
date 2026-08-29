@@ -1,0 +1,14 @@
+391:  // BRIXTA_RENDER_GRAPH_GUARD_V1
+396:  static const int _maxRenderDepth = 64;
+448:      final widget = _renderBlock(context, block, map);
+483:  Widget _renderBlock(
+488:    int depth = 0,
+504:     * it is rejected only when it already exists in THIS render path.
+506:    if (depth >= _maxRenderDepth) {
+538:            depth: depth + 1,
+555:            depth: depth + 1,
+572:            return _renderBlock(
+577:              depth: depth + 1,
+821:    required int depth,
+836:      final child = _renderBlock(
+841:        depth: depth,

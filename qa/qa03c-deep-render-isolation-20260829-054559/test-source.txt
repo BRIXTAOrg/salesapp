@@ -1,0 +1,57 @@
+   120	        },
+   121	      ],
+   122	    });
+   123	  });
+   124	
+   125	  testWidgets('QA03 hostile — two-node cycle does not crash', (tester) async {
+   126	    await pumpDocument(tester, {
+   127	      'version': 1,
+   128	      'engine': 'brixta_stac_v1',
+   129	      'rootIds': ['A'],
+   130	      'blocks': [
+   131	        {
+   132	          'id': 'A',
+   133	          'type': 'layout.column',
+   134	          'children': ['B'],
+   135	        },
+   136	        {
+   137	          'id': 'B',
+   138	          'type': 'layout.stack',
+   139	          'children': ['A'],
+   140	        },
+   141	      ],
+   142	    });
+   143	  });
+   144	
+   145	  testWidgets('QA03 stress — deeply nested CMS layout does not crash', (
+   146	    tester,
+   147	  ) async {
+   148	    const depth = 250;
+   149	
+   150	    final blocks = <Map<String, dynamic>>[];
+   151	
+   152	    for (var index = 0; index < depth; index++) {
+   153	      blocks.add({
+   154	        'id': 'node-$index',
+   155	        'type': 'layout.column',
+   156	        'children': [index == depth - 1 ? 'terminal' : 'node-${index + 1}'],
+   157	        'config': {'gap': 0},
+   158	      });
+   159	    }
+   160	
+   161	    blocks.add({
+   162	      'id': 'terminal',
+   163	      'type': 'display.text',
+   164	      'config': {'text': 'SURVIVED DEEP GRAPH'},
+   165	    });
+   166	
+   167	    await pumpDocument(tester, {
+   168	      'version': 1,
+   169	      'engine': 'brixta_stac_v1',
+   170	      'rootIds': ['node-0'],
+   171	      'blocks': blocks,
+   172	    });
+   173	
+   174	    expect(find.text('SURVIVED DEEP GRAPH'), findsOneWidget);
+   175	  });
+   176	}

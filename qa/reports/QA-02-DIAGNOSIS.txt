@@ -1,0 +1,50 @@
+BRIXTA QA-02 — ROOT CAUSE ANALYSIS
+==================================
+
+CLASS
+Interaction / presentation architecture defect.
+
+NOT A CMS DEFECT.
+NOT A RESPONSIBILITY MANIFEST DEFECT.
+NOT A READY/DECISION BACKEND DEFECT.
+
+ROOT CAUSE
+Some BRIXTA interactive controls awaited audio/haptic feedback
+before executing the actual user action.
+
+Problematic ordering:
+
+    await BrixtaFeedback.selection();
+    onTap();
+
+This makes presentation audio part of the critical execution path.
+
+Potential consequences are larger than widget-test failure:
+
+- slow audio initialization can delay navigation
+- unavailable platform audio can delay an action
+- a plugin regression can affect UI execution
+- first-play decoder latency becomes interaction latency
+- business functionality becomes unnecessarily coupled to cosmetics
+
+CORRECT ARCHITECTURE
+
+    unawaited(BrixtaFeedback.selection());
+    onTap();
+
+Sound/haptics are optional presentation enhancements.
+
+They must NEVER gate:
+
+- Responsibility opening
+- Work lens selection
+- To-do opening
+- Decisions
+- navigation
+- authentication
+- submissions
+- Pixel execution
+- Kernel execution
+
+QA-02 therefore discovered a real resilience issue.
+The production code should be fixed rather than weakening the test.

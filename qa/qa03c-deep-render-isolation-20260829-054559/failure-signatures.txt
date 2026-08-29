@@ -1,0 +1,70 @@
+qa/qa03c-deep-render-isolation-20260829-054559/alone-1.log:47:══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+qa/qa03c-deep-render-isolation-20260829-054559/alone-1.log:49:Expected: exactly one matching candidate
+qa/qa03c-deep-render-isolation-20260829-054559/alone-1.log:50:  Actual: _TextWidgetFinder:<Found 0 widgets with text "SURVIVED DEEP GRAPH": []>
+qa/qa03c-deep-render-isolation-20260829-054559/alone-1.log:69:  Test failed. See exception logs above.
+qa/qa03c-deep-render-isolation-20260829-054559/alone-1.log:73:00:00 +0 -1: Some tests failed.
+qa/qa03c-deep-render-isolation-20260829-054559/alone-2.log:47:══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+qa/qa03c-deep-render-isolation-20260829-054559/alone-2.log:49:Expected: exactly one matching candidate
+qa/qa03c-deep-render-isolation-20260829-054559/alone-2.log:50:  Actual: _TextWidgetFinder:<Found 0 widgets with text "SURVIVED DEEP GRAPH": []>
+qa/qa03c-deep-render-isolation-20260829-054559/alone-2.log:69:  Test failed. See exception logs above.
+qa/qa03c-deep-render-isolation-20260829-054559/alone-2.log:73:00:00 +0 -1: Some tests failed.
+qa/qa03c-deep-render-isolation-20260829-054559/alone-3.log:47:══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+qa/qa03c-deep-render-isolation-20260829-054559/alone-3.log:49:Expected: exactly one matching candidate
+qa/qa03c-deep-render-isolation-20260829-054559/alone-3.log:50:  Actual: _TextWidgetFinder:<Found 0 widgets with text "SURVIVED DEEP GRAPH": []>
+qa/qa03c-deep-render-isolation-20260829-054559/alone-3.log:69:  Test failed. See exception logs above.
+qa/qa03c-deep-render-isolation-20260829-054559/alone-3.log:73:00:00 +0 -1: Some tests failed.
+qa/qa03c-deep-render-isolation-20260829-054559/alone-4.log:47:══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+qa/qa03c-deep-render-isolation-20260829-054559/alone-4.log:49:Expected: exactly one matching candidate
+qa/qa03c-deep-render-isolation-20260829-054559/alone-4.log:50:  Actual: _TextWidgetFinder:<Found 0 widgets with text "SURVIVED DEEP GRAPH": []>
+qa/qa03c-deep-render-isolation-20260829-054559/alone-4.log:69:  Test failed. See exception logs above.
+qa/qa03c-deep-render-isolation-20260829-054559/alone-4.log:73:00:00 +0 -1: Some tests failed.
+qa/qa03c-deep-render-isolation-20260829-054559/alone-5.log:47:══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+qa/qa03c-deep-render-isolation-20260829-054559/alone-5.log:49:Expected: exactly one matching candidate
+qa/qa03c-deep-render-isolation-20260829-054559/alone-5.log:50:  Actual: _TextWidgetFinder:<Found 0 widgets with text "SURVIVED DEEP GRAPH": []>
+qa/qa03c-deep-render-isolation-20260829-054559/alone-5.log:69:  Test failed. See exception logs above.
+qa/qa03c-deep-render-isolation-20260829-054559/alone-5.log:73:00:00 +0 -1: Some tests failed.
+qa/qa03c-deep-render-isolation-20260829-054559/default-order.log:52:══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+qa/qa03c-deep-render-isolation-20260829-054559/default-order.log:54:Expected: exactly one matching candidate
+qa/qa03c-deep-render-isolation-20260829-054559/default-order.log:55:  Actual: _TextWidgetFinder:<Found 0 widgets with text "SURVIVED DEEP GRAPH": []>
+qa/qa03c-deep-render-isolation-20260829-054559/default-order.log:74:  Test failed. See exception logs above.
+qa/qa03c-deep-render-isolation-20260829-054559/default-order.log:78:00:00 +5 -1: Some tests failed.
+qa/qa03c-deep-render-isolation-20260829-054559/seed-13.log:53:══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+qa/qa03c-deep-render-isolation-20260829-054559/seed-13.log:55:Expected: exactly one matching candidate
+qa/qa03c-deep-render-isolation-20260829-054559/seed-13.log:56:  Actual: _TextWidgetFinder:<Found 0 widgets with text "SURVIVED DEEP GRAPH": []>
+qa/qa03c-deep-render-isolation-20260829-054559/seed-13.log:75:  Test failed. See exception logs above.
+qa/qa03c-deep-render-isolation-20260829-054559/seed-13.log:79:00:00 +5 -1: Some tests failed.
+qa/qa03c-deep-render-isolation-20260829-054559/seed-2.log:49:══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+qa/qa03c-deep-render-isolation-20260829-054559/seed-2.log:51:Expected: exactly one matching candidate
+qa/qa03c-deep-render-isolation-20260829-054559/seed-2.log:52:  Actual: _TextWidgetFinder:<Found 0 widgets with text "SURVIVED DEEP GRAPH": []>
+qa/qa03c-deep-render-isolation-20260829-054559/seed-2.log:71:  Test failed. See exception logs above.
+qa/qa03c-deep-render-isolation-20260829-054559/seed-2.log:79:00:00 +5 -1: Some tests failed.
+qa/qa03c-deep-render-isolation-20260829-054559/seed-3.log:52:══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+qa/qa03c-deep-render-isolation-20260829-054559/seed-3.log:54:Expected: exactly one matching candidate
+qa/qa03c-deep-render-isolation-20260829-054559/seed-3.log:55:  Actual: _TextWidgetFinder:<Found 0 widgets with text "SURVIVED DEEP GRAPH": []>
+qa/qa03c-deep-render-isolation-20260829-054559/seed-3.log:74:  Test failed. See exception logs above.
+qa/qa03c-deep-render-isolation-20260829-054559/seed-3.log:79:00:00 +5 -1: Some tests failed.
+qa/qa03c-deep-render-isolation-20260829-054559/seed-42.log:50:══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+qa/qa03c-deep-render-isolation-20260829-054559/seed-42.log:52:Expected: exactly one matching candidate
+qa/qa03c-deep-render-isolation-20260829-054559/seed-42.log:53:  Actual: _TextWidgetFinder:<Found 0 widgets with text "SURVIVED DEEP GRAPH": []>
+qa/qa03c-deep-render-isolation-20260829-054559/seed-42.log:72:  Test failed. See exception logs above.
+qa/qa03c-deep-render-isolation-20260829-054559/seed-42.log:79:00:00 +5 -1: Some tests failed.
+qa/qa03c-deep-render-isolation-20260829-054559/seed-7.log:51:══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+qa/qa03c-deep-render-isolation-20260829-054559/seed-7.log:53:Expected: exactly one matching candidate
+qa/qa03c-deep-render-isolation-20260829-054559/seed-7.log:54:  Actual: _TextWidgetFinder:<Found 0 widgets with text "SURVIVED DEEP GRAPH": []>
+qa/qa03c-deep-render-isolation-20260829-054559/seed-7.log:73:  Test failed. See exception logs above.
+qa/qa03c-deep-render-isolation-20260829-054559/seed-7.log:79:00:00 +5 -1: Some tests failed.
+qa/qa03c-deep-render-isolation-20260829-054559/seed1-1.log:50:══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+qa/qa03c-deep-render-isolation-20260829-054559/seed1-1.log:52:Expected: exactly one matching candidate
+qa/qa03c-deep-render-isolation-20260829-054559/seed1-1.log:53:  Actual: _TextWidgetFinder:<Found 0 widgets with text "SURVIVED DEEP GRAPH": []>
+qa/qa03c-deep-render-isolation-20260829-054559/seed1-1.log:72:  Test failed. See exception logs above.
+qa/qa03c-deep-render-isolation-20260829-054559/seed1-1.log:79:00:00 +5 -1: Some tests failed.
+qa/qa03c-deep-render-isolation-20260829-054559/seed1-2.log:50:══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+qa/qa03c-deep-render-isolation-20260829-054559/seed1-2.log:52:Expected: exactly one matching candidate
+qa/qa03c-deep-render-isolation-20260829-054559/seed1-2.log:53:  Actual: _TextWidgetFinder:<Found 0 widgets with text "SURVIVED DEEP GRAPH": []>
+qa/qa03c-deep-render-isolation-20260829-054559/seed1-2.log:72:  Test failed. See exception logs above.
+qa/qa03c-deep-render-isolation-20260829-054559/seed1-2.log:79:00:00 +5 -1: Some tests failed.
+qa/qa03c-deep-render-isolation-20260829-054559/seed1-3.log:50:══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+qa/qa03c-deep-render-isolation-20260829-054559/seed1-3.log:52:Expected: exactly one matching candidate
+qa/qa03c-deep-render-isolation-20260829-054559/seed1-3.log:53:  Actual: _TextWidgetFinder:<Found 0 widgets with text "SURVIVED DEEP GRAPH": []>
+qa/qa03c-deep-render-isolation-20260829-054559/seed1-3.log:72:  Test failed. See exception logs above.
+qa/qa03c-deep-render-isolation-20260829-054559/seed1-3.log:79:00:00 +5 -1: Some tests failed.

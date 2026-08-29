@@ -1,0 +1,48 @@
+BRIXTA QA-02
+WORK INBOX CONTRACT — BEFORE FIX
+================================
+
+RESULT
+2 PASSED
+3 FAILED
+
+PASS
+- Empty queues create zero operational clutter.
+- Responsibility search filters actual assigned modules.
+
+FAIL
+- To do appears only when actionable work exists and forwards
+  exact item.
+
+  Expected:
+  "Inspect construction site"
+
+  Actual:
+  0 matching widgets.
+
+- Decisions appears only for pending decisions and forwards
+  exact approval.
+
+  Expected:
+  "Approve dealer discount"
+
+  Actual:
+  0 matching widgets.
+
+- Waiting is contextual and not actionable.
+
+  Expected:
+  "Submit expense report"
+
+  Actual:
+  0 matching widgets.
+
+IMPORTANT
+flutter analyze still reported:
+No issues found.
+
+INTERPRETATION
+This is why static analysis alone is insufficient.
+
+The source compiles correctly but interaction behavior is wrong
+under deterministic widget execution.

@@ -1,0 +1,14 @@
+DEPTH       RESULT
+------------------
+1           PASS
+2           PASS
+4           PASS
+8           PASS
+16          PASS
+32          PASS
+64          DEPTH_CUTOFF
+48          PASS
+56          PASS
+60          PASS
+62          PASS
+63          PASS

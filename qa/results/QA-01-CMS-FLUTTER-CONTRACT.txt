@@ -1,0 +1,44 @@
+BRIXTA QA-01
+CMS → FLUTTER RESPONSIBILITY CONTRACT
+=====================================
+
+STATUS
+PASS
+
+TESTS PASSED
+1. Published CMS application overrides compatibility renderer
+   without losing compatibility configuration.
+
+2. Kernel uiDocument becomes brixta_ui_v1 when no explicit
+   compiled application exists.
+
+3. Invalid Kernel visual document is NOT promoted into
+   brixta_ui_v1.
+
+4. Legacy Responsibility continues rendering without a
+   Kernel manifest.
+
+5. Incoming CMS field aliases are normalized before Flutter
+   consumes them.
+
+RESULT
+5 / 5 TESTS PASSED
+
+POST-QA
+flutter analyze:
+No issues found.
+
+DEFECT FOUND DURING QA
+Runtime key normalization required support for GPS aliases.
+
+FIX VERIFIED
+gps       → location
+geo_point → location
+
+CONCLUSION
+The CMS → published Responsibility → Flutter runtime compatibility
+contract passed after runtime normalization hardening.
+
+This test protects BRIXTA's core promise:
+changing the native employee shell must not break dynamically
+published Responsibilities.

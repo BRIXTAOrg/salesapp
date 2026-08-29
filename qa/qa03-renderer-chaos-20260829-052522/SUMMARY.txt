@@ -1,0 +1,6 @@
+CONTROL: PASS exit=0 time=3.44s
+MISSING_CHILD: PASS exit=0 time=2.37s
+UNKNOWN_BLOCK: PASS exit=0 time=2.38s
+SELF_CYCLE: FAIL exit=1 time=2.57s
+TWO_NODE_CYCLE: FAIL exit=1 time=2.55s
+DEEP_GRAPH: PASS exit=0 time=2.45s

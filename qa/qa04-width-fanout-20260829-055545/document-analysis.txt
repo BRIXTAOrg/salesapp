@@ -1,0 +1,16 @@
+
+QA04 ATTACK SHAPES
+
+A) UNIQUE WIDTH
+   2049 serialized blocks:
+   1 root + 2048 leaves.
+
+B) REFERENCE AMPLIFICATION
+   ONLY 2 serialized blocks:
+   1 root + 1 leaf.
+
+   root.children contains the SAME leaf id 10,000 times.
+
+The second case matters most:
+a block-count validator alone cannot protect the runtime.
+

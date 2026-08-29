@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../../core/design/app_design.dart';
@@ -45,7 +43,7 @@ class BrixtaPremiumNav extends StatelessWidget {
                         return;
                       }
 
-                      unawaited(BrixtaFeedback.selection());
+                      await BrixtaFeedback.selection();
 
                       onChanged(index);
                     },

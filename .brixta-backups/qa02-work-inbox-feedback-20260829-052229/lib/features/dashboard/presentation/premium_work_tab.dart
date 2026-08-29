@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../../core/design/app_design.dart';
@@ -455,7 +453,7 @@ class _PremiumSearch extends StatelessWidget {
               ? IconButton(
                   tooltip: 'Clear search',
                   onPressed: () async {
-                    unawaited(BrixtaFeedback.selection());
+                    await BrixtaFeedback.selection();
                     controller.clear();
                   },
                   icon: const Icon(Icons.close_rounded, size: 20),
@@ -494,7 +492,7 @@ class _LensChip extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: () async {
-          unawaited(BrixtaFeedback.selection());
+          await BrixtaFeedback.selection();
           onTap();
         },
         child: AnimatedContainer(
@@ -570,7 +568,7 @@ class _ResponsibilityHeroCard extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(AppDesign.heroRadius),
           onTap: () async {
-            unawaited(BrixtaFeedback.action());
+            await BrixtaFeedback.action();
             onTap();
           },
           child: ClipRRect(
@@ -851,7 +849,7 @@ class _QueueCard extends StatelessWidget {
         onTap: onTap == null
             ? null
             : () async {
-                unawaited(BrixtaFeedback.action());
+                await BrixtaFeedback.action();
                 onTap!();
               },
         borderRadius: BorderRadius.circular(24),

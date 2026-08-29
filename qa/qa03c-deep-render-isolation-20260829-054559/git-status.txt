@@ -1,0 +1,14 @@
+ M lib/core/runtime/runtime_contract.dart
+ M lib/features/auth/presentation/login_screen.dart
+ M lib/features/dashboard/presentation/brixta_premium_nav.dart
+ M lib/features/dashboard/presentation/employee_dashboard_screen.dart
+ M lib/features/dashboard/presentation/premium_work_tab.dart
+ M lib/features/dynamic/presentation/brixta_stac_ui.dart
+?? .brixta-backups/qa-test-01-responsibility-contract-20260829-051207/
+?? .brixta-backups/qa01-runtime-key-fix-20260829-051435/
+?? .brixta-backups/qa02-work-inbox-feedback-20260829-052229/
+?? .brixta-backups/qa03-cycle-hardening-20260829-052805/
+?? .brixta-backups/qa03b-render-graph-guard-20260829-053120/
+?? .brixta-backups/qa03c-depth-budget-20260829-053500/
+?? qa/
+?? test/

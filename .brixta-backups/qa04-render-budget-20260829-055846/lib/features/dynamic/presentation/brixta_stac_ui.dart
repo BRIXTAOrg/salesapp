@@ -385,31 +385,6 @@ class _BrixtaFullscreenHostState extends State<_BrixtaFullscreenHost> {
   }
 }
 
-class _BrixtaRenderGraphCheck {
-  const _BrixtaRenderGraphCheck._({
-    required this.allowed,
-    required this.reason,
-    required this.expandedNodes,
-  });
-
-  const _BrixtaRenderGraphCheck.allowed(int expandedNodes)
-    : this._(allowed: true, reason: '', expandedNodes: expandedNodes);
-
-  const _BrixtaRenderGraphCheck.rejected(String reason, int expandedNodes)
-    : this._(allowed: false, reason: reason, expandedNodes: expandedNodes);
-
-  final bool allowed;
-  final String reason;
-  final int expandedNodes;
-}
-
-class _BrixtaRenderQueueEntry {
-  const _BrixtaRenderQueueEntry({required this.id, required this.depth});
-
-  final String id;
-  final int depth;
-}
-
 class _BrixtaDocumentView extends StatelessWidget {
   const _BrixtaDocumentView({required this.document, required this.runtime});
 
@@ -418,16 +393,7 @@ class _BrixtaDocumentView extends StatelessWidget {
   // CMS-authored UI is untrusted declarative input.
   // A malformed graph must never be able to recurse until the
   // employee application exhausts its Dart stack.
-  // BRIXTA_RENDER_RESOURCE_BUDGET_V1
-  //
-  // These limits apply to the EXPANDED graph, not merely
-  // the number of serialized blocks. Repeated references
-  // therefore cannot amplify a tiny CMS document without
-  // bound.
   static const int _maxRenderDepth = 64;
-  static const int _maxRenderRoots = 256;
-  static const int _maxDirectChildren = 2048;
-  static const int _maxExpandedRenderNodes = 4096;
 
   final Map<String, dynamic> document;
   final BrixtaUiRuntime runtime;
@@ -462,156 +428,9 @@ class _BrixtaDocumentView extends StatelessWidget {
     return raw.map((item) => item.toString()).toList();
   }
 
-  _BrixtaRenderGraphCheck _validateExpandedRenderGraph(
-    Map<String, Map<String, dynamic>> map,
-    List<String> roots,
-  ) {
-    if (roots.length > _maxRenderRoots) {
-      return _BrixtaRenderGraphCheck.rejected('root_budget', roots.length);
-    }
-
-    final queue = <_BrixtaRenderQueueEntry>[
-      for (final id in roots) _BrixtaRenderQueueEntry(id: id, depth: 0),
-    ];
-
-    /*
-     * "scheduled" counts render OCCURRENCES.
-     *
-     * This distinction is important:
-     *
-     * 2 serialized blocks may still describe:
-     *
-     * root.children =
-     *   [leaf, leaf, leaf ... 10,000 times]
-     *
-     * A serialized block-count limit alone cannot protect Flutter.
-     */
-    var scheduled = queue.length;
-    var cursor = 0;
-
-    if (scheduled > _maxExpandedRenderNodes) {
-      return _BrixtaRenderGraphCheck.rejected(
-        'expanded_node_budget',
-        scheduled,
-      );
-    }
-
-    while (cursor < queue.length) {
-      final entry = queue[cursor];
-      cursor += 1;
-
-      if (entry.depth >= _maxRenderDepth) {
-        return _BrixtaRenderGraphCheck.rejected('depth_budget', scheduled);
-      }
-
-      final block = map[entry.id];
-
-      /*
-       * Unknown references do not create a Flutter block.
-       */
-      if (block == null) {
-        continue;
-      }
-
-      final rawChildren = block['children'];
-
-      if (rawChildren is! List) {
-        continue;
-      }
-
-      final childIds = rawChildren
-          .map((value) => value.toString())
-          .toList(growable: false);
-
-      if (childIds.length > _maxDirectChildren) {
-        return _BrixtaRenderGraphCheck.rejected(
-          'fanout_budget',
-          scheduled + childIds.length,
-        );
-      }
-
-      /*
-       * Reject BEFORE enqueuing an oversized generation.
-       *
-       * This prevents the validator itself from becoming the
-       * memory-amplification surface.
-       */
-      if (scheduled + childIds.length > _maxExpandedRenderNodes) {
-        return _BrixtaRenderGraphCheck.rejected(
-          'expanded_node_budget',
-          scheduled + childIds.length,
-        );
-      }
-
-      scheduled += childIds.length;
-
-      for (final childId in childIds) {
-        queue.add(_BrixtaRenderQueueEntry(id: childId, depth: entry.depth + 1));
-      }
-    }
-
-    return _BrixtaRenderGraphCheck.allowed(scheduled);
-  }
-
-  Widget _resourceLimitView(
-    BuildContext context,
-    _BrixtaRenderGraphCheck check,
-  ) {
-    /*
-     * Fail CLOSED rather than rendering a partial business UI.
-     *
-     * Silent truncation could hide:
-     * - mandatory captures
-     * - approval actions
-     * - warnings
-     * - submission buttons
-     *
-     * A complete safe rejection is preferable.
-     */
-    return SafeArea(
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.shield_outlined,
-                size: 32,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              const SizedBox(height: 14),
-              Text(
-                'This Responsibility cannot be displayed safely.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Its published interface exceeds the device render safety limit.',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final map = byId;
-
-    // BRIXTA_EXPANDED_GRAPH_PREFLIGHT_V1
-    //
-    // Validate the complete expanded reference graph BEFORE
-    // recursively constructing Flutter widgets.
-    final graphCheck = _validateExpandedRenderGraph(map, rootIds);
-
-    if (!graphCheck.allowed) {
-      return _resourceLimitView(context, graphCheck);
-    }
 
     final normal = <Widget>[];
 

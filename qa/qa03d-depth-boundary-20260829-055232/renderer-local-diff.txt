@@ -1,0 +1,118 @@
+diff --git a/lib/features/dynamic/presentation/brixta_stac_ui.dart b/lib/features/dynamic/presentation/brixta_stac_ui.dart
+index e9198ba..88ce2a0 100644
+--- a/lib/features/dynamic/presentation/brixta_stac_ui.dart
++++ b/lib/features/dynamic/presentation/brixta_stac_ui.dart
+@@ -388,6 +388,13 @@ class _BrixtaFullscreenHostState extends State<_BrixtaFullscreenHost> {
+ class _BrixtaDocumentView extends StatelessWidget {
+   const _BrixtaDocumentView({required this.document, required this.runtime});
+ 
++  // BRIXTA_RENDER_GRAPH_GUARD_V1
++  //
++  // CMS-authored UI is untrusted declarative input.
++  // A malformed graph must never be able to recurse until the
++  // employee application exhausts its Dart stack.
++  static const int _maxRenderDepth = 64;
++
+   final Map<String, dynamic> document;
+   final BrixtaUiRuntime runtime;
+ 
+@@ -476,12 +483,38 @@ class _BrixtaDocumentView extends StatelessWidget {
+   Widget _renderBlock(
+     BuildContext context,
+     Map<String, dynamic> block,
+-    Map<String, Map<String, dynamic>> blockMap,
+-  ) {
++    Map<String, Map<String, dynamic>> blockMap, {
++    Set<String> ancestry = const <String>{},
++    int depth = 0,
++  }) {
+     final type = block['type']?.toString() ?? '';
+ 
+     final blockId = block['id']?.toString() ?? '';
+ 
++    /*
++     * Never trust the CMS graph to be acyclic.
++     *
++     * Examples that must terminate safely:
++     *
++     *   A -> A
++     *
++     *   A -> B -> A
++     *
++     * A repeated block ID is allowed elsewhere in the document;
++     * it is rejected only when it already exists in THIS render path.
++     */
++    if (depth >= _maxRenderDepth) {
++      return const SizedBox.shrink();
++    }
++
++    if (blockId.isNotEmpty && ancestry.contains(blockId)) {
++      return const SizedBox.shrink();
++    }
++
++    final nextAncestry = blockId.isEmpty
++        ? ancestry
++        : <String>{...ancestry, blockId};
++
+     final config = block['config'] is Map
+         ? Map<String, dynamic>.from(block['config'] as Map)
+         : <String, dynamic>{};
+@@ -501,6 +534,9 @@ class _BrixtaDocumentView extends StatelessWidget {
+             context,
+             childIds,
+             blockMap,
++            ancestry: nextAncestry,
++            depth: depth + 1,
++
+             vertical: true,
+             gap: _double(config['gap'], 16),
+           ),
+@@ -515,6 +551,9 @@ class _BrixtaDocumentView extends StatelessWidget {
+             context,
+             childIds,
+             blockMap,
++            ancestry: nextAncestry,
++            depth: depth + 1,
++
+             vertical: false,
+             gap: _double(config['gap'], 12),
+           ),
+@@ -530,7 +569,13 @@ class _BrixtaDocumentView extends StatelessWidget {
+               return const SizedBox.shrink();
+             }
+ 
+-            return _renderBlock(context, child, blockMap);
++            return _renderBlock(
++              context,
++              child,
++              blockMap,
++              ancestry: nextAncestry,
++              depth: depth + 1,
++            );
+           }).toList(),
+         );
+         break;
+@@ -772,6 +817,8 @@ class _BrixtaDocumentView extends StatelessWidget {
+     BuildContext context,
+     List<String> ids,
+     Map<String, Map<String, dynamic>> map, {
++    required Set<String> ancestry,
++    required int depth,
+     required bool vertical,
+     required double gap,
+   }) {
+@@ -786,7 +833,13 @@ class _BrixtaDocumentView extends StatelessWidget {
+     for (var index = 0; index < visibleIds.length; index += 1) {
+       final block = map[visibleIds[index]]!;
+ 
+-      final child = _renderBlock(context, block, map);
++      final child = _renderBlock(
++        context,
++        block,
++        map,
++        ancestry: ancestry,
++        depth: depth,
++      );
+ 
+       result.add(vertical ? child : Expanded(child: child));
+ 

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 
 import '../../../core/design/app_design.dart';
@@ -54,7 +52,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     // BRIXTA_LOGIN_ACTION_SOUND
-    unawaited(BrixtaFeedback.action());
+    await BrixtaFeedback.action();
 
     setState(() {
       _loading = true;

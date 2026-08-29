@@ -1,0 +1,39 @@
+BRIXTA QUALITY ASSURANCE INDEX
+==============================
+
+QA-01 — CMS → Flutter Responsibility Contract
+STATUS: PASS
+
+Report:
+results/QA-01-CMS-FLUTTER-CONTRACT.txt
+
+
+QA-02 — Work Inbox / To do / Decisions / Waiting
+STATUS: PASS
+
+Before-fix evidence:
+results/QA-02-WORK-INBOX-BEFORE-FIX.txt
+
+Raw rerun:
+results/QA-02-WORK-INBOX-AFTER-FIX.txt
+
+Analyzer:
+results/QA-02-ANALYZER.txt
+
+Root-cause analysis:
+reports/QA-02-DIAGNOSIS.txt
+
+Final report:
+reports/QA-02-FINAL.txt
+
+
+QA RULE
+=======
+A test failure is evidence.
+
+We first determine whether:
+A. production is wrong
+B. the test is wrong
+C. the contract is ambiguous
+
+We do not modify tests merely to manufacture green output.

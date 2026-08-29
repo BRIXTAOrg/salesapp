@@ -58,7 +58,7 @@ const Map<String, String> _runtimeAliases = <String, String>{
 };
 
 String _runtimeKey(String value) =>
-    value.trim().toLowerCase().replaceAll(RegExp(r'[\s-]+'), '_');
+    value.trim().toLowerCase().replaceAll(RegExp(r'[\\s-]+'), '_');
 String normalizeRuntimeFieldKind(String value) =>
     _runtimeAliases[_runtimeKey(value)] ?? _runtimeKey(value);
 

@@ -1,0 +1,3 @@
+391:  // BRIXTA_RENDER_GRAPH_GUARD_V1
+396:  static const int _maxRenderDepth = 64;
+506:    if (depth >= _maxRenderDepth) {

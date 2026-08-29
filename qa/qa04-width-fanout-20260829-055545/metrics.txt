@@ -1,0 +1,3 @@
+QA04_METRIC case=unique requested=256 elapsed_ms=201
+QA04_METRIC case=unique requested=2048 elapsed_ms=376
+QA04_METRIC case=amplification serialized_blocks=2 requested=10000 rendered=10000 elapsed_ms=4576

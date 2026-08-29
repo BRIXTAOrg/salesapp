@@ -1,0 +1,13 @@
+QA04 RESULT: RESOURCE-GUARD FINDING
+
+The renderer allowed a tiny serialized graph to amplify
+into the full requested Flutter widget count.
+
+Depth protection is working, but width/fan-out remains
+an independent resource exhaustion surface.
+
+DO NOT raise the depth limit.
+
+Next action:
+Add a per-render total node budget / fan-out budget and
+repeat QA04.

@@ -1022,7 +1022,7 @@ class _ResponsibilityTile extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: () async {
-          unawaited(BrixtaFeedback.action());
+          await BrixtaFeedback.action();
           onTap();
         },
         borderRadius: BorderRadius.circular(26),
@@ -1142,7 +1142,7 @@ class _NextCard extends StatelessWidget {
       icon: LucideIcons.circle_play,
       tone: AppDesign.green,
       onTap: () async {
-        unawaited(BrixtaFeedback.action());
+        await BrixtaFeedback.action();
         onTap();
       },
     );
