@@ -110,6 +110,12 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
 
   final Set<String> _uiForceHiddenBlockIds = {};
 
+  // BRIXTA_REPEATABLE_PRESENTATION_RESET_EPOCH_V1
+  //
+  // A delayed completion-animation cleanup must never erase visual effects
+  // belonging to a newer submission.
+  int _repeatablePresentationResetEpoch = 0;
+
   /// Resolve the live Responsibility from the refreshed workspace so an
   /// administrator can publish a changed app definition without requiring an
   /// APK release or a new login. The screen updates after the normal workspace
@@ -236,6 +242,38 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
 
   bool get _isRepeatableRootContext =>
       !_hasConcreteRecordContext && _instanceMode == 'repeatable';
+
+  // BRIXTA_REPEATABLE_PRESENTATION_CONTEXT_V1
+  //
+  // `_records` contains HISTORY.
+  //
+  // That is not automatically the record currently being operated on.
+  //
+  // For a repeatable Responsibility opened from its normal/root entry point,
+  // the employee is creating a NEW instance even when completed historical
+  // records already exist.
+  //
+  // Therefore:
+  //
+  //   history/latest record != active presentation record
+  //
+  // A concrete initialRecordId still represents a real existing record and
+  // must retain its real state for review/delegation/history workflows.
+  Map<String, dynamic>? get _presentationRecord {
+    if (_isRepeatableRootContext) {
+      return null;
+    }
+
+    return _records.isEmpty ? null : _records.first;
+  }
+
+  String? get _presentationState {
+    if (_isRepeatableRootContext) {
+      return _initialState;
+    }
+
+    return latestStatus;
+  }
 
   String? get _initialState {
     final rawConfig = _capability.appDefinition['config'];
@@ -952,6 +990,14 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     final actionKey = (action['key'] ?? 'action').toString();
     if (_submittingActionKey != null) return;
 
+    // BRIXTA_REPEATABLE_CANCEL_OLD_VISUAL_RESET_V1
+    //
+    // If another repeatable action begins before an older completion cleanup
+    // fires, invalidate that old cleanup.
+    if (_isRepeatableRootContext) {
+      _repeatablePresentationResetEpoch += 1;
+    }
+
     setState(() => _submittingActionKey = actionKey);
 
     try {
@@ -1212,6 +1258,16 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
       }
 
       _clearActionFields(selectedKeys);
+
+      // BRIXTA_REPEATABLE_REPOPULATE_INPUTS_V1
+      //
+      // The just-completed record remains in history, while the root screen
+      // immediately becomes the next fresh instance. Re-sample/repopulate
+      // device-known fields such as GPS/date/datetime for that new instance.
+      if (_isRepeatableRootContext) {
+        _autoPopulateFields();
+      }
+
       await AppDatabase.instance.putCache(_cacheKey, _records);
 
       if (!explicitHaptic) {
@@ -1235,6 +1291,15 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
 
       if (widget.controller.isOnline) {
         await _loadRecords();
+      }
+
+      // BRIXTA_REPEATABLE_SCHEDULE_FRESH_PRESENTATION_V1
+      //
+      // _loadRecords() deliberately asks Kernel for recordId=null in the
+      // repeatable root context. Once that fresh projection has arrived,
+      // retire any visual overrides produced by the completed submission.
+      if (_isRepeatableRootContext) {
+        _scheduleRepeatablePresentationReset();
       }
     } finally {
       if (mounted) setState(() => _submittingActionKey = null);
@@ -1307,6 +1372,70 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
         _photos.remove(key);
       }
     });
+  }
+
+  // BRIXTA_REPEATABLE_TRANSIENT_PRESENTATION_RESET_V1
+  //
+  // Pixel presentation effects belong to one execution/instance.
+  //
+  // Without clearing these maps/sets, an effect such as:
+  //
+  //   ui_hide(submit_button)
+  //   ui_show(success_banner)
+  //   ui_animate(completion_card)
+  //
+  // can leak into the NEXT repeatable instance even though the Kernel has
+  // correctly returned to its initial state.
+  //
+  // We wait for the configured completion animation to finish first so the
+  // current authored look/animation is preserved.
+  void _scheduleRepeatablePresentationReset() {
+    if (!_isRepeatableRootContext || !mounted) {
+      return;
+    }
+
+    final hasTransientPresentationState =
+        _uiEffectNonces.isNotEmpty ||
+        _uiEffectAnimationPresets.isNotEmpty ||
+        _uiEffectAnimationDurations.isNotEmpty ||
+        _uiForceVisibleBlockIds.isNotEmpty ||
+        _uiForceHiddenBlockIds.isNotEmpty;
+
+    if (!hasTransientPresentationState) {
+      return;
+    }
+
+    final epoch = ++_repeatablePresentationResetEpoch;
+
+    var maxAnimationMs = 0;
+
+    for (final duration in _uiEffectAnimationDurations.values) {
+      if (duration > maxAnimationMs) {
+        maxAnimationMs = duration;
+      }
+    }
+
+    // Preserve the authored completion effect, but never leave an instance
+    // override around indefinitely.
+    final delayMs = (maxAnimationMs + 180).clamp(650, 2400).toInt();
+
+    unawaited(
+      Future<void>.delayed(Duration(milliseconds: delayMs), () {
+        if (!mounted ||
+            epoch != _repeatablePresentationResetEpoch ||
+            !_isRepeatableRootContext) {
+          return;
+        }
+
+        setState(() {
+          _uiEffectNonces.clear();
+          _uiEffectAnimationPresets.clear();
+          _uiEffectAnimationDurations.clear();
+          _uiForceVisibleBlockIds.clear();
+          _uiForceHiddenBlockIds.clear();
+        });
+      }),
+    );
   }
 
   dynamic _valueForField(Map<String, dynamic> field) {
@@ -1411,8 +1540,12 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
           ? (_visualContractError == null && _uiDocument != null
                 ? BrixtaStacUi(
                     document: _uiDocument!,
-                    record: _records.isEmpty ? null : _records.first,
-                    stateId: latestStatus,
+                    // BRIXTA_REPEATABLE_VISUAL_INSTANCE_BRIDGE_V1
+                    //
+                    // Do not leak the newest completed history record into a
+                    // fresh repeatable instance.
+                    record: _presentationRecord,
+                    stateId: _presentationState,
                     actions: visibleActions,
                     submittingActionKey: _submittingActionKey,
                     effectNonces: _uiEffectNonces,
