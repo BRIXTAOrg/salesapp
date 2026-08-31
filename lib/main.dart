@@ -14,11 +14,10 @@ import 'core/services/sync/sync_transport.dart';
 import 'core/session/app_session_controller.dart';
 import 'firebase_options.dart';
 import 'features/dynamic/presentation/brixta_stac_ui.dart';
+import 'features/dynamic/presentation/builder_preview_app.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   /*
    * BRIXTA_STAC_LOCAL_RUNTIME_V1
@@ -27,6 +26,16 @@ Future<void> main() async {
    * No Stac Cloud account/API is required.
    */
   await Stac.initialize(parsers: const [BrixtaScreenParser()]);
+
+  // BRIXTA_UNIVERSAL_INTEGRATION_V1
+  // CMS live preview runs the actual Flutter/Stac renderer without auth, DB,
+  // Firebase or employee runtime side effects.
+  if (Uri.base.queryParameters['brixtaPreview'] == '1') {
+    runApp(const BrixtaBuilderPreviewApp());
+    return;
+  }
+
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await RemoteConfigService.initialize();
   await AppDatabase.instance.initialize();
   await AppDeviceIdentity.instance.initialize();

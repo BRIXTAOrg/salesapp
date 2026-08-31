@@ -1227,6 +1227,104 @@ class _BrixtaDocumentView extends StatelessWidget {
         );
         break;
 
+      case 'layout.wrap':
+        rendered = Wrap(
+          spacing: _double(config['gap'], 10),
+          runSpacing: _double(config['runGap'], 10),
+          alignment: config['alignment']?.toString() == 'center'
+              ? WrapAlignment.center
+              : config['alignment']?.toString() == 'end'
+              ? WrapAlignment.end
+              : WrapAlignment.start,
+          children: childIds.map((id) {
+            final child = blockMap[id];
+            if (child == null || !runtime.blockVisible(child)) {
+              return const SizedBox.shrink();
+            }
+            return _renderBlock(
+              context,
+              child,
+              blockMap,
+              ancestry: nextAncestry,
+              depth: depth + 1,
+              suppressAnimations: suppressAnimations,
+            );
+          }).toList(),
+        );
+        break;
+
+      case 'layout.grid':
+        final columns = _double(config['columns'], 2).round().clamp(1, 6);
+        final gap = _double(config['gap'], 12);
+        rendered = GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: columns,
+          mainAxisSpacing: gap,
+          crossAxisSpacing: gap,
+          childAspectRatio: _double(config['childAspectRatio'], 1.15),
+          children: childIds.map((id) {
+            final child = blockMap[id];
+            if (child == null || !runtime.blockVisible(child)) {
+              return const SizedBox.shrink();
+            }
+            return _renderBlock(
+              context,
+              child,
+              blockMap,
+              ancestry: nextAncestry,
+              depth: depth + 1,
+              suppressAnimations: suppressAnimations,
+            );
+          }).toList(),
+        );
+        break;
+
+      case 'container.card':
+      case 'container.surface':
+        final children = _children(
+          context,
+          childIds,
+          blockMap,
+          ancestry: nextAncestry,
+          depth: depth + 1,
+          suppressAnimations: suppressAnimations,
+          vertical: true,
+          gap: _double(config['gap'], 12),
+        );
+        final padding = EdgeInsets.all(_double(config['padding'], 16));
+        final radius = BorderRadius.circular(_double(config['radius'], 16));
+        final content = Padding(
+          padding: padding,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            mainAxisSize: MainAxisSize.min,
+            children: children,
+          ),
+        );
+        if (type == 'container.card') {
+          rendered = Card(
+            elevation: _double(config['elevation'], 0),
+            shape: RoundedRectangleBorder(borderRadius: radius),
+            clipBehavior: Clip.antiAlias,
+            child: content,
+          );
+        } else {
+          final scheme = Theme.of(context).colorScheme;
+          rendered = Container(
+            decoration: BoxDecoration(
+              color: _hexColor(config['background']?.toString()) ??
+                  scheme.surfaceContainerLow,
+              borderRadius: radius,
+              border: config['border'] == false
+                  ? null
+                  : Border.all(color: scheme.outlineVariant),
+            ),
+            child: content,
+          );
+        }
+        break;
+
       case 'display.text':
         rendered = _textWidget(
           context,
@@ -1293,6 +1391,66 @@ class _BrixtaDocumentView extends StatelessWidget {
         );
         break;
 
+      case 'display.icon':
+        final alignment = config['alignment']?.toString();
+        rendered = Align(
+          alignment: alignment == 'center'
+              ? Alignment.center
+              : alignment == 'right'
+              ? Alignment.centerRight
+              : Alignment.centerLeft,
+          child: Icon(
+            _iconData(config['name']?.toString()),
+            size: _double(config['size'], 28),
+            color: _hexColor(config['color']?.toString()),
+          ),
+        );
+        break;
+
+      case 'feedback.empty':
+        rendered = Padding(
+          padding: const EdgeInsets.symmetric(vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _iconData(config['icon']?.toString() ?? 'inbox'),
+                size: 34,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                config['title']?.toString() ?? 'Nothing here yet',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              if ((config['message']?.toString() ?? '').isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  config['message'].toString(),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ],
+          ),
+        );
+        break;
+
+      case 'feedback.loading':
+        rendered = Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const CircularProgressIndicator(),
+              const SizedBox(height: 12),
+              Text(config['text']?.toString() ?? 'Loading…'),
+            ],
+          ),
+        );
+        break;
+
       case 'interaction.capture':
         final rawBinding = block['binding'];
 
@@ -1348,27 +1506,42 @@ class _BrixtaDocumentView extends StatelessWidget {
         final busy =
             actionId != null && runtime.submittingActionKey == actionId;
 
-        rendered = SizedBox(
-          width: double.infinity,
-
-          child: FilledButton(
-            onPressed: action == null || busy
-                ? null
-                : () => unawaited(runtime.onRunAction(action!)),
-
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-
-              child: busy
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Text(label),
-            ),
-          ),
+        final style = config['style']?.toString() ?? 'primary';
+        final size = config['size']?.toString() ?? 'large';
+        final verticalPadding = size == 'small' ? 9.0 : size == 'medium' ? 12.0 : 15.0;
+        final child = Padding(
+          padding: EdgeInsets.symmetric(vertical: verticalPadding),
+          child: busy
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(label),
         );
+        final onPressed = action == null || busy
+            ? null
+            : () => unawaited(runtime.onRunAction(action!));
+
+        Widget button;
+        if (style == 'secondary') {
+          button = FilledButton.tonal(onPressed: onPressed, child: child);
+        } else if (style == 'outlined') {
+          button = OutlinedButton(onPressed: onPressed, child: child);
+        } else if (style == 'danger') {
+          button = FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
+            onPressed: onPressed,
+            child: child,
+          );
+        } else {
+          button = FilledButton(onPressed: onPressed, child: child);
+        }
+
+        rendered = SizedBox(width: double.infinity, child: button);
         break;
 
       case 'overlay.banner':
@@ -1757,6 +1930,43 @@ class _BrixtaDocumentView extends StatelessWidget {
 
       default:
         return CrossAxisAlignment.stretch;
+    }
+  }
+
+  static IconData _iconData(String? value) {
+    switch (value) {
+      case 'add':
+        return Icons.add_rounded;
+      case 'alert':
+      case 'warning':
+        return Icons.warning_amber_rounded;
+      case 'camera':
+        return Icons.camera_alt_outlined;
+      case 'check':
+      case 'success':
+        return Icons.check_circle_outline_rounded;
+      case 'close':
+        return Icons.close_rounded;
+      case 'edit':
+        return Icons.edit_outlined;
+      case 'inbox':
+        return Icons.inbox_outlined;
+      case 'info':
+        return Icons.info_outline_rounded;
+      case 'location':
+        return Icons.location_on_outlined;
+      case 'person':
+        return Icons.person_outline_rounded;
+      case 'phone':
+        return Icons.phone_outlined;
+      case 'search':
+        return Icons.search_rounded;
+      case 'star':
+        return Icons.star_outline_rounded;
+      case 'time':
+        return Icons.schedule_rounded;
+      default:
+        return Icons.circle_outlined;
     }
   }
 

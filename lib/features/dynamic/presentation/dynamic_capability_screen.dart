@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -1251,8 +1252,55 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
 
           if (kind == 'haptic') {
             explicitHaptic = true;
-
             await _performPixelHaptic(effect['preset']?.toString() ?? 'light');
+            continue;
+          }
+
+          if (kind == 'device_sound') {
+            final volume =
+                double.tryParse(effect['volume']?.toString() ?? '') ?? 1;
+            unawaited(
+              _performPixelSound(
+                effect['preset']?.toString() ?? 'notice',
+                volume: volume,
+              ),
+            );
+            continue;
+          }
+
+          if (kind == 'device_ring') {
+            final duration =
+                int.tryParse(effect['durationMs']?.toString() ?? '') ?? 3000;
+            unawaited(
+              _performPixelRing(
+                effect['preset']?.toString() ?? 'decision',
+                durationMs: duration,
+              ),
+            );
+            if (effect['vibrate'] != false) {
+              explicitHaptic = true;
+              await HapticFeedback.vibrate();
+            }
+            continue;
+          }
+
+          if (kind == 'device_notification') {
+            final title = effect['title']?.toString().trim() ?? '';
+            final body = effect['body']?.toString().trim() ?? '';
+            final message = [title, body]
+                .where((part) => part.isNotEmpty)
+                .join(' — ');
+            if (message.isNotEmpty) runtimeMessages.add(message);
+
+            final sound = effect['sound']?.toString() ?? 'none';
+            if (sound != 'none') {
+              unawaited(_performPixelSound(sound));
+            }
+            if (effect['vibrate'] == true) {
+              explicitHaptic = true;
+              await HapticFeedback.mediumImpact();
+            }
+            continue;
           }
         }
       }
@@ -1505,6 +1553,55 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
       case 'light':
       default:
         await HapticFeedback.lightImpact();
+    }
+  }
+
+  String _pixelSoundAsset(String preset) {
+    switch (preset) {
+      case 'action':
+        return 'sounds/brixta_action.mp3';
+      case 'decision':
+        return 'sounds/brixta_decision.mp3';
+      case 'select':
+        return 'sounds/brixta_select.mp3';
+      case 'success':
+        return 'sounds/brixta_success.mp3';
+      case 'notice':
+      default:
+        return 'sounds/brixta_notice.mp3';
+    }
+  }
+
+  Future<void> _performPixelSound(String preset, {double volume = 1}) async {
+    final player = AudioPlayer();
+    try {
+      await player.play(
+        AssetSource(_pixelSoundAsset(preset)),
+        volume: volume.clamp(0, 1).toDouble(),
+      );
+      await player.onPlayerComplete.first.timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {},
+      );
+    } finally {
+      await player.dispose();
+    }
+  }
+
+  Future<void> _performPixelRing(
+    String preset, {
+    int durationMs = 3000,
+  }) async {
+    final player = AudioPlayer();
+    try {
+      await player.setReleaseMode(ReleaseMode.loop);
+      await player.play(AssetSource(_pixelSoundAsset(preset)));
+      await Future<void>.delayed(
+        Duration(milliseconds: durationMs.clamp(250, 8000)),
+      );
+      await player.stop();
+    } finally {
+      await player.dispose();
     }
   }
 
