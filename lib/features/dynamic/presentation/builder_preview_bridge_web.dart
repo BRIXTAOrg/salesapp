@@ -41,6 +41,13 @@ class BuilderPreviewBridge {
     );
   }
 
+  void selectBlock(String blockId) {
+    web.window.parent?.postMessage(
+      jsonEncode({'type': 'brixta.preview.select', 'blockId': blockId}).toJS,
+      '*'.toJS,
+    );
+  }
+
   void dispose() {
     _subscription?.cancel();
     _subscription = null;

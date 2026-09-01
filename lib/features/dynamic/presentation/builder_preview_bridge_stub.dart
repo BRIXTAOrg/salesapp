@@ -6,5 +6,6 @@ typedef BuilderPreviewMessageHandler =
 class BuilderPreviewBridge {
   void start(BuilderPreviewMessageHandler handler) {}
   void announceReady() {}
+  void selectBlock(String blockId) {}
   void dispose() {}
 }

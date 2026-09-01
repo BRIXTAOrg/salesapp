@@ -31,6 +31,7 @@ class BrixtaUiRuntime {
     required this.submittingActionKey,
     required this.onRunAction,
     this.onBuildCapture,
+    this.onSelectBlock,
     this.onRefresh,
     this.effectNonces = const {},
     this.effectAnimationPresets = const {},
@@ -45,6 +46,7 @@ class BrixtaUiRuntime {
   final String? submittingActionKey;
   final BrixtaUiRunAction onRunAction;
   final BrixtaUiCaptureBuilder? onBuildCapture;
+  final ValueChanged<String>? onSelectBlock;
   final Future<void> Function()? onRefresh;
 
   final Map<String, int> effectNonces;
@@ -292,6 +294,7 @@ class BrixtaStacUi extends StatelessWidget {
     required this.submittingActionKey,
     required this.onRunAction,
     this.onBuildCapture,
+    this.onSelectBlock,
     this.onRefresh,
     this.effectNonces = const {},
     this.effectAnimationPresets = const {},
@@ -307,6 +310,7 @@ class BrixtaStacUi extends StatelessWidget {
   final String? submittingActionKey;
   final BrixtaUiRunAction onRunAction;
   final BrixtaUiCaptureBuilder? onBuildCapture;
+  final ValueChanged<String>? onSelectBlock;
   final Future<void> Function()? onRefresh;
 
   final Map<String, int> effectNonces;
@@ -352,6 +356,7 @@ class BrixtaStacUi extends StatelessWidget {
       submittingActionKey: submittingActionKey,
       onRunAction: onRunAction,
       onBuildCapture: onBuildCapture,
+      onSelectBlock: onSelectBlock,
       onRefresh: onRefresh,
       effectNonces: effectNonces,
       effectAnimationPresets: effectAnimationPresets,
@@ -1170,6 +1175,88 @@ class _BrixtaDocumentView extends StatelessWidget {
     Widget rendered;
 
     switch (type) {
+      case 'layout.safe_area':
+        rendered = SafeArea(
+          child: Padding(
+            padding: EdgeInsets.all(_double(config['padding'], 0)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: _children(
+                context,
+                childIds,
+                blockMap,
+                ancestry: nextAncestry,
+                depth: depth + 1,
+                suppressAnimations: suppressAnimations,
+                vertical: true,
+                gap: _double(config['gap'], 12),
+              ),
+            ),
+          ),
+        );
+        break;
+
+      case 'navigation.tabs':
+        final visibleChildren = childIds
+            .map((id) => blockMap[id])
+            .whereType<Map<String, dynamic>>()
+            .where(runtime.blockVisible)
+            .toList();
+
+        final rawLabels = config['labels'];
+
+        final labels = rawLabels is List
+            ? rawLabels.map((item) => item.toString()).toList()
+            : <String>[];
+
+        rendered = visibleChildren.isEmpty
+            ? const SizedBox.shrink()
+            : DefaultTabController(
+                length: visibleChildren.length,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TabBar(
+                      isScrollable: visibleChildren.length > 3,
+                      tabs: [
+                        for (
+                          var index = 0;
+                          index < visibleChildren.length;
+                          index += 1
+                        )
+                          Tab(
+                            text: index < labels.length
+                                ? labels[index]
+                                : 'Tab ${index + 1}',
+                          ),
+                      ],
+                    ),
+                    SizedBox(
+                      height: _double(config['height'], 360),
+                      child: TabBarView(
+                        children: visibleChildren
+                            .map(
+                              (child) => SingleChildScrollView(
+                                padding: const EdgeInsets.only(top: 16),
+                                child: _renderBlock(
+                                  context,
+                                  child,
+                                  blockMap,
+                                  ancestry: nextAncestry,
+                                  depth: depth + 1,
+                                  suppressAnimations: suppressAnimations,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+        break;
+
       case 'layout.column':
         rendered = Column(
           crossAxisAlignment: _crossAxis(config['alignment']),
@@ -1304,6 +1391,7 @@ class _BrixtaDocumentView extends StatelessWidget {
         );
         if (type == 'container.card') {
           rendered = Card(
+            color: _hexColor(config['background']?.toString()),
             elevation: _double(config['elevation'], 0),
             shape: RoundedRectangleBorder(borderRadius: radius),
             clipBehavior: Clip.antiAlias,
@@ -1313,7 +1401,8 @@ class _BrixtaDocumentView extends StatelessWidget {
           final scheme = Theme.of(context).colorScheme;
           rendered = Container(
             decoration: BoxDecoration(
-              color: _hexColor(config['background']?.toString()) ??
+              color:
+                  _hexColor(config['background']?.toString()) ??
                   scheme.surfaceContainerLow,
               borderRadius: radius,
               border: config['border'] == false
@@ -1407,6 +1496,71 @@ class _BrixtaDocumentView extends StatelessWidget {
         );
         break;
 
+      case 'display.avatar':
+        final avatarValue = runtime.resolveBinding(block['binding']);
+
+        final avatarSize = _double(config['size'], 52);
+
+        final avatarText = avatarValue?.toString() ?? '';
+
+        rendered = CircleAvatar(
+          radius: avatarSize / 2,
+          backgroundImage: avatarText.startsWith('http')
+              ? NetworkImage(avatarText)
+              : null,
+          child: avatarText.startsWith('http')
+              ? null
+              : Text(
+                  (config['initials']?.toString() ??
+                          (avatarText.isNotEmpty
+                              ? avatarText.substring(0, 1)
+                              : 'A'))
+                      .toUpperCase(),
+                ),
+        );
+        break;
+
+      case 'feedback.success':
+      case 'feedback.error':
+        final success = type == 'feedback.success';
+
+        final scheme = Theme.of(context).colorScheme;
+
+        rendered = Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: (success ? Colors.green : scheme.error).withValues(
+              alpha: 0.08,
+            ),
+            borderRadius: BorderRadius.circular(_double(config['radius'], 18)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                success ? Icons.check_circle_outline : Icons.error_outline,
+                color: success ? Colors.green : scheme.error,
+                size: 34,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                config['title']?.toString() ??
+                    (success ? 'Done' : 'Something went wrong'),
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              if ((config['message']?.toString() ?? '').isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(config['message'].toString(), textAlign: TextAlign.center),
+              ],
+            ],
+          ),
+        );
+        break;
+
       case 'feedback.empty':
         rendered = Padding(
           padding: const EdgeInsets.symmetric(vertical: 24),
@@ -1487,6 +1641,7 @@ class _BrixtaDocumentView extends StatelessWidget {
         break;
 
       case 'interaction.action_button':
+      case 'interaction.icon_button':
         final actionId = block['actionId']?.toString();
 
         Map<String, dynamic>? action;
@@ -1507,41 +1662,67 @@ class _BrixtaDocumentView extends StatelessWidget {
             actionId != null && runtime.submittingActionKey == actionId;
 
         final style = config['style']?.toString() ?? 'primary';
-        final size = config['size']?.toString() ?? 'large';
-        final verticalPadding = size == 'small' ? 9.0 : size == 'medium' ? 12.0 : 15.0;
-        final child = Padding(
-          padding: EdgeInsets.symmetric(vertical: verticalPadding),
-          child: busy
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Text(label),
+
+        final background = _hexColor(config['background']?.toString());
+
+        final foreground = _hexColor(config['foreground']?.toString());
+
+        final radius = _double(config['radius'], 16);
+
+        final height = _double(config['height'], 54);
+
+        final shape = RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(radius),
         );
+
         final onPressed = action == null || busy
             ? null
             : () => unawaited(runtime.onRunAction(action!));
 
+        final Widget child = busy
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : type == 'interaction.icon_button'
+            ? Icon(_iconData(config['icon']?.toString()))
+            : Text(label);
+
         Widget button;
-        if (style == 'secondary') {
-          button = FilledButton.tonal(onPressed: onPressed, child: child);
-        } else if (style == 'outlined') {
-          button = OutlinedButton(onPressed: onPressed, child: child);
-        } else if (style == 'danger') {
-          button = FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-              foregroundColor: Theme.of(context).colorScheme.onError,
+
+        if (style == 'outlined') {
+          button = OutlinedButton(
+            style: OutlinedButton.styleFrom(
+              foregroundColor: foreground,
+              minimumSize: Size(0, height),
+              shape: shape,
             ),
             onPressed: onPressed,
             child: child,
           );
+        } else if (style == 'secondary') {
+          button = FilledButton.tonal(onPressed: onPressed, child: child);
         } else {
-          button = FilledButton(onPressed: onPressed, child: child);
+          button = FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: style == 'danger'
+                  ? (background ?? Theme.of(context).colorScheme.error)
+                  : background,
+              foregroundColor: style == 'danger'
+                  ? (foreground ?? Theme.of(context).colorScheme.onError)
+                  : foreground,
+              minimumSize: Size(0, height),
+              shape: shape,
+            ),
+            onPressed: onPressed,
+            child: child,
+          );
         }
 
-        rendered = SizedBox(width: double.infinity, child: button);
+        rendered = config['width']?.toString() == 'fit'
+            ? Align(alignment: Alignment.centerLeft, child: button)
+            : SizedBox(width: double.infinity, child: button);
         break;
 
       case 'overlay.banner':
@@ -1673,9 +1854,28 @@ class _BrixtaDocumentView extends StatelessWidget {
         rendered = const SizedBox.shrink();
     }
 
+    final marginTop = _double(config['marginTop'], 0);
+
+    final marginBottom = _double(config['marginBottom'], 0);
+
+    final opacity = _double(config['opacity'], 1).clamp(0.0, 1.0);
+
+    Widget styled = Padding(
+      padding: EdgeInsets.only(top: marginTop, bottom: marginBottom),
+      child: Opacity(opacity: opacity, child: rendered),
+    );
+
+    if (runtime.onSelectBlock != null && blockId.isNotEmpty) {
+      styled = Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: (_) => runtime.onSelectBlock?.call(blockId),
+        child: styled,
+      );
+    }
+
     return _animate(
       context,
-      rendered,
+      styled,
       block,
       suppressAnimations: suppressAnimations,
     );
@@ -1768,9 +1968,18 @@ class _BrixtaDocumentView extends StatelessWidget {
             : TextAlign.left,
 
         style: style?.copyWith(
-          fontWeight: size == 'hero' || size == 'large' || size == 'title'
-              ? FontWeight.w800
-              : style.fontWeight,
+          color: _hexColor(config['color']?.toString()),
+          fontWeight: switch (config['weight']?.toString()) {
+            'normal' => FontWeight.w400,
+            'medium' => FontWeight.w500,
+            'semibold' => FontWeight.w600,
+            'bold' => FontWeight.w700,
+            'black' => FontWeight.w900,
+            _ =>
+              size == 'hero' || size == 'large' || size == 'title'
+                  ? FontWeight.w800
+                  : style.fontWeight,
+          },
         ),
       ),
     );

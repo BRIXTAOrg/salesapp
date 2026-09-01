@@ -18,6 +18,7 @@ import '../../../core/services/media/local_photo_store.dart';
 import '../../../core/services/runtime/responsibility_runtime_api.dart';
 import '../../../core/session/app_session_controller.dart';
 import 'brixta_stac_ui.dart';
+import '../runtime/client_pixel_logic.dart';
 
 /// Generic Responsibility app renderer.
 ///
@@ -987,6 +988,135 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     return _records.isEmpty ? null : _records.first;
   }
 
+  Future<void> _applyClientPixelEffects(
+    List<Map<String, dynamic>> effects,
+  ) async {
+    for (final effect in effects) {
+      final kind = effect['kind']?.toString() ?? '';
+
+      if (kind == 'ui_animate') {
+        final target = effect['targetBlockId']?.toString() ?? '';
+
+        if (target.isNotEmpty && mounted) {
+          setState(() {
+            _uiEffectNonces[target] = (_uiEffectNonces[target] ?? 0) + 1;
+
+            final preset = effect['preset']?.toString();
+
+            if (preset != null && preset.isNotEmpty) {
+              _uiEffectAnimationPresets[target] = preset;
+            }
+
+            final duration = int.tryParse(
+              effect['durationMs']?.toString() ?? '',
+            );
+
+            if (duration != null) {
+              _uiEffectAnimationDurations[target] = duration.clamp(50, 10000);
+            }
+          });
+        }
+
+        continue;
+      }
+
+      if (kind == 'ui_show' || kind == 'ui_hide') {
+        final target = effect['targetBlockId']?.toString() ?? '';
+
+        if (target.isNotEmpty && mounted) {
+          setState(() {
+            if (kind == 'ui_show') {
+              _uiForceHiddenBlockIds.remove(target);
+
+              _uiForceVisibleBlockIds.add(target);
+            } else {
+              _uiForceVisibleBlockIds.remove(target);
+
+              _uiForceHiddenBlockIds.add(target);
+            }
+          });
+        }
+
+        continue;
+      }
+
+      if (kind == 'ui_play') {
+        final target = effect['targetBlockId']?.toString() ?? '';
+
+        if (target.isNotEmpty && mounted) {
+          setState(() {
+            _uiEffectNonces[target] = (_uiEffectNonces[target] ?? 0) + 1;
+          });
+        }
+
+        continue;
+      }
+
+      if (kind == 'haptic') {
+        await _performPixelHaptic(effect['preset']?.toString() ?? 'light');
+
+        continue;
+      }
+
+      if (kind == 'device_sound') {
+        unawaited(
+          _performPixelSound(
+            effect['preset']?.toString() ?? 'notice',
+
+            volume: double.tryParse(effect['volume']?.toString() ?? '') ?? 1,
+          ),
+        );
+
+        continue;
+      }
+
+      if (kind == 'device_ring') {
+        unawaited(
+          _performPixelRing(
+            effect['preset']?.toString() ?? 'decision',
+
+            durationMs:
+                int.tryParse(effect['durationMs']?.toString() ?? '') ?? 3000,
+          ),
+        );
+
+        if (effect['vibrate'] != false) {
+          await HapticFeedback.vibrate();
+        }
+
+        continue;
+      }
+
+      if (kind == 'device_notification') {
+        final title = effect['title']?.toString().trim() ?? '';
+
+        final body =
+            effect['body']?.toString().trim() ??
+            effect['message']?.toString().trim() ??
+            '';
+
+        final message = [
+          title,
+          body,
+        ].where((part) => part.isNotEmpty).join(' — ');
+
+        if (message.isNotEmpty && mounted) {
+          _message(message);
+        }
+
+        final sound = effect['sound']?.toString() ?? 'none';
+
+        if (sound != 'none') {
+          unawaited(_performPixelSound(sound));
+        }
+
+        if (effect['vibrate'] == true) {
+          await HapticFeedback.mediumImpact();
+        }
+      }
+    }
+  }
+
   Future<void> _runAction(Map<String, dynamic> action) async {
     final actionKey = (action['key'] ?? 'action').toString();
     if (_submittingActionKey != null) return;
@@ -1096,6 +1226,24 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
 
         'appActionKey': actionKey,
       }..removeWhere((_, value) => value == null);
+
+      final clientPixel = runClientPixelLogic(
+        rawProgram: _appConfig['clientPixelLogic'],
+
+        actionId: actionKey,
+
+        captures: payload,
+
+        stateId: _presentationState,
+      );
+
+      if (clientPixel.effects.isNotEmpty) {
+        await _applyClientPixelEffects(clientPixel.effects);
+      }
+
+      if (clientPixel.executedNodeIds.isNotEmpty) {
+        body['clientExecutedPixelNodeIds'] = clientPixel.executedNodeIds;
+      }
 
       Map<String, dynamic>? response;
 
@@ -1287,9 +1435,10 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
           if (kind == 'device_notification') {
             final title = effect['title']?.toString().trim() ?? '';
             final body = effect['body']?.toString().trim() ?? '';
-            final message = [title, body]
-                .where((part) => part.isNotEmpty)
-                .join(' — ');
+            final message = [
+              title,
+              body,
+            ].where((part) => part.isNotEmpty).join(' — ');
             if (message.isNotEmpty) runtimeMessages.add(message);
 
             final sound = effect['sound']?.toString() ?? 'none';
@@ -1588,10 +1737,7 @@ class _DynamicCapabilityScreenState extends State<DynamicCapabilityScreen> {
     }
   }
 
-  Future<void> _performPixelRing(
-    String preset, {
-    int durationMs = 3000,
-  }) async {
+  Future<void> _performPixelRing(String preset, {int durationMs = 3000}) async {
     final player = AudioPlayer();
     try {
       await player.setReleaseMode(ReleaseMode.loop);

@@ -232,6 +232,7 @@ class _BuilderPreviewScreenState extends State<_BuilderPreviewScreen> {
         submittingActionKey: null,
         onRunAction: _runAction,
         onBuildCapture: _capture,
+        onSelectBlock: _bridge.selectBlock,
       ),
     );
   }
