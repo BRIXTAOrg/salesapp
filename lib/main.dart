@@ -15,6 +15,7 @@ import 'core/session/app_session_controller.dart';
 import 'firebase_options.dart';
 import 'features/dynamic/presentation/brixta_stac_ui.dart';
 import 'features/dynamic/presentation/builder_preview_app.dart';
+import 'features/external/presentation/brixta_external_runtime_app.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,6 +33,20 @@ Future<void> main() async {
   // Firebase or employee runtime side effects.
   if (Uri.base.queryParameters['brixtaPreview'] == '1') {
     runApp(const BrixtaBuilderPreviewApp());
+    return;
+  }
+
+  /*
+   * BRIXTA_EXTERNAL_WEB_RUNTIME_V1
+   *
+   * /r/{tenant}/{token}
+   * /x/{tenant}/{responsibility}
+   *
+   * This runs BEFORE Firebase, local DB, device identity and employee
+   * session initialization.
+   */
+  if (BrixtaExternalRuntimeRoute.matches(Uri.base)) {
+    runApp(const BrixtaExternalRuntimeApp());
     return;
   }
 
