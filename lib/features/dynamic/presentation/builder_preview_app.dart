@@ -130,16 +130,31 @@ class _BuilderPreviewScreenState extends State<_BuilderPreviewScreen> {
       'person_reference',
       'responsibility_reference',
     }.contains(kind)) {
+      final selected = _values[key];
+      final selectedMap = selected is Map
+          ? Map<String, dynamic>.from(selected)
+          : <String, dynamic>{};
+
       return InkWell(
         borderRadius: BorderRadius.circular(12),
-        onTap: () => setState(() => _values[key] = 'preview-selection'),
+        onTap: () => setState(
+          () => _values[key] = {
+            'id': 'preview-record-1',
+            'label': 'Example business record',
+            'data': {'name': 'Example business record'},
+          },
+        ),
         child: InputDecorator(
           decoration: decoration,
           child: Row(
             children: [
               Expanded(
                 child: Text(
-                  _values[key]?.toString() ?? 'Search and select…',
+                  selectedMap.isEmpty
+                      ? 'Search and select…'
+                      : selectedMap['label']?.toString() ??
+                            selectedMap['id']?.toString() ??
+                            'Selected',
                   overflow: TextOverflow.ellipsis,
                 ),
               ),

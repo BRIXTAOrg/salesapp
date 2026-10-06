@@ -537,8 +537,18 @@ class _KernelResponsibilityScreenState extends State<KernelResponsibilityScreen>
   Future<void> _pickReference(Map<String, dynamic> capture) async {
     final id = capture['id']?.toString() ?? '';
     final config = _map(capture['config']);
+    // BRIXTA_BUSINESS_DATA_V2
+    //
+    // Historical builder versions stored the Data Source in config.source,
+    // newer definitions also carry sourceKey explicitly.
+    //
+    // Accept every supported representation so a visually connected
+    // business-data field always resolves on the employee app.
     final sourceKey =
-        (capture['sourceKey'] ?? config['sourceKey'] ?? config['dataSourceKey'])
+        (capture['sourceKey'] ??
+                config['sourceKey'] ??
+                config['dataSourceKey'] ??
+                config['source'])
             ?.toString()
             .trim();
 

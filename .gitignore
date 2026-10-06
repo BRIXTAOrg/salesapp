@@ -46,3 +46,7 @@ app.*.map.json
 
 # BRIXTA patch-script backups (local only)
 /.brixta-backups/
+
+# BRIXTA local patch backups
+*.brixta.bak
+*.phase-*.bak
