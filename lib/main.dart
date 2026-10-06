@@ -1,7 +1,6 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:stac/stac.dart';
-
 import 'app/brixta_app.dart';
 import 'core/config/remote_config_service.dart';
 import 'core/config/tenant_config.dart';

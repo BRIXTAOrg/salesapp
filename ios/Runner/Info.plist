@@ -22,6 +22,14 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Your location is used to check in at sites and show how far away they are.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Your location is used to check in at sites and record field visits during work hours.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>The camera is used to take site and visit photos.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photos are used as evidence for site visits.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

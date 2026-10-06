@@ -198,6 +198,12 @@ class FieldApiException implements Exception {
   final dynamic details;
   final int? statusCode;
 
+  /// BRIXTA_OFFLINE_AUTH_PAUSE_V1: refused because of the sign-in (expired
+  /// token, account switched off) rather than the data itself. Offline
+  /// queues keep such items and send them after the next sign-in instead
+  /// of throwing the work away.
+  bool get isSignInProblem => statusCode == 401 || code == 'ACCOUNT_INACTIVE';
+
   @override
   String toString() => message;
 }

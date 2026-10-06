@@ -11,16 +11,23 @@ class BrixtaPremiumNav extends StatelessWidget {
     super.key,
     required this.selectedIndex,
     required this.onChanged,
+    this.labels,
+    this.icons,
   });
 
   final int selectedIndex;
   final ValueChanged<int> onChanged;
 
+  // BRIXTA_FIELD_APP_V1: the dashboard can add tabs (e.g. SITES).
+  final List<String>? labels;
+  final List<IconData>? icons;
+
   @override
   Widget build(BuildContext context) {
-    const labels = ['HOME', 'WORK', 'ME'];
+    final labels = this.labels ?? const ['HOME', 'WORK', 'ME'];
 
-    final icons = [AppIcons.home, AppIcons.work, AppIcons.profile];
+    final icons =
+        this.icons ?? [AppIcons.home, AppIcons.work, AppIcons.profile];
 
     return SafeArea(
       top: false,

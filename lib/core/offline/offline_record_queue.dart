@@ -322,6 +322,13 @@ class OfflineRecordQueue {
       } on FieldApiException catch (error) {
         final status = error.statusCode ?? 0;
 
+        if (error.isSignInProblem) {
+          // BRIXTA_OFFLINE_AUTH_PAUSE_V1: keep everything for after the
+          // next sign-in instead of deleting unsent work.
+          _backoff.recordTransientFailure();
+          break;
+        }
+
         final permanent =
             status >= 400 && status < 500 && status != 408 && status != 429;
 

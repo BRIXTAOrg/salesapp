@@ -411,7 +411,7 @@ class _ExternalRuntimeScreenState extends State<_ExternalRuntimeScreen> {
       final current = _captureValue(captureKey)?.toString();
 
       return DropdownButtonFormField<String>(
-        value: options.contains(current) ? current : null,
+        initialValue: options.contains(current) ? current : null,
         decoration: InputDecoration(
           labelText: effectiveLabel,
           border: const OutlineInputBorder(),
@@ -442,7 +442,7 @@ class _ExternalRuntimeScreenState extends State<_ExternalRuntimeScreen> {
         final current = _captureValue(captureKey)?.toString();
 
         return DropdownButtonFormField<String>(
-          value: rows.any((row) => row['id']?.toString() == current)
+          initialValue: rows.any((row) => row['id']?.toString() == current)
               ? current
               : null,
           decoration: InputDecoration(
@@ -750,7 +750,7 @@ class _ExternalRuntimeScreenState extends State<_ExternalRuntimeScreen> {
     payload['upiVerification'] = <String, dynamic>{
       'status': stateId,
 
-      if (message != null) 'message': message,
+      'message': ?message,
     };
 
     setState(() {

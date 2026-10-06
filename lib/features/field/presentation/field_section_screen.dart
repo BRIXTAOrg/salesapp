@@ -1,0 +1,1038 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../../../core/config/field_api.dart';
+import '../../../core/database/app_database.dart';
+import '../../../core/design/app_design.dart';
+import '../../../core/design/app_icons.dart';
+import '../../../core/design/brixta_feedback.dart';
+import '../../../core/services/media/local_photo_store.dart';
+import '../../../core/session/app_session_controller.dart';
+import '../data/field_records_api.dart';
+import 'field_signature_pad.dart';
+import 'field_ui.dart';
+
+// BRIXTA_FIELD_APP_V1 — one step of the field workflow, drawn entirely
+// from the list's config. New inputs in the CMS template appear here
+// without an app update.
+//
+// BRIXTA_FIELD_APP_CONTRACT_V2 — questions can be shown only when another
+// answer matches, calculated answers update live, and the new input types
+// (email, time, tick box, rating, signature, info text) are drawn here.
+
+const _textTypes = {'text', 'long_text', 'number', 'currency', 'phone', 'email'};
+final _emailPattern = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]{2,}$');
+
+class FieldSectionScreen extends StatefulWidget {
+  const FieldSectionScreen({
+    super.key,
+    required this.controller,
+    required this.recordId,
+    required this.section,
+    required this.initialValues,
+    this.sitePoint,
+  });
+
+  final AppSessionController controller;
+  final String recordId;
+  final FieldSection section;
+  final Map<String, dynamic> initialValues;
+  final FieldPoint? sitePoint;
+
+  @override
+  State<FieldSectionScreen> createState() => _FieldSectionScreenState();
+}
+
+class _FieldSectionScreenState extends State<FieldSectionScreen> {
+  final Map<String, TextEditingController> _text = {};
+  final Map<String, dynamic> _values = {};
+  final Map<String, String> _errors = {};
+  final ImagePicker _picker = ImagePicker();
+  String? _locatingKey;
+  bool _saving = false;
+
+  List<FieldInput> get _fields => widget.section.fields;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final field in _fields) {
+      final initial = widget.initialValues[field.key];
+      if (_textTypes.contains(field.type)) {
+        _text[field.key] = TextEditingController(
+          text: initial == null ? '' : _plain(initial),
+        );
+      } else if (field.type == 'photos' || field.type == 'multi_choice') {
+        _values[field.key] = initial is List
+            ? initial.map((e) => e.toString()).toList()
+            : <String>[];
+      } else if (field.type == 'checkbox') {
+        _values[field.key] = initial == true;
+      } else if (field.type == 'rating') {
+        final stars = toNumber(initial)?.round();
+        if (stars != null) _values[field.key] = stars;
+      } else if (field.type == 'calculated' || field.type == 'note') {
+        // Worked out live / nothing to store.
+      } else if (initial != null) {
+        _values[field.key] = initial;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    for (final controller in _text.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  String _plain(Object value) {
+    if (value is num) {
+      return value == value.roundToDouble()
+          ? value.toInt().toString()
+          : value.toString();
+    }
+    return value.toString();
+  }
+
+  void _message(String text) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  Object? _valueOf(FieldInput field) {
+    if (_textTypes.contains(field.type)) {
+      final text = _text[field.key]?.text.trim() ?? '';
+      return text.isEmpty ? null : text;
+    }
+    final value = _values[field.key];
+    if (value is List && value.isEmpty) return null;
+    if (value is String && value.trim().isEmpty) return null;
+    return value;
+  }
+
+  /// Which questions are showing right now, and the live calculated
+  /// answers. Earlier steps' answers (initialValues) count too.
+  ({Set<String> visible, Map<String, double?> calculated}) _evaluate() {
+    final current = Map<String, dynamic>.from(widget.initialValues);
+    final visible = <String>{};
+    final calculated = <String, double?>{};
+    for (final field in _fields) {
+      if (!fieldVisible(field.showWhen, current)) {
+        current[field.key] = null;
+        continue;
+      }
+      visible.add(field.key);
+      if (field.type == 'note') continue;
+      if (field.type == 'calculated') {
+        final result = evaluateFormula(
+          field.formula,
+          current,
+          decimals: field.decimals,
+        );
+        calculated[field.key] = result;
+        current[field.key] = result;
+        continue;
+      }
+      current[field.key] = _valueOf(field);
+    }
+    return (visible: visible, calculated: calculated);
+  }
+
+  String? _problemFor(FieldInput field, Object value) {
+    switch (field.type) {
+      case 'number':
+      case 'currency':
+        final number = toNumber(value);
+        if (number == null) return 'Numbers only';
+        if (field.min != null && number < field.min!) {
+          return 'At least ${formatNumber(field.min!)}';
+        }
+        if (field.max != null && number > field.max!) {
+          return 'At most ${formatNumber(field.max!)}';
+        }
+        return null;
+      case 'email':
+        return _emailPattern.hasMatch(value.toString().trim().toLowerCase())
+            ? null
+            : 'Check the email';
+      case 'phone':
+        return value.toString().replaceAll(RegExp(r'\D'), '').length < 6
+            ? 'Too short'
+            : null;
+      default:
+        return null;
+    }
+  }
+
+  Future<void> _save() async {
+    if (_saving) return;
+    FocusScope.of(context).unfocus();
+
+    final shown = _evaluate().visible;
+    final errors = <String, String>{};
+    final values = <String, dynamic>{};
+    for (final field in _fields) {
+      // Info text has no answer; calculated answers are worked out on the
+      // server from the other answers.
+      if (field.type == 'note' || field.type == 'calculated') continue;
+      if (!shown.contains(field.key)) {
+        values[field.key] = null;
+        continue;
+      }
+      if (field.type == 'checkbox') {
+        final ticked = _values[field.key] == true;
+        if (field.required && !ticked) errors[field.key] = 'Tick to confirm';
+        values[field.key] = ticked;
+        continue;
+      }
+      final value = _valueOf(field);
+      if (value == null) {
+        if (field.required) errors[field.key] = 'Needed';
+        values[field.key] = null;
+        continue;
+      }
+      final problem = _problemFor(field, value);
+      if (problem != null) {
+        errors[field.key] = problem;
+        continue;
+      }
+      values[field.key] = value;
+    }
+
+    setState(() {
+      _errors
+        ..clear()
+        ..addAll(errors);
+    });
+    if (errors.isNotEmpty) {
+      unawaited(BrixtaFeedback.notice());
+      _message('Fill in the highlighted answers.');
+      return;
+    }
+
+    final session = widget.controller.session;
+    if (session == null) return;
+    final mutationId = AppDatabase.instance.newId();
+    setState(() => _saving = true);
+    var needsSignIn = false;
+
+    if (widget.controller.isOnline) {
+      try {
+        await FieldRecordsApi(session.accessToken).saveSection(
+          recordId: widget.recordId,
+          sectionKey: widget.section.key,
+          values: values,
+          clientMutationId: mutationId,
+          mediaKeys: _mediaKeys,
+        );
+        unawaited(BrixtaFeedback.success());
+        if (!mounted) return;
+        _message('${widget.section.title} saved.');
+        Navigator.of(context).pop(true);
+        return;
+      } on FieldApiException catch (error) {
+        final status = error.statusCode ?? 0;
+        if (error.isSignInProblem) {
+          // BRIXTA_OFFLINE_AUTH_PAUSE_V1: keep the answers on the phone.
+          needsSignIn = true;
+        } else if (status >= 400 &&
+            status < 500 &&
+            status != 408 &&
+            status != 429) {
+          if (mounted) {
+            setState(() => _saving = false);
+            _message(error.message);
+          }
+          return;
+        }
+      } catch (_) {
+        // Falls through to saving on the phone.
+      }
+    }
+
+    await FieldSectionQueue.enqueue(
+      session: session,
+      recordId: widget.recordId,
+      sectionKey: widget.section.key,
+      values: values,
+      clientMutationId: mutationId,
+      mediaKeys: _mediaKeys,
+    );
+    await widget.controller.markLocalMutationQueued();
+    unawaited(BrixtaFeedback.success());
+    if (!mounted) return;
+    _message(
+      needsSignIn
+          ? 'Saved on this phone. Sign in again to send it.'
+          : 'Saved on this phone. It will send when you have signal.',
+    );
+    Navigator.of(context).pop(true);
+  }
+
+  Set<String> get _mediaKeys =>
+      _fields.where((field) => field.isMedia).map((field) => field.key).toSet();
+
+  Future<void> _addPhoto(FieldInput field) async {
+    final current = List<String>.from(_values[field.key] as List? ?? const []);
+    if (current.length >= field.maxPhotos) {
+      _message('Up to ${field.maxPhotos} photos.');
+      return;
+    }
+    try {
+      final picked = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 76,
+        maxWidth: 1440,
+      );
+      if (picked == null) return;
+      final path = await LocalPhotoStore.persist(
+        picked,
+        prefix: 'field-${widget.section.key}',
+      );
+      if (!mounted) return;
+      setState(() {
+        _values[field.key] = [...current, path];
+        _errors.remove(field.key);
+      });
+    } catch (_) {
+      if (mounted) _message('Could not open the camera.');
+    }
+  }
+
+  Future<void> _removePhoto(FieldInput field, String path) async {
+    final current = List<String>.from(_values[field.key] as List? ?? const []);
+    current.remove(path);
+    setState(() => _values[field.key] = current);
+    if (!path.startsWith('http')) await LocalPhotoStore.delete(path);
+  }
+
+  Future<void> _checkIn(FieldInput field) async {
+    setState(() => _locatingKey = field.key);
+    try {
+      if (!await Geolocator.isLocationServiceEnabled()) {
+        _message('Turn on location to check in.');
+        return;
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        _message('Location permission is needed to check in.');
+        return;
+      }
+      final fix = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 20),
+        ),
+      );
+      if (!mounted) return;
+      setState(() {
+        _values[field.key] = {
+          'lat': fix.latitude,
+          'lng': fix.longitude,
+          'accuracy': fix.accuracy,
+          'capturedAt': DateTime.now().toUtc().toIso8601String(),
+        };
+        _errors.remove(field.key);
+      });
+      unawaited(BrixtaFeedback.success());
+    } catch (_) {
+      if (mounted) _message('Could not get your location. Try again in the open.');
+    } finally {
+      if (mounted) setState(() => _locatingKey = null);
+    }
+  }
+
+  Future<void> _sign(FieldInput field) async {
+    final path = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => FieldSignaturePad(title: field.label),
+      ),
+    );
+    if (path == null || !mounted) return;
+    final previous = _values[field.key]?.toString();
+    setState(() {
+      _values[field.key] = path;
+      _errors.remove(field.key);
+    });
+    if (previous != null && FieldRecordsApi.isLocalFile(previous)) {
+      await LocalPhotoStore.delete(previous);
+    }
+  }
+
+  Future<void> _clearSignature(FieldInput field) async {
+    final previous = _values[field.key]?.toString();
+    setState(() => _values[field.key] = null);
+    if (previous != null && FieldRecordsApi.isLocalFile(previous)) {
+      await LocalPhotoStore.delete(previous);
+    }
+  }
+
+  Future<void> _pickTime(FieldInput field) async {
+    final parts = (_values[field.key]?.toString() ?? '').split(':');
+    final initial = parts.length == 2
+        ? TimeOfDay(
+            hour: int.tryParse(parts[0]) ?? 10,
+            minute: int.tryParse(parts[1]) ?? 0,
+          )
+        : const TimeOfDay(hour: 10, minute: 0);
+    final picked = await showTimePicker(context: context, initialTime: initial);
+    if (picked == null || !mounted) return;
+    setState(() {
+      _values[field.key] =
+          '${picked.hour.toString().padLeft(2, '0')}:'
+          '${picked.minute.toString().padLeft(2, '0')}';
+      _errors.remove(field.key);
+    });
+    unawaited(BrixtaFeedback.selection());
+  }
+
+  Future<void> _pickDate(FieldInput field) async {
+    final current = DateTime.tryParse(_values[field.key]?.toString() ?? '');
+    final now = DateTime.now();
+    final first = DateTime(now.year - 5);
+    final last = DateTime(now.year + 3, 12, 31);
+    final initial = current != null &&
+            !current.isBefore(first) &&
+            !current.isAfter(last)
+        ? current
+        : now.add(const Duration(days: 1));
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: first,
+      lastDate: last,
+    );
+    if (picked != null && mounted) _setDate(field, picked);
+  }
+
+  void _setDate(FieldInput field, DateTime date) {
+    final value =
+        '${date.year.toString().padLeft(4, '0')}-'
+        '${date.month.toString().padLeft(2, '0')}-'
+        '${date.day.toString().padLeft(2, '0')}';
+    setState(() {
+      _values[field.key] = value;
+      _errors.remove(field.key);
+    });
+    unawaited(BrixtaFeedback.selection());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = _evaluate();
+    return Scaffold(
+      appBar: AppBar(title: Text(widget.section.title)),
+      body: ListView(
+        padding: const EdgeInsets.fromLTRB(22, 8, 22, 32),
+        children: [
+          if (widget.section.hint != null) ...[
+            Text(
+              widget.section.hint!,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 22),
+          ],
+          for (final field in _fields)
+            AnimatedSize(
+              duration: const Duration(milliseconds: 220),
+              curve: Curves.easeOutCubic,
+              alignment: Alignment.topCenter,
+              child: !state.visible.contains(field.key)
+                  ? const SizedBox(width: double.infinity)
+                  : Padding(
+                      padding: const EdgeInsets.only(bottom: 26),
+                      child: field.type == 'note'
+                          ? _NoteCard(field: field)
+                          : _Block(
+                              label: field.label,
+                              required: field.required,
+                              help: field.help,
+                              error: _errors[field.key],
+                              child: field.type == 'calculated'
+                                  ? _CalculatedCard(
+                                      field: field,
+                                      value: state.calculated[field.key],
+                                    )
+                                  : _input(field),
+                            ),
+                    ),
+            ),
+        ],
+      ),
+      bottomNavigationBar: SafeArea(
+        minimum: const EdgeInsets.fromLTRB(22, 8, 22, 14),
+        child: FilledButton(
+          onPressed: _saving ? null : _save,
+          child: _saving
+              ? const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: AppDesign.white,
+                  ),
+                )
+              : Text('SAVE ${widget.section.title.toUpperCase()}'),
+        ),
+      ),
+    );
+  }
+
+  Widget _input(FieldInput field) {
+    switch (field.type) {
+      case 'choice':
+        final chosen = _values[field.key]?.toString();
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final option in field.options)
+              FieldPill(
+                label: option,
+                selected: option == chosen,
+                onTap: () {
+                  unawaited(BrixtaFeedback.selection());
+                  setState(() {
+                    _values[field.key] = option == chosen ? null : option;
+                    _errors.remove(field.key);
+                  });
+                },
+              ),
+          ],
+        );
+
+      case 'multi_choice':
+        final picked = List<String>.from(_values[field.key] as List? ?? const []);
+        return Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final option in field.options)
+              FieldPill(
+                label: option,
+                selected: picked.contains(option),
+                onTap: () {
+                  unawaited(BrixtaFeedback.selection());
+                  setState(() {
+                    if (picked.contains(option)) {
+                      picked.remove(option);
+                    } else {
+                      picked.add(option);
+                    }
+                    _values[field.key] = picked;
+                    _errors.remove(field.key);
+                  });
+                },
+              ),
+          ],
+        );
+
+      case 'yes_no':
+        final answer = _values[field.key]?.toString();
+        return Row(
+          children: [
+            for (final option in const ['Yes', 'No']) ...[
+              Expanded(
+                child: FieldPill(
+                  label: option,
+                  selected: option == answer,
+                  onTap: () {
+                    unawaited(BrixtaFeedback.selection());
+                    setState(() {
+                      _values[field.key] = option;
+                      _errors.remove(field.key);
+                    });
+                  },
+                ),
+              ),
+              if (option == 'Yes') const SizedBox(width: 10),
+            ],
+          ],
+        );
+
+      case 'date':
+        final dateValue = _values[field.key]?.toString();
+        final today = DateTime.now();
+        final quick = <String, DateTime>{
+          'Tomorrow': today.add(const Duration(days: 1)),
+          'In 3 days': today.add(const Duration(days: 3)),
+          'Next week': today.add(const Duration(days: 7)),
+        };
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final entry in quick.entries)
+                  FieldPill(
+                    label: entry.key,
+                    selected: false,
+                    onTap: () => _setDate(field, entry.value),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: () => _pickDate(field),
+              icon: Icon(AppIcons.clock, size: 18),
+              label: Text(
+                dateValue == null ? 'PICK A DATE' : formatDay(dateValue).toUpperCase(),
+              ),
+            ),
+          ],
+        );
+
+      case 'photos':
+        final photos = List<String>.from(_values[field.key] as List? ?? const []);
+        return Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: [
+            for (final photo in photos)
+              _PhotoTile(path: photo, onRemove: () => _removePhoto(field, photo)),
+            if (photos.length < field.maxPhotos)
+              InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => _addPhoto(field),
+                child: Container(
+                  width: 92,
+                  height: 92,
+                  decoration: BoxDecoration(
+                    color: AppDesign.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppDesign.faint),
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(AppIcons.camera, size: 22),
+                      const SizedBox(height: 6),
+                      Text(
+                        'ADD PHOTO',
+                        style: AppDesign.mono(
+                          size: 8,
+                          color: AppDesign.ink,
+                          weight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+
+      case 'gps':
+        final gpsValue = _values[field.key];
+        final point = gpsValue is Map ? FieldPoint.fromJson(gpsValue) : null;
+        final accuracy = gpsValue is Map ? (gpsValue['accuracy'] as num?)?.round() : null;
+        double? distance;
+        if (point != null && widget.sitePoint != null) {
+          distance = Geolocator.distanceBetween(
+            widget.sitePoint!.lat,
+            widget.sitePoint!.lng,
+            point.lat,
+            point.lng,
+          );
+        }
+        final locating = _locatingKey == field.key;
+        return FieldCard(
+          color: point == null ? AppDesign.white : AppDesign.softGreen,
+          child: Row(
+            children: [
+              Icon(
+                point == null ? AppIcons.mapPin : AppIcons.check,
+                color: point == null ? AppDesign.ink : AppDesign.greenDark,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      point == null
+                          ? 'Not checked in yet'
+                          : distance != null
+                          ? "You're ${formatDistance(distance)} from the pin"
+                          : 'Location captured',
+                      style: AppDesign.sans(size: 15, weight: FontWeight.w600),
+                    ),
+                    if (accuracy != null)
+                      Text(
+                        'GPS accurate to ±$accuracy m',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                  ],
+                ),
+              ),
+              TextButton(
+                onPressed: locating ? null : () => _checkIn(field),
+                child: locating
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Text(point == null ? 'CHECK IN' : 'AGAIN'),
+              ),
+            ],
+          ),
+        );
+
+      case 'time':
+        final timeValue = _values[field.key]?.toString();
+        return OutlinedButton.icon(
+          onPressed: () => _pickTime(field),
+          icon: Icon(AppIcons.clock, size: 18),
+          label: Text(timeValue ?? 'PICK A TIME'),
+        );
+
+      case 'checkbox':
+        final ticked = _values[field.key] == true;
+        return FieldCard(
+          color: ticked ? AppDesign.softGreen : AppDesign.white,
+          padding: EdgeInsets.zero,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppDesign.radius),
+            onTap: () {
+              unawaited(BrixtaFeedback.selection());
+              setState(() {
+                _values[field.key] = !ticked;
+                _errors.remove(field.key);
+              });
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Row(
+                children: [
+                  Icon(
+                    ticked
+                        ? Icons.check_box_rounded
+                        : Icons.check_box_outline_blank_rounded,
+                    color: ticked ? AppDesign.greenDark : AppDesign.faint,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      ticked ? 'Confirmed' : 'Tap to confirm',
+                      style: AppDesign.sans(size: 15, weight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+
+      case 'rating':
+        final rating = (_values[field.key] as num?)?.toInt() ?? 0;
+        return Row(
+          children: [
+            for (var star = 1; star <= field.stars; star++)
+              Expanded(
+                child: InkResponse(
+                  radius: 26,
+                  onTap: () {
+                    unawaited(BrixtaFeedback.selection());
+                    setState(() {
+                      _values[field.key] = star == rating ? null : star;
+                      _errors.remove(field.key);
+                    });
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Icon(
+                      star <= rating
+                          ? Icons.star_rounded
+                          : Icons.star_border_rounded,
+                      size: field.stars > 6 ? 28 : 36,
+                      color: star <= rating ? AppDesign.amber : AppDesign.faint,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+
+      case 'signature':
+        final signature = _values[field.key]?.toString();
+        if (signature == null || signature.isEmpty) {
+          return OutlinedButton.icon(
+            onPressed: () => _sign(field),
+            icon: const Icon(Icons.gesture_rounded, size: 18),
+            label: const Text('SIGN HERE'),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: Container(
+                height: 140,
+                width: double.infinity,
+                color: AppDesign.white,
+                child: signature.startsWith('http')
+                    ? Image.network(
+                        signature,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) =>
+                            Container(color: AppDesign.softGray),
+                      )
+                    : Image.file(
+                        File(signature),
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) =>
+                            Container(color: AppDesign.softGray),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () => _sign(field),
+                  child: const Text('SIGN AGAIN'),
+                ),
+                TextButton(
+                  onPressed: () => _clearSignature(field),
+                  child: const Text('REMOVE'),
+                ),
+              ],
+            ),
+          ],
+        );
+
+      default:
+        final type = field.type;
+        return TextField(
+          controller: _text[field.key],
+          minLines: type == 'long_text' ? 3 : 1,
+          maxLines: type == 'long_text' ? 6 : 1,
+          keyboardType: type == 'phone'
+              ? TextInputType.phone
+              : type == 'number' || type == 'currency'
+              ? const TextInputType.numberWithOptions(decimal: true)
+              : type == 'long_text'
+              ? TextInputType.multiline
+              : type == 'email'
+              ? TextInputType.emailAddress
+              : TextInputType.text,
+          autocorrect: type != 'email',
+          textCapitalization: type == 'text' || type == 'long_text'
+              ? TextCapitalization.sentences
+              : TextCapitalization.none,
+          // Conditions and calculated answers follow what is typed.
+          onChanged: (_) => setState(() => _errors.remove(field.key)),
+          decoration: InputDecoration(
+            hintText: field.placeholder,
+            prefixText: type == 'currency' ? '${field.unit ?? '₹'} ' : null,
+            suffixText: type != 'currency' ? field.unit : null,
+          ),
+        );
+    }
+  }
+}
+
+class _Block extends StatelessWidget {
+  const _Block({
+    required this.label,
+    required this.required,
+    required this.child,
+    this.error,
+    this.help,
+  });
+
+  final String label;
+  final bool required;
+  final String? error;
+  final String? help;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: AppDesign.sans(size: 17, weight: FontWeight.w700),
+              ),
+            ),
+            if (error != null)
+              Text(
+                error!.toUpperCase(),
+                style: AppDesign.mono(
+                  size: 9,
+                  color: AppDesign.red,
+                  weight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              )
+            else if (required)
+              Text(
+                'REQUIRED',
+                style: AppDesign.mono(size: 8, letterSpacing: 1.2),
+              ),
+          ],
+        ),
+        if (help != null && help!.isNotEmpty) ...[
+          const SizedBox(height: 4),
+          Text(help!, style: Theme.of(context).textTheme.bodySmall),
+        ],
+        const SizedBox(height: 12),
+        child,
+      ],
+    );
+  }
+}
+
+class _NoteCard extends StatelessWidget {
+  const _NoteCard({required this.field});
+
+  final FieldInput field;
+
+  @override
+  Widget build(BuildContext context) {
+    return FieldCard(
+      color: AppDesign.softBlue,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.info_outline_rounded, size: 20, color: Color(0xFF2F4F6B)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  field.label,
+                  style: AppDesign.sans(size: 15, weight: FontWeight.w700),
+                ),
+                if (field.help != null && field.help!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    field.help!,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CalculatedCard extends StatelessWidget {
+  const _CalculatedCard({required this.field, required this.value});
+
+  final FieldInput field;
+  final double? value;
+
+  @override
+  Widget build(BuildContext context) {
+    final currency = field.unit == '₹' || field.unit == r'$';
+    return FieldCard(
+      color: value == null ? AppDesign.softGray : AppDesign.softGreen,
+      child: Row(
+        children: [
+          Icon(
+            Icons.calculate_outlined,
+            color: value == null ? AppDesign.muted : AppDesign.greenDark,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              value == null
+                  ? 'Fills in from your answers'
+                  : formatNumber(value!, unit: field.unit, currency: currency),
+              style: AppDesign.sans(
+                size: value == null ? 14 : 20,
+                weight: FontWeight.w700,
+                color: value == null ? AppDesign.muted : AppDesign.ink,
+              ),
+            ),
+          ),
+          Text(
+            'AUTO',
+            style: AppDesign.mono(size: 8, letterSpacing: 1.2),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PhotoTile extends StatelessWidget {
+  const _PhotoTile({required this.path, required this.onRemove});
+
+  final String path;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final remote = path.startsWith('http');
+    return SizedBox(
+      width: 92,
+      height: 92,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: remote
+                  ? Image.network(
+                      path,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) =>
+                          Container(color: AppDesign.softGray),
+                    )
+                  : Image.file(
+                      File(path),
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, _, _) =>
+                          Container(color: AppDesign.softGray),
+                    ),
+            ),
+          ),
+          Positioned(
+            top: 4,
+            right: 4,
+            child: Material(
+              color: AppDesign.ink.withValues(alpha: .75),
+              shape: const CircleBorder(),
+              child: InkWell(
+                customBorder: const CircleBorder(),
+                onTap: onRemove,
+                child: const Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(Icons.close_rounded, size: 14, color: AppDesign.white),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

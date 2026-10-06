@@ -16,6 +16,8 @@ import '../../../core/services/runtime/responsibility_runtime_api.dart';
 import '../../../core/session/app_session_controller.dart';
 import '../../../core/widgets/runtime_connection_banner.dart';
 import '../../dynamic/presentation/dynamic_capability_screen.dart';
+import '../../field/data/field_records_api.dart';
+import '../../field/presentation/field_sites_tab.dart';
 import '../../tracking/data/native_tracking_repository.dart';
 import '../../tracking/presentation/tracking_controller.dart';
 import 'employee_profile_tab.dart';
@@ -42,6 +44,8 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
   Map<String, Object?>? _workSession;
   bool _loadingWork = true;
   int _tab = 0;
+  // BRIXTA_FIELD_APP_V1: label of the field tab, from the list the office sent.
+  String _fieldTabLabel = 'FIELD';
   bool _reconciling = false;
   String _lastRevision = '';
 
@@ -62,6 +66,8 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
     _lastRevision = widget.controller.workspaceRevision;
 
     tracker = TrackingController(repository: NativeTrackingRepository());
+
+    unawaited(FieldRecordsApi.cachedLists().then(_onFieldListsLoaded));
 
     unawaited(
       tracker
@@ -153,6 +159,12 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
         await OfflineRecordQueue.flush(session.accessToken);
         await OfflineSubmissionQueue.flush(session.accessToken);
         await OfflineAttendanceQueue.flush(session.accessToken);
+        try {
+          await FieldSectionQueue.flush(session);
+          _onFieldListsLoaded(
+            await FieldRecordsApi(session.accessToken).lists(),
+          );
+        } catch (_) {}
         await widget.controller.markLocalMutationQueued();
 
         final response = await ResponsibilityRuntimeApi(
@@ -236,8 +248,12 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
         modules: _modules,
         loadingWork: _loadingWork,
         onRefresh: () => _refreshAll(refreshWorkspace: true),
-        onOpenWork: () => setState(() => _tab = 1),
+        onOpenWork: () => setState(() => _tab = 2),
         onCapabilityTap: _openCapability,
+      ),
+      FieldSitesTab(
+        controller: widget.controller,
+        onListsLoaded: _onFieldListsLoaded,
       ),
       PremiumWorkTab(
         controller: widget.controller,
@@ -271,8 +287,21 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
       bottomNavigationBar: BrixtaPremiumNav(
         selectedIndex: safeTab,
         onChanged: (index) => setState(() => _tab = index),
+        labels: ['HOME', _fieldTabLabel, 'WORK', 'ME'],
+        icons: [AppIcons.home, AppIcons.mapPin, AppIcons.work, AppIcons.profile],
       ),
     );
+  }
+
+  void _onFieldListsLoaded(List<FieldList> lists) {
+    var label = 'FIELD';
+    if (lists.length == 1) {
+      final title = lists.first.title.trim().toUpperCase();
+      if (title.isNotEmpty && title.length <= 8) label = title;
+    }
+    if (mounted && label != _fieldTabLabel) {
+      setState(() => _fieldTabLabel = label);
+    }
   }
 
   void _openCapability(
