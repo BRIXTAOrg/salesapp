@@ -68,6 +68,15 @@ class AppSessionController extends ChangeNotifier {
   DateTime? _lastSyncAt;
   DateTime? _lastWorkspaceRefreshAt;
   String? _runtimeError;
+  String? _signedOutReason;
+
+  /// Why the app signed itself out (expired sign-in, access switched off).
+  /// The login screen shows it once.
+  String? takeSignedOutReason() {
+    final reason = _signedOutReason;
+    _signedOutReason = null;
+    return reason;
+  }
 
   bool get isOnline => connectivity == ConnectivityStateValue.online;
   bool get isOffline => !isOnline;
@@ -207,6 +216,10 @@ class AppSessionController extends ChangeNotifier {
       _runtimeError = null;
       notifyListeners();
       return false;
+    } on FieldApiException catch (error) {
+      _runtimeError = error.toString();
+      if (error.isSignInProblem) await _signOutBecause(error);
+      return false;
     } catch (error) {
       _runtimeError = error.toString();
       return false;
@@ -214,6 +227,18 @@ class AppSessionController extends ChangeNotifier {
       _checkingRevision = false;
       notifyListeners();
     }
+  }
+
+  /// BRIXTA_SESSION_EXPIRY_V1: when the server no longer accepts this
+  /// sign-in (expired, or the account was switched off) stop polling and go
+  /// back to the login screen with a clear reason. Work saved on the phone
+  /// stays queued and is sent after the next sign-in.
+  Future<void> _signOutBecause(FieldApiException error) async {
+    if (session == null) return;
+    _signedOutReason = error.code == 'ACCOUNT_INACTIVE'
+        ? error.message
+        : 'Your sign-in expired. Please sign in again.';
+    await logout();
   }
 
   Future<void> logout() async {

@@ -35,6 +35,8 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   void initState() {
     super.initState();
+    // BRIXTA_SESSION_EXPIRY_V1: explain why the app signed out.
+    _error = widget.controller.takeSignedOutReason();
   }
 
   @override
