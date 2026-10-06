@@ -437,29 +437,7 @@ class _KernelResponsibilityScreenState extends State<KernelResponsibilityScreen>
     }
 
     if (kind == 'gps' || kind == 'location' || kind == 'location_point') {
-      final existing = _values[id];
-
-      if (!_empty(existing)) {
-        return existing;
-      }
-
-      final config = _map(capture['config']);
-      final automatic =
-          config['automatic'] == true ||
-          config['valueSource']?.toString() == 'native_phone' ||
-          config['nativeCapability']?.toString() == 'current_location';
-
-      if (automatic) {
-        final value = await _readCurrentLocation();
-
-        if (value != null) {
-          _values[id] = value;
-        }
-
-        return value;
-      }
-
-      return existing;
+      return _values[id];
     }
 
     if (kind == 'datetime' || kind == 'time') {
@@ -520,24 +498,21 @@ class _KernelResponsibilityScreenState extends State<KernelResponsibilityScreen>
     if (mounted) setState(() => _photos[id] = persisted);
   }
 
-  Future<Map<String, dynamic>?> _readCurrentLocation() async {
+  Future<void> _captureLocation(String id) async {
     final enabled = await Geolocator.isLocationServiceEnabled();
-
     if (!enabled) {
       _message('Turn on location services to continue.');
-      return null;
+      return;
     }
 
     var permission = await Geolocator.checkPermission();
-
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
-
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       _message('Location permission is required.');
-      return null;
+      return;
     }
 
     final fix = await Geolocator.getCurrentPosition(
@@ -547,24 +522,16 @@ class _KernelResponsibilityScreenState extends State<KernelResponsibilityScreen>
       ),
     );
 
-    return {
-      'lat': fix.latitude,
-      'lng': fix.longitude,
-      'accuracy': fix.accuracy,
-      'capturedAt': DateTime.now().toUtc().toIso8601String(),
-    };
-  }
-
-  Future<void> _captureLocation(String id) async {
-    final value = await _readCurrentLocation();
-
-    if (value == null || !mounted) {
-      return;
+    if (mounted) {
+      setState(() {
+        _values[id] = {
+          'lat': fix.latitude,
+          'lng': fix.longitude,
+          'accuracy': fix.accuracy,
+          'capturedAt': DateTime.now().toUtc().toIso8601String(),
+        };
+      });
     }
-
-    setState(() {
-      _values[id] = value;
-    });
   }
 
   Future<void> _pickReference(Map<String, dynamic> capture) async {
