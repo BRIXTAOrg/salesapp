@@ -27,21 +27,6 @@ class FieldSitesTab extends StatefulWidget {
   State<FieldSitesTab> createState() => _FieldSitesTabState();
 }
 
-class _Lens {
-  const _Lens(this.key, this.label);
-
-  final String key;
-  final String label;
-}
-
-const _lenses = [
-  _Lens('mine', 'Mine'),
-  _Lens('todo', 'To visit'),
-  _Lens('active', 'In progress'),
-  _Lens('followups', 'Follow-ups'),
-  _Lens('closed', 'Closed'),
-];
-
 class _FieldSitesTabState extends State<FieldSitesTab> {
   final TextEditingController _search = TextEditingController();
   Timer? _debounce;
@@ -66,6 +51,11 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
     return _lists.isEmpty ? null : _lists.first;
   }
 
+  FieldListExperience get _experience =>
+      _list?.config.experience.list ?? const FieldListExperience();
+
+  List<FieldLens> get _lenses => _experience.lenses;
+
   @override
   void initState() {
     super.initState();
@@ -87,6 +77,9 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
       setState(() {
         _lists = cached;
         _listKey ??= cached.first.key;
+        if (!_lensChosen) {
+          _lens = cached.first.config.experience.list.defaultLens;
+        }
       });
       widget.onListsLoaded?.call(cached);
       await _loadCachedPage();
@@ -153,6 +146,16 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
           _lists = lists;
           if (lists.every((list) => list.key != _listKey)) {
             _listKey = lists.isEmpty ? null : lists.first.key;
+            if (lists.isNotEmpty) {
+              _lens = lists.first.config.experience.list.defaultLens;
+              _lensChosen = false;
+            }
+          } else if (!_lensChosen && lists.isNotEmpty) {
+            final active = lists.firstWhere(
+              (list) => list.key == _listKey,
+              orElse: () => lists.first,
+            );
+            _lens = active.config.experience.list.defaultLens;
           }
           _error = null;
         });
@@ -243,8 +246,11 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
   void _selectList(String key) {
     if (key == _listKey) return;
     unawaited(BrixtaFeedback.selection());
+    final selected = _lists.firstWhere((item) => item.key == key);
     setState(() {
       _listKey = key;
+      _lens = selected.config.experience.list.defaultLens;
+      _lensChosen = false;
       _items = const [];
       _loading = true;
     });
@@ -339,33 +345,35 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
               ),
             ],
             const SizedBox(height: 22),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 22),
-              child: Container(
-                height: 58,
-                decoration: BoxDecoration(
-                  color: AppDesign.white,
-                  borderRadius: BorderRadius.circular(29),
-                  border: Border.all(
-                    color: AppDesign.line.withValues(alpha: .65),
+            if (_experience.search) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                child: Container(
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: AppDesign.white,
+                    borderRadius: BorderRadius.circular(29),
+                    border: Border.all(
+                      color: AppDesign.line.withValues(alpha: .65),
+                    ),
                   ),
-                ),
-                child: TextField(
-                  controller: _search,
-                  textInputAction: TextInputAction.search,
-                  decoration: InputDecoration(
-                    hintText: 'Search $title',
-                    prefixIcon: const Icon(Icons.search_rounded),
-                    filled: false,
-                    border: InputBorder.none,
-                    enabledBorder: InputBorder.none,
-                    focusedBorder: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 18),
+                  child: TextField(
+                    controller: _search,
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: 'Search $title',
+                      prefixIcon: const Icon(Icons.search_rounded),
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 18),
+                    ),
                   ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
+            ],
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -427,29 +435,38 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
       for (final item in _items)
         Padding(
           padding: const EdgeInsets.fromLTRB(22, 0, 22, 12),
-          child: _SiteCard(item: item, onTap: () => _open(item)),
+          child: _SiteCard(
+            item: item,
+            experience: _experience,
+            onTap: () => _open(item),
+          ),
         ),
     ];
   }
 }
 
 class _SiteCard extends StatelessWidget {
-  const _SiteCard({required this.item, required this.onTap});
+  const _SiteCard({
+    required this.item,
+    required this.experience,
+    required this.onTap,
+  });
 
   final FieldRecordSummary item;
+  final FieldListExperience experience;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final distance = formatDistance(item.distanceM);
     final footer = <String>[
-      if (item.assignedToMe)
+      if (experience.showAssignee && item.assignedToMe)
         'Assigned to you'
-      else if (item.assigneeName != null)
+      else if (experience.showAssignee && item.assigneeName != null)
         'Assigned to ${item.assigneeName}',
-      if (item.followUpAt != null && !item.closed)
+      if (experience.showFollowUp && item.followUpAt != null && !item.closed)
         'Follow-up ${formatDay(item.followUpAt)}',
-      if (item.lastVisitAt != null)
+      if (experience.showLastActivity && item.lastVisitAt != null)
         'Last update ${formatWhen(item.lastVisitAt)}'
             '${item.lastVisitBy != null ? ' · ${item.lastVisitBy}' : ''}',
     ];
@@ -473,6 +490,13 @@ class _SiteCard extends StatelessWidget {
                 Row(
                   children: [
                     FieldStageChip(label: item.stageLabel, tone: item.stageTone),
+                    if (item.badgeValue != null && item.badgeValue!.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      FieldStageChip(
+                        label: item.badgeValue!,
+                        tone: item.badgeTone ?? 'neutral',
+                      ),
+                    ],
                     if (item.priority != null) ...[
                       const SizedBox(width: 8),
                       Text(
@@ -486,7 +510,7 @@ class _SiteCard extends StatelessWidget {
                       ),
                     ],
                     const Spacer(),
-                    if (distance.isNotEmpty)
+                    if (experience.showDistance && distance.isNotEmpty)
                       Text(
                         distance,
                         style: AppDesign.sans(
@@ -515,6 +539,19 @@ class _SiteCard extends StatelessWidget {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+                if (item.cardValues.isNotEmpty) ...[
+                  const SizedBox(height: 7),
+                  Text(
+                    item.cardValues.map((item) => item.value).join(' · '),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppDesign.sans(
+                      size: 12,
+                      weight: FontWeight.w600,
+                      color: AppDesign.ink,
+                    ),
                   ),
                 ],
                 if (footer.isNotEmpty) ...[

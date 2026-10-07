@@ -5,7 +5,7 @@ abstract final class ApiConfig {
   // away from it once RemoteConfigService.initialize() actually succeeds.
   static const _compiledDefault = String.fromEnvironment(
     'SALESAPP_API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:8000',
+    defaultValue: 'https://sales-api.brixtahomeserver.site',
   );
 
   static String _baseUrl = _compiledDefault;

@@ -151,6 +151,8 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
     final bundle = _bundle;
     final summary = bundle?.record.summary ?? widget.initial;
     final title = summary?.title ?? 'Site';
+    final experience =
+        bundle?.list.config.experience.detail ?? const FieldDetailExperience();
 
     return Scaffold(
       appBar: AppBar(
@@ -162,30 +164,34 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(22, 8, 22, 48),
           children: [
-            if (_point != null) ...[
+            if (_point != null && experience.showMap) ...[
               _MiniMap(site: _point!, me: widget.origin),
               const SizedBox(height: 18),
             ],
             if (summary != null) _header(context, summary),
-            if (_point != null) ...[
+            if (_point != null &&
+                (experience.showNavigate || experience.showCopyLink)) ...[
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: _navigate,
-                      icon: const Icon(LucideIcons.navigation, size: 18),
-                      label: const Text('NAVIGATE'),
+                  if (experience.showNavigate)
+                    Expanded(
+                      child: FilledButton.icon(
+                        onPressed: _navigate,
+                        icon: const Icon(LucideIcons.navigation, size: 18),
+                        label: const Text('NAVIGATE'),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: _copyLocation,
-                      icon: const Icon(Icons.copy_rounded, size: 18),
-                      label: const Text('COPY LINK'),
+                  if (experience.showNavigate && experience.showCopyLink)
+                    const SizedBox(width: 10),
+                  if (experience.showCopyLink)
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _copyLocation,
+                        icon: const Icon(Icons.copy_rounded, size: 18),
+                        label: const Text('COPY LINK'),
+                      ),
                     ),
-                  ),
                 ],
               ),
             ],
@@ -218,7 +224,7 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
                 ),
                 const SizedBox(height: 10),
               ],
-              if (bundle.record.info.isNotEmpty) ...[
+              if (experience.showImportedInfo && bundle.record.info.isNotEmpty) ...[
                 const SizedBox(height: 22),
                 const FieldEyebrow('From the import'),
                 const SizedBox(height: 12),
@@ -228,7 +234,7 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
                   onToggle: () => setState(() => _showAllInfo = !_showAllInfo),
                 ),
               ],
-              if (bundle.timeline.isNotEmpty) ...[
+              if (experience.showTimeline && bundle.timeline.isNotEmpty) ...[
                 const SizedBox(height: 28),
                 const FieldEyebrow('Timeline'),
                 const SizedBox(height: 14),

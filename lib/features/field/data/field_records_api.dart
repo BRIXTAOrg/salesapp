@@ -165,11 +165,153 @@ class FieldSection {
   final List<FieldInput> fields;
 }
 
+
+class FieldLens {
+  const FieldLens({
+    required this.key,
+    required this.label,
+    required this.kind,
+    this.field,
+    this.values = const [],
+    this.stageKeys = const [],
+  });
+
+  factory FieldLens.fromJson(Map<String, dynamic> json) => FieldLens(
+    key: json['key']?.toString() ?? '',
+    label: json['label']?.toString() ?? '',
+    kind: json['kind']?.toString() ?? 'all',
+    field: json['field']?.toString(),
+    values: _strings(json['values']),
+    stageKeys: _strings(json['stageKeys']),
+  );
+
+  final String key;
+  final String label;
+  final String kind;
+  final String? field;
+  final List<String> values;
+  final List<String> stageKeys;
+}
+
+const defaultFieldLenses = <FieldLens>[
+  FieldLens(key: 'mine', label: 'Mine', kind: 'mine'),
+  FieldLens(key: 'todo', label: 'To visit', kind: 'todo'),
+  FieldLens(key: 'active', label: 'In progress', kind: 'active'),
+  FieldLens(key: 'followups', label: 'Follow-ups', kind: 'followups'),
+  FieldLens(key: 'closed', label: 'Closed', kind: 'closed'),
+];
+
+class FieldListExperience {
+  const FieldListExperience({
+    this.recordScope = 'all',
+    this.search = true,
+    this.defaultLens = 'mine',
+    this.lenses = defaultFieldLenses,
+    this.cardFields = const [],
+    this.badgeField,
+    this.showDistance = true,
+    this.showAssignee = true,
+    this.showFollowUp = true,
+    this.showLastActivity = true,
+    this.sort = 'smart',
+  });
+
+  factory FieldListExperience.fromJson(Map<String, dynamic> json) {
+    final lenses = _maps(json['lenses']).map(FieldLens.fromJson).toList();
+
+    return FieldListExperience(
+      recordScope: json['recordScope']?.toString() ?? 'all',
+      search: json['search'] != false,
+      defaultLens: json['defaultLens']?.toString() ?? 'mine',
+      lenses: lenses.isEmpty ? defaultFieldLenses : lenses,
+      cardFields: _strings(json['cardFields']),
+      badgeField: json['badgeField']?.toString(),
+      showDistance: json['showDistance'] != false,
+      showAssignee: json['showAssignee'] != false,
+      showFollowUp: json['showFollowUp'] != false,
+      showLastActivity: json['showLastActivity'] != false,
+      sort: json['sort']?.toString() ?? 'smart',
+    );
+  }
+
+  final String recordScope;
+  final bool search;
+  final String defaultLens;
+  final List<FieldLens> lenses;
+  final List<String> cardFields;
+  final String? badgeField;
+  final bool showDistance;
+  final bool showAssignee;
+  final bool showFollowUp;
+  final bool showLastActivity;
+  final String sort;
+}
+
+class FieldDetailExperience {
+  const FieldDetailExperience({
+    this.showMap = true,
+    this.showNavigate = true,
+    this.showCopyLink = true,
+    this.showImportedInfo = true,
+    this.showTimeline = true,
+  });
+
+  factory FieldDetailExperience.fromJson(Map<String, dynamic> json) =>
+      FieldDetailExperience(
+        showMap: json['showMap'] != false,
+        showNavigate: json['showNavigate'] != false,
+        showCopyLink: json['showCopyLink'] != false,
+        showImportedInfo: json['showImportedInfo'] != false,
+        showTimeline: json['showTimeline'] != false,
+      );
+
+  final bool showMap;
+  final bool showNavigate;
+  final bool showCopyLink;
+  final bool showImportedInfo;
+  final bool showTimeline;
+}
+
+class FieldExperience {
+  const FieldExperience({
+    this.list = const FieldListExperience(),
+    this.detail = const FieldDetailExperience(),
+  });
+
+  factory FieldExperience.fromJson(Map<String, dynamic> json) =>
+      FieldExperience(
+        list: FieldListExperience.fromJson(_map(json['list'])),
+        detail: FieldDetailExperience.fromJson(_map(json['detail'])),
+      );
+
+  final FieldListExperience list;
+  final FieldDetailExperience detail;
+}
+
+class FieldCardValue {
+  const FieldCardValue({
+    required this.key,
+    required this.label,
+    required this.value,
+  });
+
+  factory FieldCardValue.fromJson(Map<String, dynamic> json) => FieldCardValue(
+    key: json['key']?.toString() ?? '',
+    label: json['label']?.toString() ?? '',
+    value: json['value']?.toString() ?? '',
+  );
+
+  final String key;
+  final String label;
+  final String value;
+}
+
 class FieldListConfig {
   const FieldListConfig({
     required this.title,
     required this.stages,
     required this.sections,
+    required this.experience,
     this.locationField,
   });
 
@@ -179,12 +321,14 @@ class FieldListConfig {
         locationField: json['locationField']?.toString(),
         stages: _maps(json['stages']).map(FieldStage.fromJson).toList(),
         sections: _maps(json['sections']).map(FieldSection.fromJson).toList(),
+        experience: FieldExperience.fromJson(_map(json['experience'])),
       );
 
   final String title;
   final String? locationField;
   final List<FieldStage> stages;
   final List<FieldSection> sections;
+  final FieldExperience experience;
 
   FieldSection? section(String key) {
     for (final section in sections) {
@@ -247,8 +391,11 @@ class FieldRecordSummary {
     required this.stageLabel,
     required this.stageTone,
     required this.closed,
+    required this.cardValues,
     this.key,
     this.priority,
+    this.badgeValue,
+    this.badgeTone,
     this.location,
     this.distanceM,
     this.followUpAt,
@@ -271,6 +418,12 @@ class FieldRecordSummary {
         stageLabel: json['stageLabel']?.toString() ?? 'Not visited',
         stageTone: json['stageTone']?.toString() ?? 'neutral',
         closed: json['closed'] == true,
+        badgeValue: _map(json['badge'])['value']?.toString(),
+        badgeTone: _map(json['badge'])['tone']?.toString(),
+        cardValues: _maps(json['cardValues'])
+            .map(FieldCardValue.fromJson)
+            .where((item) => item.value.isNotEmpty)
+            .toList(),
         followUpAt: json['followUpAt']?.toString(),
         lastVisitAt: json['lastVisitAt']?.toString(),
         lastVisitBy: json['lastVisitBy']?.toString(),
@@ -289,6 +442,9 @@ class FieldRecordSummary {
   final String stageLabel;
   final String stageTone;
   final bool closed;
+  final String? badgeValue;
+  final String? badgeTone;
+  final List<FieldCardValue> cardValues;
   final String? followUpAt;
   final String? lastVisitAt;
   final String? lastVisitBy;
