@@ -1,7 +1,5 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
-
 import 'package:http/http.dart' as http;
 
 import '../../config/api_config.dart';
@@ -13,29 +11,12 @@ import '../../models/auth_session.dart';
 import '../../models/mobile_capability.dart';
 import 'auth_gateway.dart';
 
-final ValueNotifier<List<String>> brixtaAuthDiagnostics =
-    ValueNotifier<List<String>>(<String>[]);
-
-void brixtaAuthDiag(String message) {
-  final now = DateTime.now();
-  final time =
-      '${now.hour.toString().padLeft(2, '0')}:'
-      '${now.minute.toString().padLeft(2, '0')}:'
-      '${now.second.toString().padLeft(2, '0')}';
-
-  final next = <String>[...brixtaAuthDiagnostics.value, '[$time] $message'];
-
-  brixtaAuthDiagnostics.value = next.length > 20
-      ? next.sublist(next.length - 20)
-      : next;
-
-  debugPrint('BRIXTA AUTH: $message');
-}
-
 class BackendAuthGateway implements AuthGateway {
-  BackendAuthGateway({http.Client? client, AppDatabase? database})
-    : _client = client ?? http.Client(),
-      _database = database ?? AppDatabase.instance;
+  BackendAuthGateway({
+    http.Client? client,
+    AppDatabase? database,
+  })  : _client = client ?? http.Client(),
+        _database = database ?? AppDatabase.instance;
 
   static const _cacheKey = 'last_auth_session';
 
@@ -47,84 +28,51 @@ class BackendAuthGateway implements AuthGateway {
 
   @override
   Future<AuthSession> login(LoginRequest request) async {
-    brixtaAuthDiagnostics.value = <String>[];
+    await AppDeviceIdentity.instance.initialize();
 
-    final loginUrl = '${ApiConfig.baseUrl}/api/salesApp/auth/login';
+    final loginResponse = await _client.post(
+      Uri.parse('${ApiConfig.baseUrl}/api/salesApp/auth/login'),
+      headers: {
+        'content-type': 'application/json',
+        ..._runtimeHeaders,
+      },
+      body: jsonEncode({
+        'companyCode': request.tenant.code,
+        'salesmanLoginId': request.identifier.trim(),
+        'password': request.password,
+      }),
+    );
 
-    brixtaAuthDiag('LOGIN PRESSED');
-    brixtaAuthDiag('API: ${ApiConfig.baseUrl}');
-    brixtaAuthDiag('Company: ${request.tenant.code}');
-    brixtaAuthDiag('Employee: ${request.identifier.trim()}');
-
-    try {
-      brixtaAuthDiag('Initializing device identity...');
-      await AppDeviceIdentity.instance.initialize();
-      brixtaAuthDiag('Device identity ready');
-
-      brixtaAuthDiag('POST /api/salesApp/auth/login');
-
-      final loginResponse = await _client.post(
-        Uri.parse(loginUrl),
-        headers: {'content-type': 'application/json', ..._runtimeHeaders},
-        body: jsonEncode({
-          'companyCode': request.tenant.code,
-          'salesmanLoginId': request.identifier.trim(),
-          'password': request.password,
-        }),
+    final loginBody = _decodeMap(loginResponse.body);
+    if (loginResponse.statusCode != 200 || loginBody['success'] != true) {
+      throw AuthException(
+        (loginBody['error'] ?? 'Unable to sign in.').toString(),
       );
-
-      brixtaAuthDiag('Login HTTP ${loginResponse.statusCode}');
-
-      final loginBody = _decodeMap(loginResponse.body);
-
-      if (loginResponse.statusCode != 200 || loginBody['success'] != true) {
-        final message = (loginBody['error'] ?? 'Unable to sign in.').toString();
-        brixtaAuthDiag('LOGIN REJECTED: $message');
-        throw AuthException(message);
-      }
-
-      final token = loginBody['token']?.toString();
-      if (token == null || token.isEmpty) {
-        brixtaAuthDiag('ERROR: login returned no token');
-        throw const AuthException(
-          'Login succeeded but no access token was returned.',
-        );
-      }
-
-      brixtaAuthDiag('Token received');
-      brixtaAuthDiag('GET /api/salesApp/bootstrap');
-
-      final bootstrap = await _fetchBootstrap(token);
-
-      brixtaAuthDiag('Bootstrap received');
-      brixtaAuthDiag('Building workspace session...');
-
-      final session = _buildSession(
-        tenant: request.tenant,
-        token: token,
-        identifier: request.identifier,
-        bootstrap: bootstrap,
-      );
-
-      brixtaAuthDiag('Session built');
-      brixtaAuthDiag('Caching session...');
-
-      await _cacheSession(
-        token: token,
-        identifier: request.identifier.trim(),
-        tenantCode: request.tenant.code,
-        bootstrap: bootstrap,
-      );
-
-      brixtaAuthDiag('LOGIN COMPLETE');
-      return session;
-    } on AuthException catch (error) {
-      brixtaAuthDiag('AUTH ERROR: ${error.message}');
-      rethrow;
-    } catch (error) {
-      brixtaAuthDiag('NETWORK/RUNTIME ERROR: ${error.runtimeType}: $error');
-      throw AuthException('DIAGNOSTIC: ${error.runtimeType}: $error');
     }
+
+    final token = loginBody['token']?.toString();
+    if (token == null || token.isEmpty) {
+      throw const AuthException(
+        'Login succeeded but no access token was returned.',
+      );
+    }
+
+    final bootstrap = await _fetchBootstrap(token);
+    final session = _buildSession(
+      tenant: request.tenant,
+      token: token,
+      identifier: request.identifier,
+      bootstrap: bootstrap,
+    );
+
+    await _cacheSession(
+      token: token,
+      identifier: request.identifier.trim(),
+      tenantCode: request.tenant.code,
+      bootstrap: bootstrap,
+    );
+
+    return session;
   }
 
   @override
@@ -168,9 +116,7 @@ class BackendAuthGateway implements AuthGateway {
     try {
       return _buildSession(
         tenant: tenant.copyWith(
-          code: tenantCode == null || tenantCode.isEmpty
-              ? tenant.code
-              : tenantCode,
+          code: tenantCode == null || tenantCode.isEmpty ? tenant.code : tenantCode,
         ),
         token: token,
         identifier: identifier,
@@ -184,19 +130,13 @@ class BackendAuthGateway implements AuthGateway {
   Future<Map<String, dynamic>> _fetchBootstrap(String token) async {
     await AppDeviceIdentity.instance.initialize();
 
-    late final http.Response response;
-
-    try {
-      response = await _client.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/salesApp/bootstrap'),
-        headers: {'authorization': 'Bearer $token', ..._runtimeHeaders},
-      );
-    } catch (error) {
-      brixtaAuthDiag('BOOTSTRAP NETWORK ERROR: ${error.runtimeType}: $error');
-      rethrow;
-    }
-
-    brixtaAuthDiag('Bootstrap HTTP ${response.statusCode}');
+    final response = await _client.get(
+      Uri.parse('${ApiConfig.baseUrl}/api/salesApp/bootstrap'),
+      headers: {
+        'authorization': 'Bearer $token',
+        ..._runtimeHeaders,
+      },
+    );
 
     final body = _decodeMap(response.body);
     if (response.statusCode != 200 || body['success'] != true) {
@@ -264,18 +204,21 @@ class BackendAuthGateway implements AuthGateway {
             (user['employeeCode'] ?? user['salesmanLoginId'] ?? identifier)
                 .toString(),
         name: (user['name'] ?? user['displayName'] ?? identifier).toString(),
-        designation: (user['designation'] ?? user['role'] ?? 'Employee')
-            .toString(),
+        designation:
+            (user['designation'] ?? user['role'] ?? 'Employee').toString(),
         department: user['department']?.toString(),
-        roles: [if (user['role'] is String) user['role'] as String],
+        roles: [
+          if (user['role'] is String) user['role'] as String,
+        ],
       ),
       permissions: permissions,
       modules: [
         if (responsibilitiesRaw is List)
           ...responsibilitiesRaw.whereType<Map>().map(
-            (item) =>
-                MobileCapability.fromJson(Map<String, dynamic>.from(item)),
-          ),
+                (item) => MobileCapability.fromJson(
+                  Map<String, dynamic>.from(item),
+                ),
+              ),
       ],
       workspaceRevision: sync['workspaceRevision']?.toString() ?? '',
       syncConfig: sync,
@@ -284,20 +227,19 @@ class BackendAuthGateway implements AuthGateway {
       readyActions: readyActions,
       blockedActions: _mapList(bootstrap['blockedActions']),
       pendingApprovals: _mapList(bootstrap['pendingApprovals']),
-      generatedAt: DateTime.tryParse(
-        bootstrap['generatedAt']?.toString() ?? '',
-      ),
+      generatedAt: DateTime.tryParse(bootstrap['generatedAt']?.toString() ?? ''),
     );
   }
 
-  static Map<String, dynamic> _map(dynamic value) =>
-      value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
+  static Map<String, dynamic> _map(dynamic value) => value is Map
+      ? Map<String, dynamic>.from(value)
+      : <String, dynamic>{};
 
   static List<Map<String, dynamic>> _mapList(dynamic value) => value is List
       ? value
-            .whereType<Map>()
-            .map((item) => Map<String, dynamic>.from(item))
-            .toList()
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList()
       : <Map<String, dynamic>>[];
 
   Map<String, dynamic> _decodeMap(String body) {

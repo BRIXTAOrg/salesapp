@@ -13,25 +13,6 @@ import '../../models/auth_session.dart';
 import '../../models/mobile_capability.dart';
 import 'auth_gateway.dart';
 
-final ValueNotifier<List<String>> brixtaAuthDiagnostics =
-    ValueNotifier<List<String>>(<String>[]);
-
-void brixtaAuthDiag(String message) {
-  final now = DateTime.now();
-  final time =
-      '${now.hour.toString().padLeft(2, '0')}:'
-      '${now.minute.toString().padLeft(2, '0')}:'
-      '${now.second.toString().padLeft(2, '0')}';
-
-  final next = <String>[...brixtaAuthDiagnostics.value, '[$time] $message'];
-
-  brixtaAuthDiagnostics.value = next.length > 20
-      ? next.sublist(next.length - 20)
-      : next;
-
-  debugPrint('BRIXTA AUTH: $message');
-}
-
 class BackendAuthGateway implements AuthGateway {
   BackendAuthGateway({http.Client? client, AppDatabase? database})
     : _client = client ?? http.Client(),
@@ -47,84 +28,56 @@ class BackendAuthGateway implements AuthGateway {
 
   @override
   Future<AuthSession> login(LoginRequest request) async {
-    brixtaAuthDiagnostics.value = <String>[];
+    await AppDeviceIdentity.instance.initialize();
 
-    final loginUrl = '${ApiConfig.baseUrl}/api/salesApp/auth/login';
+    debugPrint(
+      'BRIXTA LOGIN URL: ${ApiConfig.baseUrl}/api/salesApp/auth/login',
+    );
 
-    brixtaAuthDiag('LOGIN PRESSED');
-    brixtaAuthDiag('API: ${ApiConfig.baseUrl}');
-    brixtaAuthDiag('Company: ${request.tenant.code}');
-    brixtaAuthDiag('Employee: ${request.identifier.trim()}');
+    debugPrint(
+      'BRIXTA LOGIN URL: ${ApiConfig.baseUrl}/api/salesApp/auth/login',
+    );
 
-    try {
-      brixtaAuthDiag('Initializing device identity...');
-      await AppDeviceIdentity.instance.initialize();
-      brixtaAuthDiag('Device identity ready');
+    final loginResponse = await _client.post(
+      Uri.parse('${ApiConfig.baseUrl}/api/salesApp/auth/login'),
+      headers: {'content-type': 'application/json', ..._runtimeHeaders},
+      body: jsonEncode({
+        'companyCode': request.tenant.code,
+        'salesmanLoginId': request.identifier.trim(),
+        'password': request.password,
+      }),
+    );
 
-      brixtaAuthDiag('POST /api/salesApp/auth/login');
-
-      final loginResponse = await _client.post(
-        Uri.parse(loginUrl),
-        headers: {'content-type': 'application/json', ..._runtimeHeaders},
-        body: jsonEncode({
-          'companyCode': request.tenant.code,
-          'salesmanLoginId': request.identifier.trim(),
-          'password': request.password,
-        }),
+    final loginBody = _decodeMap(loginResponse.body);
+    if (loginResponse.statusCode != 200 || loginBody['success'] != true) {
+      throw AuthException(
+        (loginBody['error'] ?? 'Unable to sign in.').toString(),
       );
-
-      brixtaAuthDiag('Login HTTP ${loginResponse.statusCode}');
-
-      final loginBody = _decodeMap(loginResponse.body);
-
-      if (loginResponse.statusCode != 200 || loginBody['success'] != true) {
-        final message = (loginBody['error'] ?? 'Unable to sign in.').toString();
-        brixtaAuthDiag('LOGIN REJECTED: $message');
-        throw AuthException(message);
-      }
-
-      final token = loginBody['token']?.toString();
-      if (token == null || token.isEmpty) {
-        brixtaAuthDiag('ERROR: login returned no token');
-        throw const AuthException(
-          'Login succeeded but no access token was returned.',
-        );
-      }
-
-      brixtaAuthDiag('Token received');
-      brixtaAuthDiag('GET /api/salesApp/bootstrap');
-
-      final bootstrap = await _fetchBootstrap(token);
-
-      brixtaAuthDiag('Bootstrap received');
-      brixtaAuthDiag('Building workspace session...');
-
-      final session = _buildSession(
-        tenant: request.tenant,
-        token: token,
-        identifier: request.identifier,
-        bootstrap: bootstrap,
-      );
-
-      brixtaAuthDiag('Session built');
-      brixtaAuthDiag('Caching session...');
-
-      await _cacheSession(
-        token: token,
-        identifier: request.identifier.trim(),
-        tenantCode: request.tenant.code,
-        bootstrap: bootstrap,
-      );
-
-      brixtaAuthDiag('LOGIN COMPLETE');
-      return session;
-    } on AuthException catch (error) {
-      brixtaAuthDiag('AUTH ERROR: ${error.message}');
-      rethrow;
-    } catch (error) {
-      brixtaAuthDiag('NETWORK/RUNTIME ERROR: ${error.runtimeType}: $error');
-      throw AuthException('DIAGNOSTIC: ${error.runtimeType}: $error');
     }
+
+    final token = loginBody['token']?.toString();
+    if (token == null || token.isEmpty) {
+      throw const AuthException(
+        'Login succeeded but no access token was returned.',
+      );
+    }
+
+    final bootstrap = await _fetchBootstrap(token);
+    final session = _buildSession(
+      tenant: request.tenant,
+      token: token,
+      identifier: request.identifier,
+      bootstrap: bootstrap,
+    );
+
+    await _cacheSession(
+      token: token,
+      identifier: request.identifier.trim(),
+      tenantCode: request.tenant.code,
+      bootstrap: bootstrap,
+    );
+
+    return session;
   }
 
   @override
@@ -184,19 +137,10 @@ class BackendAuthGateway implements AuthGateway {
   Future<Map<String, dynamic>> _fetchBootstrap(String token) async {
     await AppDeviceIdentity.instance.initialize();
 
-    late final http.Response response;
-
-    try {
-      response = await _client.get(
-        Uri.parse('${ApiConfig.baseUrl}/api/salesApp/bootstrap'),
-        headers: {'authorization': 'Bearer $token', ..._runtimeHeaders},
-      );
-    } catch (error) {
-      brixtaAuthDiag('BOOTSTRAP NETWORK ERROR: ${error.runtimeType}: $error');
-      rethrow;
-    }
-
-    brixtaAuthDiag('Bootstrap HTTP ${response.statusCode}');
+    final response = await _client.get(
+      Uri.parse('${ApiConfig.baseUrl}/api/salesApp/bootstrap'),
+      headers: {'authorization': 'Bearer $token', ..._runtimeHeaders},
+    );
 
     final body = _decodeMap(response.body);
     if (response.statusCode != 200 || body['success'] != true) {

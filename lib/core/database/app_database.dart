@@ -20,7 +20,7 @@ class AppDatabase {
 
     _db = await openDatabase(
       'salesapp.db',
-      version: 4,
+      version: 5,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
@@ -29,6 +29,7 @@ class AppDatabase {
         await _createTrackingTable(db);
         await _createCacheTable(db);
         await _createOfflineQueueTables(db);
+        await _createOfflineQueueConflictTables(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -40,6 +41,9 @@ class AppDatabase {
 
         if (oldVersion < 4) {
           await _createOfflineQueueTables(db);
+        }
+        if (oldVersion < 5) {
+          await _createOfflineQueueConflictTables(db);
         }
       },
     );
@@ -182,6 +186,28 @@ class AppDatabase {
     ''');
   }
 
+  // BRIXTA_FIELD_CONFLICT_INBOX_V1 — isolated evidence, never silently discarded.
+  Future<void> _createOfflineQueueConflictTables(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS offline_queue_conflicts (
+        id TEXT PRIMARY KEY,
+        queue_name TEXT NOT NULL,
+        scope TEXT NOT NULL,
+        path TEXT,
+        payload_json TEXT NOT NULL,
+        client_mutation_id TEXT,
+        reason TEXT NOT NULL,
+        status_code INTEGER,
+        quarantined_at TEXT NOT NULL,
+        reviewed_at TEXT
+      )
+    ''');
+    await db.execute(
+      'CREATE INDEX IF NOT EXISTS idx_offline_queue_conflicts_scope '
+      'ON offline_queue_conflicts(queue_name, scope, quarantined_at)',
+    );
+  }
+
   Future<void> _createCacheTable(DatabaseExecutor db) async {
     await db.execute('''
       CREATE TABLE IF NOT EXISTS app_cache (
@@ -293,6 +319,79 @@ class AppDatabase {
       'offline_queue_items',
       where: 'id IN ($placeholders)',
       whereArgs: values,
+    );
+  }
+
+  // Move one failed submission atomically into the on-device review inbox.
+  // Neither captured answers nor local photos are modified or deleted.
+  Future<void> quarantineOfflineQueueItem({
+    required String id,
+    required String queueName,
+    required String scope,
+    required String reason,
+    int? statusCode,
+  }) async {
+    await db.transaction((txn) async {
+      final rows = await txn.query(
+        'offline_queue_items',
+        where: 'id = ? AND queue_name = ? AND scope = ?',
+        whereArgs: [id, queueName, scope],
+        limit: 1,
+      );
+      if (rows.isEmpty) return;
+      final row = rows.single;
+      await txn.insert('offline_queue_conflicts', {
+        'id': id,
+        'queue_name': queueName,
+        'scope': scope,
+        'path': row['path'],
+        'payload_json': row['payload_json'],
+        'client_mutation_id': row['client_mutation_id'],
+        'reason': reason,
+        'status_code': statusCode,
+        'quarantined_at': DateTime.now().toUtc().toIso8601String(),
+        'reviewed_at': null,
+      }, conflictAlgorithm: ConflictAlgorithm.abort);
+      await txn.delete(
+        'offline_queue_items',
+        where: 'id = ? AND queue_name = ? AND scope = ?',
+        whereArgs: [id, queueName, scope],
+      );
+    });
+  }
+
+  Future<int> offlineQueueConflictCount({
+    required String queueName,
+    required String scope,
+  }) async {
+    final rows = await db.rawQuery(
+      'SELECT COUNT(*) FROM offline_queue_conflicts '
+      'WHERE queue_name = ? AND scope = ?',
+      [queueName, scope],
+    );
+    return Sqflite.firstIntValue(rows) ?? 0;
+  }
+
+  Future<List<Map<String, Object?>>> offlineQueueConflicts({
+    required String queueName,
+    required String scope,
+  }) => db.query(
+    'offline_queue_conflicts',
+    where: 'queue_name = ? AND scope = ?',
+    whereArgs: [queueName, scope],
+    orderBy: 'quarantined_at DESC',
+    limit: 200,
+  );
+
+  Future<void> markOfflineQueueConflictReviewed({
+    required String id,
+    required String scope,
+  }) async {
+    await db.update(
+      'offline_queue_conflicts',
+      {'reviewed_at': DateTime.now().toUtc().toIso8601String()},
+      where: 'id = ? AND scope = ?',
+      whereArgs: [id, scope],
     );
   }
 

@@ -52,14 +52,6 @@ abstract final class RemoteConfigService {
     }
 
     final fetchedUrl = remoteConfig.getString(_baseUrlKey);
-
-    // BRIXTA_API_PIN_V1
-    // Production API is currently pinned to the compiled URL.
-    // Keep fetching Remote Config, but do not allow a stale/malformed
-    // remote value to redirect the mobile runtime.
-    debugPrint(
-      'BRIXTA REMOTE API IGNORED: $fetchedUrl; '
-      'using ${ApiConfig.baseUrl}',
-    );
+    ApiConfig.updateBaseUrl(fetchedUrl);
   }
 }

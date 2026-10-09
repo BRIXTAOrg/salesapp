@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import '../../../core/design/app_design.dart';
 import '../../../core/design/brixta_feedback.dart';
 import '../../../core/services/auth/auth_gateway.dart';
-import '../../../core/services/auth/backend_auth_gateway.dart';
 import '../../../core/session/app_session_controller.dart';
 import '../../../core/widgets/tenant_logo.dart';
 
@@ -203,37 +202,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           validator: (value) => value == null || value.isEmpty
                               ? 'Enter your password'
                               : null,
-                        ),
-
-                        const SizedBox(height: 18),
-
-                        ValueListenableBuilder<List<String>>(
-                          valueListenable: brixtaAuthDiagnostics,
-                          builder: (context, lines, _) {
-                            return Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: Colors.black,
-                                borderRadius: BorderRadius.circular(
-                                  AppDesign.radius,
-                                ),
-                              ),
-                              child: SelectableText(
-                                lines.isEmpty
-                                    ? 'BRIXTA NETWORK DIAGNOSTICS\n'
-                                          'Waiting for login...'
-                                    : 'BRIXTA NETWORK DIAGNOSTICS\n\n'
-                                          '${lines.join('\n')}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  height: 1.45,
-                                  fontFamily: 'monospace',
-                                ),
-                              ),
-                            );
-                          },
                         ),
 
                         if (_error != null) ...[

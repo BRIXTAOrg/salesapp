@@ -35,7 +35,7 @@ class EmployeeDashboardScreen extends StatefulWidget {
 }
 
 class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, RestorationMixin {
   late final TrackingController tracker;
 
   List<Map<String, dynamic>> _readyWork = const [];
@@ -43,11 +43,34 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
   List<Map<String, dynamic>> _approvals = const [];
   Map<String, Object?>? _workSession;
   bool _loadingWork = true;
-  int _tab = 0;
+  // System-managed restoration: keep only the selected tab.
+  final RestorableInt _tab = RestorableInt(0);
+
+  @override
+  String? get restorationId => 'employee_dashboard';
+
+  @override
+  void restoreState(RestorationBucket? oldBucket, bool initialRestore) {
+    registerForRestoration(_tab, 'selected_tab');
+  }
+
   // BRIXTA_FIELD_APP_V1: label of the field tab, from the list the office sent.
   String _fieldTabLabel = 'FIELD';
   bool _reconciling = false;
   String _lastRevision = '';
+
+  // BRIXTA_FAST_UI_V1
+  // Rebuild only when information visible to the dashboard changes.
+  String _lastUiSignature = '';
+  bool _lastOnline = false;
+  Object? _lastSessionIdentity;
+
+  String get _uiSignature {
+    final c = widget.controller;
+    return '${c.isOnline}|${c.pendingChanges}|'
+        '${c.isActivelySyncing}|${c.refreshingWorkspace}|'
+        '${c.workspaceRevision}|${c.runtimeError}|${c.lastSyncLabel}';
+  }
 
   List<MobileCapability> get _modules =>
       widget.controller.session?.modules ?? const [];
@@ -64,6 +87,9 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
     WidgetsBinding.instance.addObserver(this);
     widget.controller.addListener(_onControllerChanged);
     _lastRevision = widget.controller.workspaceRevision;
+    _lastUiSignature = _uiSignature;
+    _lastOnline = widget.controller.isOnline;
+    _lastSessionIdentity = widget.controller.session;
 
     tracker = TrackingController(repository: NativeTrackingRepository());
 
@@ -81,6 +107,7 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
     WidgetsBinding.instance.removeObserver(this);
     widget.controller.removeListener(_onControllerChanged);
     tracker.dispose();
+    _tab.dispose();
 
     unawaited(BrixtaFeedback.shutdown());
 
@@ -96,13 +123,31 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
 
   void _onControllerChanged() {
     if (!mounted) return;
-    final revision = widget.controller.workspaceRevision;
-    if (revision.isNotEmpty && revision != _lastRevision) {
+
+    final c = widget.controller;
+    final revision = c.workspaceRevision;
+    final revisionChanged = revision.isNotEmpty && revision != _lastRevision;
+    final onlineChanged = c.isOnline != _lastOnline;
+    final sessionChanged = !identical(_lastSessionIdentity, c.session);
+
+    if (revisionChanged) {
       _lastRevision = revision;
       unawaited(_loadWork());
     }
-    setState(() {});
-    unawaited(_reconcileTracking());
+
+    final signature = _uiSignature;
+    if (signature != _lastUiSignature || sessionChanged) {
+      _lastUiSignature = signature;
+      setState(() {});
+    }
+
+    _lastOnline = c.isOnline;
+    _lastSessionIdentity = c.session;
+
+    // Tracking reconciliation is unnecessary for routine sync ticks.
+    if (onlineChanged || sessionChanged || revisionChanged) {
+      unawaited(_reconcileTracking());
+    }
   }
 
   Future<void> _refreshAll({bool refreshWorkspace = false}) async {
@@ -248,7 +293,7 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
         modules: _modules,
         loadingWork: _loadingWork,
         onRefresh: () => _refreshAll(refreshWorkspace: true),
-        onOpenWork: () => setState(() => _tab = 2),
+        onOpenWork: () => setState(() => _tab.value = 2),
         onCapabilityTap: _openCapability,
       ),
       FieldSitesTab(
@@ -275,7 +320,9 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
       ),
     ];
 
-    final safeTab = _tab >= 0 && _tab < screens.length ? _tab : 0;
+    final safeTab = _tab.value >= 0 && _tab.value < screens.length
+        ? _tab.value
+        : 0;
 
     return Scaffold(
       // BRIXTA_PREMIUM_FLOATING_SHELL_V2
@@ -286,9 +333,14 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
       body: screens[safeTab],
       bottomNavigationBar: BrixtaPremiumNav(
         selectedIndex: safeTab,
-        onChanged: (index) => setState(() => _tab = index),
+        onChanged: (index) => setState(() => _tab.value = index),
         labels: ['HOME', _fieldTabLabel, 'WORK', 'ME'],
-        icons: [AppIcons.home, AppIcons.mapPin, AppIcons.work, AppIcons.profile],
+        icons: [
+          AppIcons.home,
+          AppIcons.mapPin,
+          AppIcons.work,
+          AppIcons.profile,
+        ],
       ),
     );
   }

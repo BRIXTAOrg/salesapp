@@ -23,8 +23,11 @@ class FieldApi {
     required this.accessToken,
     http.Client? client,
     Duration requestTimeout = defaultRequestTimeout,
-  }) : _client = client ?? http.Client(),
+  }) : _client = client ?? _sharedClient,
        _requestTimeout = requestTimeout;
+
+  // BRIXTA_LOW_RAM_V1: shared process-lifetime connection pool.
+  static final http.Client _sharedClient = http.Client();
 
   final String accessToken;
   final http.Client _client;

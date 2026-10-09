@@ -165,7 +165,6 @@ class FieldSection {
   final List<FieldInput> fields;
 }
 
-
 class FieldLens {
   const FieldLens({
     required this.key,
@@ -312,12 +311,14 @@ class FieldListConfig {
     required this.stages,
     required this.sections,
     required this.experience,
+    this.version = 0,
     this.locationField,
   });
 
   factory FieldListConfig.fromJson(Map<String, dynamic> json) =>
       FieldListConfig(
         title: json['title']?.toString() ?? 'Field',
+        version: (json['version'] as num?)?.toInt() ?? 0,
         locationField: json['locationField']?.toString(),
         stages: _maps(json['stages']).map(FieldStage.fromJson).toList(),
         sections: _maps(json['sections']).map(FieldSection.fromJson).toList(),
@@ -325,6 +326,7 @@ class FieldListConfig {
       );
 
   final String title;
+  final int version;
   final String? locationField;
   final List<FieldStage> stages;
   final List<FieldSection> sections;
@@ -472,6 +474,7 @@ class FieldRecordDetail {
     required this.sections,
     required this.values,
     required this.info,
+    this.progressEpoch = 0,
   });
 
   factory FieldRecordDetail.fromJson(Map<String, dynamic> json) {
@@ -488,6 +491,7 @@ class FieldRecordDetail {
     });
     return FieldRecordDetail(
       summary: FieldRecordSummary.fromJson(json),
+      progressEpoch: (json['progressEpoch'] as num?)?.toInt() ?? 0,
       sections: sections,
       values: _map(json['values']),
       info: _maps(json['info'])
@@ -503,6 +507,8 @@ class FieldRecordDetail {
   }
 
   final FieldRecordSummary summary;
+  // BRIXTA_FIELD_SYNC_GENERATION_V1
+  final int progressEpoch;
   final Map<String, FieldSectionDone> sections;
   final Map<String, dynamic> values;
   final List<FieldInfoItem> info;
@@ -542,7 +548,9 @@ class FieldRecordBundle {
     return FieldRecordBundle(
       list: FieldList.fromJson({...list, 'counts': const {}, 'total': 0}),
       record: FieldRecordDetail.fromJson(_map(json['record'])),
-      timeline: _maps(json['timeline']).map(FieldTimelineItem.fromJson).toList(),
+      timeline: _maps(
+        json['timeline'],
+      ).map(FieldTimelineItem.fromJson).toList(),
     );
   }
 
@@ -574,7 +582,8 @@ class FieldRecordPage {
 
 /// Thin client + phone cache for the field endpoints.
 class FieldRecordsApi {
-  FieldRecordsApi(String accessToken) : _api = FieldApi(accessToken: accessToken);
+  FieldRecordsApi(String accessToken)
+    : _api = FieldApi(accessToken: accessToken);
 
   final FieldApi _api;
 
@@ -653,13 +662,20 @@ class FieldRecordsApi {
     required String sectionKey,
     required Map<String, dynamic> values,
     required String clientMutationId,
+    required int appVersion,
+    required int progressEpoch,
     Set<String>? mediaKeys,
   }) async {
     final ready = await uploadLocalMedia(values, mediaKeys: mediaKeys);
     await _api.postJson(
       '/api/salesApp/field/records/${Uri.encodeComponent(recordId)}'
       '/sections/${Uri.encodeComponent(sectionKey)}',
-      {'values': ready, 'clientMutationId': clientMutationId},
+      {
+        'values': ready,
+        'clientMutationId': clientMutationId,
+        'appVersion': appVersion,
+        'progressEpoch': progressEpoch,
+      },
     );
     await deleteLocalMedia(values, mediaKeys: mediaKeys);
   }
@@ -738,6 +754,8 @@ abstract final class FieldSectionQueue {
     required String sectionKey,
     required Map<String, dynamic> values,
     required String clientMutationId,
+    required int appVersion,
+    required int progressEpoch,
     Set<String> mediaKeys = const {},
   }) async {
     await AppDatabase.instance.enqueueOfflineQueueItem(
@@ -750,14 +768,19 @@ abstract final class FieldSectionQueue {
         'sectionKey': sectionKey,
         'values': values,
         'clientMutationId': clientMutationId,
+        'appVersion': appVersion,
+        'progressEpoch': progressEpoch,
         'mediaKeys': mediaKeys.toList(),
       },
       clientMutationId: clientMutationId,
     );
   }
 
-  static Future<int> pending(AuthSession session) =>
-      AppDatabase.instance.offlineQueueCount(
+  static Future<int> pending(AuthSession session) => AppDatabase.instance
+      .offlineQueueCount(queueName: queueName, scope: scopeFor(session));
+
+  static Future<int> conflicts(AuthSession session) =>
+      AppDatabase.instance.offlineQueueConflictCount(
         queueName: queueName,
         scope: scopeFor(session),
       );
@@ -783,7 +806,13 @@ abstract final class FieldSectionQueue {
           jsonDecode(row['payload_json']?.toString() ?? '{}') as Map,
         );
       } catch (_) {
-        done.add(id);
+        // BRIXTA_FIELD_CONFLICT_INBOX_V1 — malformed JSON is evidence too.
+        await AppDatabase.instance.quarantineOfflineQueueItem(
+          id: id,
+          queueName: queueName,
+          scope: scope,
+          reason: 'Offline submission could not be decoded.',
+        );
         continue;
       }
 
@@ -798,6 +827,8 @@ abstract final class FieldSectionQueue {
           sectionKey: payload['sectionKey'].toString(),
           values: values,
           clientMutationId: payload['clientMutationId'].toString(),
+          appVersion: (payload['appVersion'] as num?)?.toInt() ?? 0,
+          progressEpoch: (payload['progressEpoch'] as num?)?.toInt() ?? 0,
           mediaKeys: mediaKeys,
         );
         done.add(id);
@@ -808,11 +839,15 @@ abstract final class FieldSectionQueue {
         }
         final status = error.statusCode ?? 0;
         if (status >= 400 && status < 500 && status != 408 && status != 429) {
-          // The server refused this save (record removed, step locked,
-          // invalid value). Retrying will never succeed, so drop it and
-          // free the photos it was holding on the phone.
-          done.add(id);
-          await FieldRecordsApi.deleteLocalMedia(values, mediaKeys: mediaKeys);
+          // BRIXTA_FIELD_CONFLICT_INBOX_V1 — protect rejected answers and
+          // photos (including 409) and continue unrelated offline saves.
+          await AppDatabase.instance.quarantineOfflineQueueItem(
+            id: id,
+            queueName: queueName,
+            scope: scope,
+            reason: error.message,
+            statusCode: status,
+          );
           continue;
         }
         break;

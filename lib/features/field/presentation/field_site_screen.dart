@@ -139,6 +139,8 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
           recordId: widget.recordId,
           section: section,
           initialValues: record.values,
+          appVersion: _bundle!.list.config.version,
+          progressEpoch: record.progressEpoch,
           sitePoint: record.summary.location,
         ),
       ),

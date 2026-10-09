@@ -507,8 +507,9 @@ class _KernelResponsibilityScreenState extends State<KernelResponsibilityScreen>
   Future<void> _takePhoto(String id) async {
     final picked = await _picker.pickImage(
       source: ImageSource.camera,
-      imageQuality: 78,
+      imageQuality: 70,
       maxWidth: 1440,
+      maxHeight: 1440,
     );
     if (picked == null) return;
 

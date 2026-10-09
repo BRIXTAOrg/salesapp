@@ -41,8 +41,6 @@ class FieldSectionScreen extends StatefulWidget {
     required this.recordId,
     required this.section,
     required this.initialValues,
-    required this.appVersion,
-    required this.progressEpoch,
     this.sitePoint,
   });
 
@@ -50,8 +48,6 @@ class FieldSectionScreen extends StatefulWidget {
   final String recordId;
   final FieldSection section;
   final Map<String, dynamic> initialValues;
-  final int appVersion;
-  final int progressEpoch;
   final FieldPoint? sitePoint;
 
   @override
@@ -352,8 +348,6 @@ class _FieldSectionScreenState extends State<FieldSectionScreen>
           sectionKey: widget.section.key,
           values: values,
           clientMutationId: mutationId,
-          appVersion: widget.appVersion,
-          progressEpoch: widget.progressEpoch,
           mediaKeys: _mediaKeys,
         );
         await _discardDraft();
@@ -388,8 +382,6 @@ class _FieldSectionScreenState extends State<FieldSectionScreen>
       sectionKey: widget.section.key,
       values: values,
       clientMutationId: mutationId,
-      appVersion: widget.appVersion,
-      progressEpoch: widget.progressEpoch,
       mediaKeys: _mediaKeys,
     );
     await _discardDraft();
@@ -476,9 +468,8 @@ class _FieldSectionScreenState extends State<FieldSectionScreen>
       });
       unawaited(BrixtaFeedback.success());
     } catch (_) {
-      if (mounted) {
+      if (mounted)
         _message('Could not get your location. Try again in the open.');
-      }
     } finally {
       if (mounted) _draftSetState(() => _locatingKey = null);
     }
