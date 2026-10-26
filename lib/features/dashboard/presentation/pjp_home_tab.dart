@@ -140,49 +140,20 @@ class _PjpHomeTabState extends State<PjpHomeTab> {
     final complete = stops.where((x) => x['doneAt'] != null).length;
     final taskCount = stops.where((x) => x['type'] == 'task').length;
     final siteCount = stops.length - taskCount;
-    final hour = DateTime.now().hour;
-    final greeting = hour < 12 ? 'GOOD MORNING' : hour < 17 ? 'GOOD AFTERNOON' : 'GOOD EVENING';
     final employeeName = widget.controller.session?.user.name.trim() ?? '';
     final designation = widget.controller.session?.user.designation.trim() ?? '';
-    final names = employeeName.split(RegExp(r'\s+')).where((part) => part.isNotEmpty).toList();
-    final initials = names.isEmpty ? 'BR' :
-        (names.first.substring(0, 1) + (names.length > 1 ? names.last.substring(0, 1) : '')).toUpperCase();
     final dateLabel = MaterialLocalizations.of(context).formatMediumDate(DateTime.now());
     return SafeArea(child: RefreshIndicator(
       onRefresh: _load,
       child: ListView(padding: const EdgeInsets.fromLTRB(24, 24, 24, 150), children: [
-        // BRIXTA_HOME_GREETING_V3: independently show the employee's name,
-        // even before the office publishes a PJP for today.
-        if (_plan?['homeGreetingEnabled'] != false) ...[
-          Row(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(_plan?['homeGreetingStyle'] == 'hello' ? 'HELLO' : greeting,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  fontWeight: FontWeight.w800, letterSpacing: 2.4)),
-              const SizedBox(height: 9),
-              Text(employeeName.isEmpty ? 'Your day' : employeeName,
-                maxLines: 2, overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.headlineLarge?.copyWith(
-                  fontSize: 36, fontWeight: FontWeight.w800, height: 1.08,
-                  letterSpacing: -1.15)),
-              if (designation.isNotEmpty) ...[
-                const SizedBox(height: 7),
-                Text(designation, style: theme.textTheme.bodySmall),
-              ],
-            ])),
-            const SizedBox(width: 12),
-            CircleAvatar(radius: 27, backgroundColor: const Color(0xFF1D2321),
-              child: Text(initials, style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.w800, fontSize: 16))),
-          ]),
-          const SizedBox(height: 26),
-        ],
-        Text(_plan?['homeTitle']?.toString() ?? "TODAY'S JOURNEY",
-          style: theme.textTheme.labelMedium?.copyWith(letterSpacing: 2.1)),
-        const SizedBox(height: 8),
-        Text(dateLabel, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-        const SizedBox(height: 8),
-        Text(_cached ? 'Saved copy · reconnect to update progress' : 'Published PJP · pull down to refresh', style: theme.textTheme.bodyMedium),
+        // BRIXTA_PJP_EXPERIENCE_V5: branded, CMS-configurable employee Home.
+        _JourneyHero(
+          plan: _plan,
+          employeeName: employeeName,
+          designation: designation,
+          dateLabel: dateLabel,
+          stops: stops,
+        ),
         const SizedBox(height: 22),
         if (_loading) const LinearProgressIndicator(),
         if (_error != null) Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text(_error!, style: theme.textTheme.bodyMedium)),
@@ -248,4 +219,145 @@ class _Counter extends StatelessWidget {
       Text(label, style: Theme.of(context).textTheme.labelSmall),
     ]),
   );
+}
+
+
+// BRIXTA_PJP_EXPERIENCE_V5: versioned, CMS-controlled mobile Home art direction.
+// All content is sourced from the authenticated employee or published PJP snapshot.
+class _JourneyHero extends StatelessWidget {
+  const _JourneyHero({
+    required this.plan,
+    required this.employeeName,
+    required this.designation,
+    required this.dateLabel,
+    required this.stops,
+  });
+
+  final Map<String, dynamic>? plan;
+  final String employeeName;
+  final String designation;
+  final String dateLabel;
+  final List<Map<String, dynamic>> stops;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = plan?['homeHeroStyle']?.toString() ?? 'aurora';
+    final light = style == 'minimal';
+    const forest = Color(0xFF1E3431);
+    const paper = Color(0xFFF7F7F3);
+    final textColor = light ? const Color(0xFF1D2321) : Colors.white;
+    final subtitleColor = light ? const Color(0xFF66716D) : const Color(0xFFE0E5E2);
+    final today = DateTime.now();
+    final greeting = plan?['homeGreetingStyle'] == 'hello'
+        ? 'HELLO'
+        : today.hour < 12 ? 'GOOD MORNING' : today.hour < 17 ? 'GOOD AFTERNOON' : 'GOOD EVENING';
+    final rawName = employeeName.trim();
+    final names = rawName.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+    final initials = names.isEmpty ? 'BR' :
+        '${names.first.substring(0, 1)}${names.length > 1 ? names.last.substring(0, 1) : ''}'.toUpperCase();
+    final next = stops.cast<Map<String, dynamic>?>().firstWhere(
+      (s) => s?['doneAt'] == null, orElse: () => null);
+    final completedTasks = stops.where((s) => s['type'] == 'task' && s['doneAt'] != null).length;
+    final tasks = stops.where((s) => s['type'] == 'task').length;
+    final eyebrow = plan?['homeHeroEyebrow']?.toString().trim();
+    final subline = plan?['homeHeroSubline']?.toString().trim();
+    final showName = plan?['homeGreetingEnabled'] != false;
+    final showNext = plan?['homeShowNextStop'] != false;
+    final gradient = style == 'ink'
+        ? const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: [Color(0xFF49635D), Color(0xFF233D36), Color(0xFF172421)])
+        : style == 'minimal'
+            ? const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+                colors: [paper, Color(0xFFEDEFEA)])
+            : const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+                stops: [0.0, 0.44, 0.78, 1],
+                colors: [Color(0xFFA4C8D8), Color(0xFFC3A9A2), Color(0xFFBD866B), Color(0xFF172122)]);
+
+    return Container(
+      constraints: const BoxConstraints(minHeight: 330),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        gradient: gradient,
+        border: Border.all(color: light ? const Color(0xFFDDE2DA) : const Color(0x225F6F6C)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(children: [
+        if (style == 'aurora') ...[
+          Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(
+            gradient: RadialGradient(center: const Alignment(0.25, 0.16), radius: 0.94,
+              colors: [const Color(0xEFFF9D3E), const Color(0x80FBC57D), Colors.transparent],
+              stops: const [0, 0.48, 1]),
+          ))),
+          Positioned.fill(child: DecoratedBox(decoration: BoxDecoration(
+            gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter,
+              stops: const [0, 0.36, 0.77, 1],
+              colors: [const Color(0x330A1820), const Color(0x220A1820), const Color(0x88101618), const Color(0xF1172022)]),
+          ))),
+        ],
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 23, 24, 24),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Expanded(child: Text(
+                (eyebrow?.isNotEmpty ?? false) ? eyebrow!.toUpperCase() : 'YOUR DAY, YOUR ROUTE',
+                maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: textColor, fontSize: 10, fontWeight: FontWeight.w800, letterSpacing: 2.6),
+              )),
+              const SizedBox(width: 9),
+              Container(
+                width: 45, height: 45,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: light ? forest : const Color(0xEEFFFFFF)),
+                child: Text(initials, style: TextStyle(color: light ? Colors.white : forest, fontWeight: FontWeight.w800, fontSize: 13)),
+              ),
+            ]),
+            const SizedBox(height: 76),
+            if (showName) ...[
+              Text(greeting, style: TextStyle(color: textColor.withValues(alpha: .83),
+                fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 2.5)),
+              const SizedBox(height: 9),
+              Text(rawName.isEmpty ? 'Welcome.' : '$rawName.', maxLines: 2, overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: textColor, fontSize: 39, fontWeight: FontWeight.w800,
+                  letterSpacing: -1.45, height: 1.04)),
+              if (designation.isNotEmpty) ...[
+                const SizedBox(height: 5),
+                Text(designation, style: TextStyle(color: subtitleColor, fontSize: 12)),
+              ],
+            ] else ...[
+              Text(plan?['homeTitle']?.toString() ?? "Today's journey", maxLines: 2,
+                style: TextStyle(color: textColor, fontSize: 29, fontWeight: FontWeight.w800)),
+            ],
+            const SizedBox(height: 12),
+            Text((subline?.isNotEmpty ?? false) ? subline! : 'A good day starts with a clear plan.',
+              style: TextStyle(color: subtitleColor, fontSize: 13, height: 1.4)),
+            const SizedBox(height: 19),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                color: light ? const Color(0xFFF0F2EE) : const Color(0x260A1514),
+                border: Border.all(color: light ? const Color(0xFFDDE1DA) : const Color(0x33FFFFFF)),
+              ),
+              child: Row(children: [
+                Icon(next == null ? Icons.check_circle_outline : Icons.route_outlined,
+                  color: textColor, size: 20),
+                const SizedBox(width: 10),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(showNext && next != null ? 'FIRST PLANNED STOP  ·  $dateLabel' : 'TODAY  ·  $dateLabel',
+                    style: TextStyle(color: subtitleColor, fontSize: 10,
+                      letterSpacing: 1.1, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  Text(showNext && next != null ? (next['title']?.toString() ?? 'Next visit')
+                      : '$completedTasks of $tasks tasks complete',
+                    maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: textColor, fontWeight: FontWeight.w700, fontSize: 14)),
+                ])),
+                Icon(Icons.arrow_forward_rounded, size: 18, color: textColor),
+              ]),
+            ),
+          ]),
+        ),
+      ]),
+    );
+  }
 }
