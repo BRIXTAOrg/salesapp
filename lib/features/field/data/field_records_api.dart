@@ -1,3 +1,4 @@
+// BRIXTA_SITE_ADMIN_V5
 import 'dart:convert';
 import 'dart:io';
 
@@ -395,6 +396,7 @@ class FieldRecordSummary {
     required this.closed,
     required this.cardValues,
     this.key,
+    this.siteName,
     this.priority,
     this.badgeValue,
     this.badgeTone,
@@ -411,6 +413,7 @@ class FieldRecordSummary {
       FieldRecordSummary(
         id: json['id']?.toString() ?? '',
         key: json['key']?.toString(),
+        siteName: json['siteName']?.toString(),
         title: json['title']?.toString() ?? 'Untitled',
         subtitle: _strings(json['subtitle']),
         priority: _double(json['priority']),
@@ -435,6 +438,7 @@ class FieldRecordSummary {
 
   final String id;
   final String? key;
+  final String? siteName;
   final String title;
   final List<String> subtitle;
   final double? priority;
@@ -657,6 +661,12 @@ class FieldRecordsApi {
     return FieldRecordBundle.fromJson(Map<String, dynamic>.from(cached));
   }
 
+  // BRIXTA_SITE_ADMIN_V5: online, audited naming; never modifies the BX key.
+  Future<void> renameSite({required String recordId, required String siteName}) async {
+    await _api.postJson('/api/salesApp/field/records/${Uri.encodeComponent(recordId)}/name',
+      {'siteName': siteName});
+  }
+
   Future<void> saveSection({
     required String recordId,
     required String sectionKey,
@@ -665,6 +675,7 @@ class FieldRecordsApi {
     required int appVersion,
     required int progressEpoch,
     Set<String>? mediaKeys,
+    String? siteName,
   }) async {
     final ready = await uploadLocalMedia(values, mediaKeys: mediaKeys);
     await _api.postJson(
@@ -675,6 +686,7 @@ class FieldRecordsApi {
         'clientMutationId': clientMutationId,
         'appVersion': appVersion,
         'progressEpoch': progressEpoch,
+        if (siteName != null) 'siteName': siteName,
       },
     );
     await deleteLocalMedia(values, mediaKeys: mediaKeys);
@@ -757,6 +769,7 @@ abstract final class FieldSectionQueue {
     required int appVersion,
     required int progressEpoch,
     Set<String> mediaKeys = const {},
+    String? siteName,
   }) async {
     await AppDatabase.instance.enqueueOfflineQueueItem(
       queueName: queueName,
@@ -771,6 +784,7 @@ abstract final class FieldSectionQueue {
         'appVersion': appVersion,
         'progressEpoch': progressEpoch,
         'mediaKeys': mediaKeys.toList(),
+        if (siteName != null) 'siteName': siteName,
       },
       clientMutationId: clientMutationId,
     );
@@ -830,6 +844,7 @@ abstract final class FieldSectionQueue {
           appVersion: (payload['appVersion'] as num?)?.toInt() ?? 0,
           progressEpoch: (payload['progressEpoch'] as num?)?.toInt() ?? 0,
           mediaKeys: mediaKeys,
+          siteName: payload['siteName']?.toString(),
         );
         done.add(id);
       } on FieldApiException catch (error) {

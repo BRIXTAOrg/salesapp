@@ -1,3 +1,4 @@
+// BRIXTA_SITE_ADMIN_V5
 import 'dart:async';
 import 'dart:io';
 
@@ -41,6 +42,7 @@ class FieldSectionScreen extends StatefulWidget {
     required this.recordId,
     required this.section,
     required this.initialValues,
+    this.initialSiteName,
     required this.appVersion,
     required this.progressEpoch,
     this.sitePoint,
@@ -50,6 +52,7 @@ class FieldSectionScreen extends StatefulWidget {
   final String recordId;
   final FieldSection section;
   final Map<String, dynamic> initialValues;
+  final String? initialSiteName;
   final int appVersion;
   final int progressEpoch;
   final FieldPoint? sitePoint;
@@ -61,6 +64,9 @@ class FieldSectionScreen extends StatefulWidget {
 class _FieldSectionScreenState extends State<FieldSectionScreen>
     with WidgetsBindingObserver {
   final Map<String, TextEditingController> _text = {};
+  final TextEditingController _siteName = TextEditingController();
+  bool get _isVerify => RegExp(r'^(verify|verification)(_|$)',caseSensitive:false)
+      .hasMatch(widget.section.key) || widget.section.title.toLowerCase().startsWith('verify');
   final Map<String, dynamic> _values = {};
   final Map<String, String> _errors = {};
   final ImagePicker _picker = ImagePicker();
@@ -102,6 +108,7 @@ class _FieldSectionScreenState extends State<FieldSectionScreen>
     final snapshot = <String, dynamic>{
       'savedAt': DateTime.now().toUtc().toIso8601String(),
       'values': Map<String, dynamic>.from(_values),
+      if (_isVerify) 'siteName': _siteName.text,
       'text': <String, String>{
         for (final entry in _text.entries) entry.key: entry.value.text,
       },
@@ -139,6 +146,9 @@ class _FieldSectionScreenState extends State<FieldSectionScreen>
               }
             }
           }
+          if (_isVerify && stored['siteName'] is String) {
+            _siteName.text = stored['siteName'] as String;
+          }
           if (texts is Map) {
             for (final entry in _text.entries) {
               final saved = texts[entry.key];
@@ -174,6 +184,8 @@ class _FieldSectionScreenState extends State<FieldSectionScreen>
   @override
   void initState() {
     super.initState();
+    _siteName.text = widget.initialSiteName ?? '';
+    _siteName.addListener(_scheduleDraft);
     for (final field in _fields) {
       final initial = widget.initialValues[field.key];
       if (_textTypes.contains(field.type)) {
@@ -210,6 +222,7 @@ class _FieldSectionScreenState extends State<FieldSectionScreen>
     for (final controller in _text.values) {
       controller.dispose();
     }
+    _siteName.dispose();
     super.dispose();
   }
 
@@ -355,6 +368,7 @@ class _FieldSectionScreenState extends State<FieldSectionScreen>
           appVersion: widget.appVersion,
           progressEpoch: widget.progressEpoch,
           mediaKeys: _mediaKeys,
+          siteName: _isVerify && _siteName.text.trim().isNotEmpty ? _siteName.text.trim() : null,
         );
         await _discardDraft();
         unawaited(BrixtaFeedback.success());
@@ -391,6 +405,7 @@ class _FieldSectionScreenState extends State<FieldSectionScreen>
       appVersion: widget.appVersion,
       progressEpoch: widget.progressEpoch,
       mediaKeys: _mediaKeys,
+      siteName: _isVerify && _siteName.text.trim().isNotEmpty ? _siteName.text.trim() : null,
     );
     await _discardDraft();
     await widget.controller.markLocalMutationQueued();
@@ -573,6 +588,14 @@ class _FieldSectionScreenState extends State<FieldSectionScreen>
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 22),
+          ],
+          if (_isVerify) ...[
+            _Block(label:'Memorable site name',required:false,
+              help:'Optional. Name this location as you will remember it. The BX reference stays unchanged.',
+              error:null,child:TextField(controller:_siteName,maxLength:100,
+                textCapitalization:TextCapitalization.words,
+                decoration:const InputDecoration(hintText:'e.g. Das residence, Beltola'))),
+            const SizedBox(height:14),
           ],
           for (final field in _fields)
             AnimatedSize(

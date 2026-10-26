@@ -1,3 +1,4 @@
+// BRIXTA_SITE_ADMIN_V5
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -40,6 +41,7 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
   bool _loading = true;
   String? _error;
   bool _showAllInfo = false;
+  bool _renaming = false;
 
   @override
   void initState() {
@@ -86,6 +88,47 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(text)));
+  }
+
+  // BRIXTA_SITE_ADMIN_V5: verified site names are personal, searchable labels.
+  // The source BX_ reference remains permanent and visible.
+  bool _canNameSite(FieldRecordBundle bundle) {
+    final steps = bundle.record.sections.keys;
+    return steps.any((k) => RegExp(r'^(verify|verification)(_|$)',caseSensitive:false).hasMatch(k)) ||
+        bundle.list.config.sections.any((section) =>
+          section.title.toLowerCase().startsWith('verify') &&
+          bundle.record.sections.containsKey(section.key));
+  }
+
+  Future<void> _renameSite() async {
+    final bundle=_bundle;
+    final session=widget.controller.session;
+    if(bundle==null || session==null) return;
+    final old=bundle.record.summary.title;
+    final text=TextEditingController(text:old==bundle.record.summary.key?'':old);
+    final name=await showDialog<String>(context:context,builder:(context)=>AlertDialog(
+      title:const Text('Name this verified site'),
+      content:Column(mainAxisSize:MainAxisSize.min,children:[
+        const Text('Give it a memorable name. The original BX ID stays unchanged.'),
+        const SizedBox(height:12),
+        TextField(controller:text,autofocus:true,maxLength:100,
+          textCapitalization:TextCapitalization.words,
+          decoration:const InputDecoration(labelText:'Site name',hintText:'e.g. Ahmed residence, Beltola')),
+      ]),
+      actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('CANCEL')),
+        FilledButton(onPressed:()=>Navigator.pop(context,text.text.trim()),child:const Text('SAVE NAME'))],
+    ));
+    text.dispose();
+    if(name==null || name.isEmpty || !mounted) return;
+    if(!widget.controller.isOnline){_message('Naming requires network access. Try again when online.');return;}
+    setState(()=>_renaming=true);
+    try {
+      await FieldRecordsApi(session.accessToken).renameSite(recordId:widget.recordId,siteName:name);
+      if(!mounted)return;
+      _message('Site named. Original CRM ID unchanged.');
+      await _load();
+    }catch(error){if(mounted)_message('Could not rename: $error');}
+    finally{if(mounted)setState(()=>_renaming=false);}
   }
 
   Future<void> _navigate() async {
@@ -139,6 +182,7 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
           recordId: widget.recordId,
           section: section,
           initialValues: record.values,
+          initialSiteName: record.summary.siteName,
           appVersion: _bundle!.list.config.version,
           progressEpoch: record.progressEpoch,
           sitePoint: record.summary.location,
@@ -171,6 +215,15 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
               const SizedBox(height: 18),
             ],
             if (summary != null) _header(context, summary),
+            if (bundle != null && _canNameSite(bundle)) ...[
+              const SizedBox(height:10),
+              OutlinedButton.icon(onPressed:_renaming?null:_renameSite,
+                icon:const Icon(Icons.edit_outlined),
+                label:Text(_renaming?'SAVING…':'NAME / RENAME THIS VERIFIED SITE')),
+              if (summary?.key != null)
+                Padding(padding:const EdgeInsets.only(top:5),child:Text(
+                  'Original CRM ID: ${summary!.key}',style:Theme.of(context).textTheme.bodySmall)),
+            ],
             if (_point != null &&
                 (experience.showNavigate || experience.showCopyLink)) ...[
               const SizedBox(height: 16),

@@ -23,6 +23,7 @@ import '../../tracking/presentation/tracking_controller.dart';
 import 'employee_profile_tab.dart';
 import 'brixta_premium_nav.dart';
 import 'premium_work_tab.dart';
+import 'pjp_home_tab.dart';
 
 class EmployeeDashboardScreen extends StatefulWidget {
   const EmployeeDashboardScreen({super.key, required this.controller});
@@ -284,18 +285,7 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
   @override
   Widget build(BuildContext context) {
     final screens = <Widget>[
-      _HomeTab(
-        controller: widget.controller,
-        tracker: tracker,
-        workSession: _workSession,
-        readyWork: _readyWork,
-        approvals: _approvals,
-        modules: _modules,
-        loadingWork: _loadingWork,
-        onRefresh: () => _refreshAll(refreshWorkspace: true),
-        onOpenWork: () => setState(() => _tab.value = 2),
-        onCapabilityTap: _openCapability,
-      ),
+      PjpHomeTab(controller: widget.controller),
       FieldSitesTab(
         controller: widget.controller,
         onListsLoaded: _onFieldListsLoaded,
@@ -652,6 +642,7 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
   }
 }
 
+// ignore: unused_element
 class _HomeTab extends StatelessWidget {
   const _HomeTab({
     required this.controller,

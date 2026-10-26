@@ -7,6 +7,7 @@ import '../../../core/design/app_icons.dart';
 import '../../../core/design/brixta_feedback.dart';
 import '../../../core/models/mobile_capability.dart';
 import '../../../core/session/app_session_controller.dart';
+import 'pjp_work_tasks.dart';
 
 enum _WorkLens { responsibilities, ready, decisions, waiting }
 
@@ -130,7 +131,12 @@ class _PremiumWorkTabState extends State<PremiumWorkTab> {
               ),
             ),
 
-            const SizedBox(height: 26),
+            const SizedBox(height: 22),
+            // BRIXTA_PJP_WORK_V3: Keep the existing Responsibility hero/cards
+            // and search below. Today's published PJP tasks have their own
+            // attractive, server-backed work board above that legacy UI.
+            PjpWorkTasks(controller: widget.controller, query: _query),
+            const SizedBox(height: 20),
 
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 22),
@@ -446,7 +452,7 @@ class _PremiumSearch extends StatelessWidget {
         controller: controller,
         textInputAction: TextInputAction.search,
         decoration: InputDecoration(
-          hintText: 'Search responsibilities',
+          hintText: 'Search tasks and responsibilities',
           prefixIcon: const Icon(Icons.search_rounded, size: 25),
 
           // No fake filter button.

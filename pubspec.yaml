@@ -28,6 +28,7 @@ dependencies:
   audioplayers: ^6.8.1
   web: ^1.1.1
   url_launcher: ^6.3.1
+  flutter_dotenv: ^6.0.1
 
 dev_dependencies:
   flutter_test:
@@ -39,3 +40,4 @@ flutter:
   assets:
     - assets/sounds/
     - assets/images/
+    - .env
