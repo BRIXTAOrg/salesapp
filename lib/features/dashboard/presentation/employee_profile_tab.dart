@@ -57,9 +57,35 @@ class _EmployeeProfileTabState extends State<EmployeeProfileTab> {
   Widget build(BuildContext context) {
     final session = widget.controller.session!;
     final devices = _mapList(_runtime?['devices']);
-    final currentDeviceId =
-        _runtime?['currentDeviceId']?.toString() ??
-        AppDeviceIdentity.instance.deviceId;
+    // BRIXTA_DEVICE_HISTORY_COMPACT_V1
+    final localId = AppDeviceIdentity.instance.deviceId;
+    final currentDeviceId = localId.isNotEmpty
+        ? localId
+        : (_runtime?['currentDeviceId']?.toString() ?? '');
+    final matches = devices
+        .where((d) => d['deviceId']?.toString() == currentDeviceId)
+        .toList();
+    final current = matches.isNotEmpty
+        ? matches.first
+        : <String, dynamic>{
+            'deviceId': currentDeviceId,
+            'platform': AppDeviceIdentity.instance.platform,
+            'appVersion': AppDeviceIdentity.appVersion,
+          };
+    final others = devices
+        .where((d) => d['deviceId']?.toString() != currentDeviceId)
+        .toList();
+    bool recentlySeen(Map<String, dynamic> d) {
+      final seen = DateTime.tryParse(
+        d['lastSeenAt']?.toString() ?? '',
+      )?.toUtc();
+      if (seen == null) return false;
+      final age = DateTime.now().toUtc().difference(seen);
+      return !age.isNegative && age <= const Duration(minutes: 15);
+    }
+
+    final recent = others.where(recentlySeen).toList();
+    final history = others.where((d) => !recentlySeen(d)).toList();
 
     return SafeArea(
       child: RefreshIndicator(
@@ -98,7 +124,7 @@ class _EmployeeProfileTabState extends State<EmployeeProfileTab> {
 
             Row(
               children: [
-                const Expanded(child: _SectionLabel('COMPANY DEVICES')),
+                const Expanded(child: _SectionLabel('DEVICE ACTIVITY')),
                 if (_loading)
                   const SizedBox(
                     width: 14,
@@ -107,31 +133,79 @@ class _EmployeeProfileTabState extends State<EmployeeProfileTab> {
                   ),
               ],
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 9),
             Text(
-              'This company account records the devices used to sign in, their app version, and when they last connected or synced.',
+              'Your device and recent account activity.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
-            const SizedBox(height: 12),
-            if (devices.isEmpty)
-              _DeviceCard(
-                device: {
-                  'deviceId': AppDeviceIdentity.instance.deviceId,
-                  'platform': AppDeviceIdentity.instance.platform,
-                  'appVersion': AppDeviceIdentity.appVersion,
-                  'lastSeenAt': null,
-                },
-                current: true,
+            const SizedBox(height: 14),
+            _DeviceCard(device: current, current: true),
+            const SizedBox(height: 24),
+            const _SectionLabel('OTHER DEVICES SEEN RECENTLY'),
+            const SizedBox(height: 7),
+            Text(
+              'Seen within 15 minutes. Recent activity is not proof of a live session.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 10),
+            if (recent.isEmpty)
+              _Card(
+                child: Text(
+                  _runtime == null
+                      ? 'Connect and pull down to check other devices.'
+                      : 'No other installations reported recent activity.',
+                ),
               )
             else
-              for (var i = 0; i < devices.length; i++) ...[
-                _DeviceCard(
-                  device: devices[i],
-                  current:
-                      devices[i]['deviceId']?.toString() == currentDeviceId,
-                ),
-                if (i != devices.length - 1) const SizedBox(height: 10),
+              for (final device in recent) ...[
+                _DeviceCard(device: device, current: false),
+                const SizedBox(height: 9),
               ],
+            const SizedBox(height: 18),
+            _Card(
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: EdgeInsets.zero,
+                shape: const Border(),
+                collapsedShape: const Border(),
+                leading: const Icon(
+                  Icons.history_rounded,
+                  color: AppDesign.muted,
+                ),
+                title: const Text(
+                  'Device history',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+                subtitle: Text('${history.length} older installations'),
+                children: [
+                  for (final device in history) ...[
+                    const Divider(height: 1),
+                    ListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.smartphone_outlined, size: 20),
+                      title: Text(
+                        '${_titleCase(device['platform']?.toString() ?? 'Device')} · BRIXTA ${device['appVersion'] ?? '?'}',
+                      ),
+                      subtitle: Text(
+                        'Last seen ${_relativeTime(device['lastSeenAt'])}'
+                        '${device['lastSyncAt'] == null ? '' : ' · Synced ${_relativeTime(device['lastSyncAt'])}'}',
+                      ),
+                    ),
+                  ],
+                  if (history.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 12),
+                      child: Text('No older installations recorded.'),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Installations are not confirmed active sessions. Geographic sign-in locations are not available.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             const SizedBox(height: 36),
             OutlinedButton.icon(
               onPressed: () async {
