@@ -689,9 +689,9 @@ class _HomeTab extends StatelessWidget {
             RuntimeConnectionBanner(controller: controller),
             const SizedBox(height: 24),
             _LiveOverview(
-              readyCount: readyWork.length,
+              readyCount: 0, // CRM-FIRST: legacy work is no longer surfaced
               approvalCount: approvals.length,
-              responsibilityCount: modules.length,
+              responsibilityCount: 0,
               tracker: tracker,
               sessionStatus: status,
             ),
@@ -719,19 +719,12 @@ class _HomeTab extends StatelessWidget {
                 tone: AppDesign.green,
                 onTap: onOpenWork,
               )
-            else if (readyWork.isNotEmpty)
-              _NextCard.fromWork(readyWork.first, onTap: onOpenWork)
             else
               const _QuietState(),
-            if (modules.isNotEmpty) ...[
-              const SizedBox(height: 32),
-              const _SectionLabel('YOUR RESPONSIBILITIES'),
-              const SizedBox(height: 12),
-              _QuickResponsibilityGrid(
-                modules: modules.take(4).toList(),
-                onTap: onCapabilityTap,
-              ),
-            ],
+            const SizedBox(height: 22),
+            const _SectionLabel('CRM APP EXPERIENCES'),
+            const SizedBox(height: 10),
+            const Text('Open FIELD to choose a published CRM module and work on your assigned sites, dealers or customers.'),
             // Floating navigation overlays the body.
             const SizedBox(height: 92),
           ],
@@ -974,8 +967,7 @@ class _LiveOverview extends StatelessWidget {
                     builder: (_, _) => Text(
                       tracker.active
                           ? '${tracker.distanceKm.toStringAsFixed(1)} km recorded today'
-                          : '$responsibilityCount '
-                                '${responsibilityCount == 1 ? 'Responsibility' : 'Responsibilities'} available',
+                          : 'Open FIELD to explore your CRM modules',
                       style: AppDesign.sans(
                         size: 13,
                         color: AppDesign.white.withValues(alpha: .74),

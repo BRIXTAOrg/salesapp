@@ -319,6 +319,7 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
         builder: (_) => FieldSiteScreen(
           controller: widget.controller,
           recordId: item.id,
+          moduleKey: _list!.key,
           initial: item,
           origin: _origin,
         ),
@@ -424,22 +425,54 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
                   ),
                 ],
                 if (_lists.length > 1) ...[
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 20),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 22),
+                    child: Row(children: [
+                      Text('YOUR MODULES', style: AppDesign.sans(size: 11, weight: FontWeight.w700,
+                        letterSpacing: 1.6)),
+                      const Spacer(),
+                      Text('${_lists.length} AVAILABLE', style: AppDesign.sans(size: 11,
+                        weight: FontWeight.w600, color: const Color(0xFF64716B))),
+                    ]),
+                  ),
+                  const SizedBox(height: 10),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 22),
-                    child: Row(
-                      children: [
-                        for (final item in _lists) ...[
-                          FieldPill(
-                            label: item.title,
-                            selected: item.key == list?.key,
-                            onTap: () => _selectList(item.key),
+                    child: Row(children: [for (final item in _lists) ...[
+                      Semantics(
+                        button:true,
+                        selected:item.key == list?.key,
+                        label:'Open ${item.title}, ${item.total} records',
+                        child: InkWell(
+                          key: ValueKey('field-module-${item.key}'),
+                          onTap:()=>_selectList(item.key),
+                          borderRadius:BorderRadius.circular(18),
+                          child: AnimatedContainer(
+                            duration:const Duration(milliseconds:180),
+                            width:174,
+                            padding:const EdgeInsets.fromLTRB(16,14,16,14),
+                            decoration:BoxDecoration(
+                              color:item.key == list?.key?const Color(0xFF245F52):Colors.white,
+                              borderRadius:BorderRadius.circular(18),
+                              border:Border.all(color:item.key == list?.key
+                                ? const Color(0xFF245F52):const Color(0xFFD5DDD7)),
+                            ),
+                            child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                              Text(item.title,maxLines:1,overflow:TextOverflow.ellipsis,
+                                style:AppDesign.sans(size:14,weight:FontWeight.w700,
+                                  color:item.key == list?.key?Colors.white:const Color(0xFF1F2823))),
+                              const SizedBox(height:8),
+                              Text('${item.total} SITES',style:AppDesign.sans(size:11,
+                                weight:FontWeight.w600,letterSpacing:1.0,
+                                color:item.key == list?.key?const Color(0xFFDCECE5):const Color(0xFF67776D))),
+                            ]),
                           ),
-                          const SizedBox(width: 8),
-                        ],
-                      ],
-                    ),
+                        ),
+                      ),
+                      const SizedBox(width:10),
+                    ]]),
                   ),
                 ],
                 const SizedBox(height: 22),

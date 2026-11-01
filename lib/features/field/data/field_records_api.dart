@@ -609,7 +609,7 @@ class FieldRecordsApi {
   static String _pageCache(String listKey, String lens) =>
       'field:records:$listKey:$lens';
 
-  static String _recordCache(String id) => 'field:record:$id';
+  static String _recordCache(String id, String moduleKey) => 'field:record:$moduleKey:$id';
 
   Future<List<FieldList>> lists() async {
     final body = await _api.getJson('/api/salesApp/field/lists');
@@ -663,36 +663,37 @@ class FieldRecordsApi {
     return FieldRecordPage.fromJson(Map<String, dynamic>.from(cached));
   }
 
-  Future<FieldRecordBundle> record(String id) async {
+  Future<FieldRecordBundle> record(String id, {required String moduleKey}) async {
     late final Map<String, dynamic> body;
     try {
       body = await _api.getJson(
-        '/api/salesApp/field/records/${Uri.encodeComponent(id)}',
+        '/api/salesApp/field/records/${Uri.encodeComponent(id)}?moduleKey=${Uri.encodeQueryComponent(moduleKey)}',
       );
     } on FieldApiException catch (error) {
       if (error.statusCode == 403 || error.statusCode == 404) {
-        await AppDatabase.instance.removeCache(_recordCache(id));
+        await AppDatabase.instance.removeCache(_recordCache(id,moduleKey));
       }
       rethrow;
     }
-    await AppDatabase.instance.putCache(_recordCache(id), body);
+    await AppDatabase.instance.putCache(_recordCache(id,moduleKey), body);
     return FieldRecordBundle.fromJson(body);
   }
 
-  static Future<FieldRecordBundle?> cachedRecord(String id) async {
-    final cached = await AppDatabase.instance.getCache(_recordCache(id));
+  static Future<FieldRecordBundle?> cachedRecord(String id, {required String moduleKey}) async {
+    final cached = await AppDatabase.instance.getCache(_recordCache(id,moduleKey));
     if (cached is! Map) return null;
     return FieldRecordBundle.fromJson(Map<String, dynamic>.from(cached));
   }
 
   // BRIXTA_SITE_ADMIN_V5: online, audited naming; never modifies the BX key.
-  Future<void> renameSite({required String recordId, required String siteName}) async {
+  Future<void> renameSite({required String recordId, required String moduleKey, required String siteName}) async {
     await _api.postJson('/api/salesApp/field/records/${Uri.encodeComponent(recordId)}/name',
-      {'siteName': siteName});
+      {'siteName': siteName, 'moduleKey': moduleKey});
   }
 
   Future<void> saveSection({
     required String recordId,
+    required String moduleKey,
     required String sectionKey,
     required Map<String, dynamic> values,
     required String clientMutationId,
@@ -706,6 +707,7 @@ class FieldRecordsApi {
       '/api/salesApp/field/records/${Uri.encodeComponent(recordId)}'
       '/sections/${Uri.encodeComponent(sectionKey)}',
       {
+        'moduleKey': moduleKey,
         'values': ready,
         'clientMutationId': clientMutationId,
         'appVersion': appVersion,
@@ -787,6 +789,7 @@ abstract final class FieldSectionQueue {
   static Future<void> enqueue({
     required AuthSession session,
     required String recordId,
+    required String moduleKey,
     required String sectionKey,
     required Map<String, dynamic> values,
     required String clientMutationId,
@@ -802,6 +805,7 @@ abstract final class FieldSectionQueue {
       path: '/api/salesApp/field/records/$recordId/sections/$sectionKey',
       payload: {
         'recordId': recordId,
+        'moduleKey': moduleKey,
         'sectionKey': sectionKey,
         'values': values,
         'clientMutationId': clientMutationId,
@@ -862,6 +866,7 @@ abstract final class FieldSectionQueue {
       try {
         await api.saveSection(
           recordId: payload['recordId'].toString(),
+          moduleKey: payload['moduleKey']?.toString() ?? '', 
           sectionKey: payload['sectionKey'].toString(),
           values: values,
           clientMutationId: payload['clientMutationId'].toString(),

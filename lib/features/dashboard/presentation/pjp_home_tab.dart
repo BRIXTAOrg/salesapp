@@ -9,6 +9,7 @@ import '../../../core/config/field_api.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/session/app_session_controller.dart';
 import '../../field/presentation/field_site_screen.dart';
+import '../../field/data/field_records_api.dart';
 import '../../../core/widgets/company_identity_banner.dart';
 
 /// BRIXTA_PJP_MOBILE_V1: published itinerary only, not legacy Responsibilities.
@@ -114,9 +115,23 @@ class _PjpHomeTabState extends State<PjpHomeTab> {
   Future<void> _openStop(Map<String, dynamic> stop) async {
     final id = stop['id']?.toString() ?? '';
     if (id.startsWith('site:')) {
+      final listId=(_plan?['listId'] as num?)?.toInt();
+      final session=widget.controller.session;
+      var modules=await FieldRecordsApi.cachedLists();
+      if (session!=null && widget.controller.isOnline) {
+        try { modules=await FieldRecordsApi(session.accessToken).lists(); } catch (_) {}
+      }
+      final matching=modules.where((m)=>m.id==listId).toList();
+      if (matching.isEmpty) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content:Text('This PJP module is unavailable. Refresh your Field access.')));
+        return;
+      }
+      if (!mounted) return;
       await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => FieldSiteScreen(
         controller: widget.controller,
         recordId: id.substring(5),
+        moduleKey: matching.first.key,
       )));
       if (mounted) unawaited(_load());
       return;

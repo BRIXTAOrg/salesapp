@@ -12,403 +12,117 @@ import 'package:salesapp/features/dashboard/presentation/premium_work_tab.dart';
 
 
 void main() {
-  group(
-    'BRIXTA Work Inbox contract',
-    () {
-      testWidgets(
-        'empty queues create zero operational clutter',
+  group('BRIXTA CRM-first Work contract', () {
+    testWidgets('empty work shows PJP and approval guidance, not legacy filters',
         (tester) async {
-          final controller =
-              _controller();
+      final controller = _controller();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(_app(controller: controller));
+      await tester.pump();
 
-          addTearDown(
-            controller.dispose,
-          );
+      expect(find.text('Visits, tasks & approvals'), findsOneWidget);
+      expect(find.text('Approvals'), findsOneWidget);
+      expect(find.text('No approval requests need your decision right now.'),
+          findsOneWidget);
+      expect(find.text('Search responsibilities'), findsNothing);
+      expect(find.text('Responsibilities'), findsNothing);
+      expect(find.text('To do'), findsNothing);
+      expect(find.text('Decisions'), findsNothing);
+      expect(find.text('Waiting'), findsNothing);
+    });
 
-          await tester.pumpWidget(
-            _app(
-              controller:
-                  controller,
-            ),
-          );
-
-          await tester.pump();
-
-          // Empty operational concepts should not occupy
-          // employee attention.
-          expect(
-            find.text('To do'),
-            findsNothing,
-          );
-
-          expect(
-            find.text('Decisions'),
-            findsNothing,
-          );
-
-          expect(
-            find.text('Waiting'),
-            findsNothing,
-          );
-
-          // Search remains a real primary function.
-          expect(
-            find.text(
-              'Search responsibilities',
-            ),
-            findsOneWidget,
-          );
-        },
-      );
-
-
-      testWidgets(
-        'To do appears only when actionable work exists and forwards exact item',
+    testWidgets('legacy ready queue is not silently presented as PJP work',
         (tester) async {
-          final controller =
-              _controller();
+      final controller = _controller();
+      addTearDown(controller.dispose);
+      final item = <String, dynamic>{
+        'id': 'legacy-work-001',
+        'title': 'Inspect construction site',
+        'kind': 'assigned_work',
+      };
+      Map<String, dynamic>? opened;
+      await tester.pumpWidget(_app(
+        controller: controller,
+        readyWork: [item],
+        onReadyTap: (value) => opened = value,
+      ));
+      await tester.pump();
 
-          addTearDown(
-            controller.dispose,
-          );
+      // Migration boundary: legacy Responsibility work must not masquerade
+      // as a published, server-backed CRM/PJP assignment.
+      expect(find.text('Inspect construction site'), findsNothing);
+      expect(find.text('Visits, tasks & approvals'), findsOneWidget);
+      expect(opened, isNull);
+    });
 
-          final workItem =
-              <String, dynamic>{
-            'id': 'work-001',
-            'kind':
-                'assigned_work',
-            'title':
-                'Inspect construction site',
-            'status':
-                'assigned',
-            'priority':
-                'high',
-          };
-
-          Map<String, dynamic>?
-              opened;
-
-          await tester.pumpWidget(
-            _app(
-              controller:
-                  controller,
-              readyWork: [
-                workItem,
-              ],
-              onReadyTap:
-                  (item) {
-                opened = item;
-              },
-            ),
-          );
-
-          await tester.pump();
-
-          // User-facing terminology should be To do,
-          // not the internal/runtime term Ready.
-          expect(
-            find.text('To do'),
-            findsOneWidget,
-          );
-
-          expect(
-            find.text('Ready'),
-            findsNothing,
-          );
-
-          await tester.tap(
-            find.text('To do'),
-          );
-
-          await tester.pumpAndSettle();
-
-          expect(
-            find.text(
-              'Inspect construction site',
-            ),
-            findsOneWidget,
-          );
-
-          await tester.tap(
-            find.text(
-              'Inspect construction site',
-            ),
-          );
-
-          // Queue cards intentionally await their small
-          // interaction feedback before forwarding.
-          await tester.pump(
-            const Duration(
-              milliseconds: 250,
-            ),
-          );
-
-          expect(
-            opened,
-            same(workItem),
-            reason:
-                'The exact backend work item must reach '
-                'onReadyTap. No synthetic replacement.',
-          );
-        },
-      );
-
-
-      testWidgets(
-        'Decisions appears only for pending decisions and forwards exact approval',
+    testWidgets('approvals remain visible and forward the exact request',
         (tester) async {
-          final controller =
-              _controller();
+      final controller = _controller();
+      addTearDown(controller.dispose);
+      final approval = <String, dynamic>{
+        'id': 'kernel:decision-001',
+        'title': 'Approve dealer discount',
+        'workflowName': 'Dealer approval',
+        'status': 'pending',
+      };
+      Map<String, dynamic>? reviewed;
+      await tester.pumpWidget(_app(
+        controller: controller,
+        approvals: [approval],
+        onApprovalTap: (value) => reviewed = value,
+      ));
+      await tester.pump();
 
-          addTearDown(
-            controller.dispose,
-          );
+      expect(find.text('Approvals'), findsOneWidget);
+      expect(find.text('Approve dealer discount'), findsOneWidget);
+      expect(find.text('Dealer approval'), findsOneWidget);
+      await tester.ensureVisible(find.text('Approve dealer discount'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Approve dealer discount'));
+      await tester.pump();
+      expect(reviewed, same(approval),
+          reason: 'The same authorized approval request must reach the handler.');
+    });
 
-          final approval =
-              <String, dynamic>{
-            'id':
-                'kernel:decision-001',
-            'title':
-                'Approve dealer discount',
-            'workflowName':
-                'Dealer approval',
-            'status':
-                'pending',
-          };
-
-          Map<String, dynamic>?
-              reviewed;
-
-          await tester.pumpWidget(
-            _app(
-              controller:
-                  controller,
-              approvals: [
-                approval,
-              ],
-              onApprovalTap:
-                  (item) {
-                reviewed = item;
-              },
-            ),
-          );
-
-          await tester.pump();
-
-          expect(
-            find.text('Decisions'),
-            findsOneWidget,
-          );
-
-          await tester.tap(
-            find.text('Decisions'),
-          );
-
-          await tester.pumpAndSettle();
-
-          expect(
-            find.text(
-              'Approve dealer discount',
-            ),
-            findsOneWidget,
-          );
-
-          expect(
-            find.text(
-              'Dealer approval',
-            ),
-            findsOneWidget,
-          );
-
-          await tester.tap(
-            find.text(
-              'Approve dealer discount',
-            ),
-          );
-
-          await tester.pump(
-            const Duration(
-              milliseconds: 250,
-            ),
-          );
-
-          expect(
-            reviewed,
-            same(approval),
-            reason:
-                'The exact approval/Kernel decision must '
-                'reach onApprovalTap.',
-          );
-        },
-      );
-
-
-      testWidgets(
-        'Waiting is contextual and not actionable',
+    testWidgets('legacy blocked queue is not exposed as a new action',
         (tester) async {
-          final controller =
-              _controller();
+      final controller = _controller();
+      addTearDown(controller.dispose);
+      final blocked = <String, dynamic>{
+        'id': 'legacy-blocked-001',
+        'title': 'Submit expense report',
+        'reason': 'Waiting for manager review',
+      };
+      await tester.pumpWidget(_app(
+        controller: controller,
+        blockedWork: [blocked],
+      ));
+      await tester.pump();
+      expect(find.text('Submit expense report'), findsNothing);
+      expect(find.text('Waiting for manager review'), findsNothing);
+      expect(find.text('Waiting'), findsNothing);
+    });
 
-          addTearDown(
-            controller.dispose,
-          );
-
-          final blocked =
-              <String, dynamic>{
-            'id':
-                'blocked-001',
-            'title':
-                'Submit expense report',
-            'reason':
-                'Waiting for manager review',
-          };
-
-          await tester.pumpWidget(
-            _app(
-              controller:
-                  controller,
-              blockedWork: [
-                blocked,
-              ],
-            ),
-          );
-
-          await tester.pump();
-
-          expect(
-            find.text('Waiting'),
-            findsOneWidget,
-          );
-
-          await tester.tap(
-            find.text('Waiting'),
-          );
-
-          await tester.pumpAndSettle();
-
-          expect(
-            find.text(
-              'Submit expense report',
-            ),
-            findsOneWidget,
-          );
-
-          expect(
-            find.text(
-              'Waiting for manager review',
-            ),
-            findsOneWidget,
-          );
-
-          // Waiting work is information, not an executable
-          // action. Its card should expose the lock affordance.
-          expect(
-            find.byIcon(
-              Icons.lock_outline_rounded,
-            ),
-            findsWidgets,
-          );
-        },
-      );
-
-
-      testWidgets(
-        'Responsibility search filters the actual assigned modules',
+    testWidgets('legacy Responsibility modules do not appear in CRM-first Work',
         (tester) async {
-          final controller =
-              _controller();
-
-          addTearDown(
-            controller.dispose,
-          );
-
-          final attendance =
-              _module(
-            id: 1,
-            key: 'attendance',
-            title: 'Attendance',
-          );
-
-          final journey =
-              _module(
-            id: 2,
-            key: 'journey',
-            title: 'Journey Tracker',
-          );
-
-          await tester.pumpWidget(
-            _app(
-              controller:
-                  controller,
-              modules: [
-                attendance,
-                journey,
-              ],
-            ),
-          );
-
-          await tester.pump();
-
-          expect(
-            find.text('Attendance'),
-            findsOneWidget,
-          );
-
-          expect(
-            find.text(
-              'Journey Tracker',
-            ),
-            findsWidgets,
-          );
-
-          final search =
-              find.byType(
-            TextField,
-          );
-
-          expect(
-            search,
-            findsOneWidget,
-          );
-
-          await tester.enterText(
-            search,
-            'attendance',
-          );
-
-          await tester.pumpAndSettle();
-
-          expect(
-            find.text('Attendance'),
-            findsOneWidget,
-          );
-
-          expect(
-            find.text(
-              'Journey Tracker',
-            ),
-            findsNothing,
-          );
-
-          await tester.enterText(
-            search,
-            'THIS_DOES_NOT_EXIST',
-          );
-
-          await tester.pumpAndSettle();
-
-          expect(
-            find.text(
-              'No matching Responsibility',
-            ),
-            findsOneWidget,
-          );
-        },
-      );
-    },
-  );
+      final controller = _controller();
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(_app(
+        controller: controller,
+        modules: [
+          _module(id: 1, key: 'attendance', title: 'Attendance'),
+          _module(id: 2, key: 'journey', title: 'Journey Tracker'),
+        ],
+      ));
+      await tester.pump();
+      expect(find.text('Attendance'), findsNothing);
+      expect(find.text('Journey Tracker'), findsNothing);
+      expect(find.text('Visits, tasks & approvals'), findsOneWidget);
+      expect(find.textContaining('Open FIELD and select the CRM module'),
+          findsOneWidget);
+    });
+  });
 }
-
 
 Widget _app({
   required AppSessionController

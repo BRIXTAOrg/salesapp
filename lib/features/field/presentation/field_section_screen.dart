@@ -40,6 +40,7 @@ class FieldSectionScreen extends StatefulWidget {
     super.key,
     required this.controller,
     required this.recordId,
+    required this.moduleKey,
     required this.section,
     required this.initialValues,
     this.initialSiteName,
@@ -50,6 +51,7 @@ class FieldSectionScreen extends StatefulWidget {
 
   final AppSessionController controller;
   final String recordId;
+  final String moduleKey;
   final FieldSection section;
   final Map<String, dynamic> initialValues;
   final String? initialSiteName;
@@ -84,7 +86,7 @@ class _FieldSectionScreenState extends State<FieldSectionScreen>
     final session = widget.controller.session;
     return 'field_draft:${session?.tenant.code ?? "none"}:'
         '${session?.user.id ?? "none"}:'
-        '${widget.recordId}:${widget.section.key}';
+        '${widget.moduleKey}:${widget.recordId}:${widget.section.key}';
   }
 
   void _draftSetState(VoidCallback change) {
@@ -362,6 +364,7 @@ class _FieldSectionScreenState extends State<FieldSectionScreen>
       try {
         await FieldRecordsApi(session.accessToken).saveSection(
           recordId: widget.recordId,
+          moduleKey: widget.moduleKey,
           sectionKey: widget.section.key,
           values: values,
           clientMutationId: mutationId,
@@ -399,6 +402,7 @@ class _FieldSectionScreenState extends State<FieldSectionScreen>
     await FieldSectionQueue.enqueue(
       session: session,
       recordId: widget.recordId,
+      moduleKey: widget.moduleKey,
       sectionKey: widget.section.key,
       values: values,
       clientMutationId: mutationId,

@@ -26,12 +26,14 @@ class FieldSiteScreen extends StatefulWidget {
     super.key,
     required this.controller,
     required this.recordId,
+    required this.moduleKey,
     this.initial,
     this.origin,
   });
 
   final AppSessionController controller;
   final String recordId;
+  final String moduleKey;
   final FieldRecordSummary? initial;
   final FieldPoint? origin;
 
@@ -53,7 +55,7 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
   }
 
   Future<void> _load() async {
-    final cached = await FieldRecordsApi.cachedRecord(widget.recordId);
+    final cached = await FieldRecordsApi.cachedRecord(widget.recordId,moduleKey:widget.moduleKey);
     if (cached != null && mounted) {
       setState(() {
         _bundle = cached;
@@ -68,7 +70,7 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
     }
 
     try {
-      final fresh = await FieldRecordsApi(session.accessToken).record(widget.recordId);
+      final fresh = await FieldRecordsApi(session.accessToken).record(widget.recordId,moduleKey:widget.moduleKey);
       if (!mounted) return;
       setState(() {
         _bundle = fresh;
@@ -133,7 +135,7 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
     if(!widget.controller.isOnline){_message('Naming requires network access. Try again when online.');return;}
     setState(()=>_renaming=true);
     try {
-      await FieldRecordsApi(session.accessToken).renameSite(recordId:widget.recordId,siteName:name);
+      await FieldRecordsApi(session.accessToken).renameSite(recordId:widget.recordId,moduleKey:widget.moduleKey,siteName:name);
       if(!mounted)return;
       _message('Site named. Original CRM ID unchanged.');
       await _load();
@@ -190,6 +192,7 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
         builder: (_) => FieldSectionScreen(
           controller: widget.controller,
           recordId: widget.recordId,
+          moduleKey: widget.moduleKey,
           section: section,
           initialValues: record.values,
           initialSiteName: record.summary.siteName,

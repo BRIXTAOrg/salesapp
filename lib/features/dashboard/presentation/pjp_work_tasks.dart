@@ -10,7 +10,7 @@ import '../../../core/session/app_session_controller.dart';
 /// BRIXTA_PJP_WORK_V3
 /// Work mirrors the employee's published PJP tasks. Completion is confirmed
 /// by the authenticated server and does not change CRM site verification.
-/// The legacy Responsibility carousel below this board is left intact.
+/// Employee Work uses this published PJP task board and approval inbox.
 class PjpWorkTasks extends StatefulWidget {
   const PjpWorkTasks({super.key, required this.controller, this.query = ''});
 
