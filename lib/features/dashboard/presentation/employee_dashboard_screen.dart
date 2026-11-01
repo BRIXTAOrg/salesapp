@@ -94,7 +94,16 @@ class _EmployeeDashboardScreenState extends State<EmployeeDashboardScreen>
 
     tracker = TrackingController(repository: NativeTrackingRepository());
 
-    unawaited(FieldRecordsApi.cachedLists().then(_onFieldListsLoaded));
+    // Use employee-scoped cached modules only while offline.
+    // Online access must be revalidated by the server.
+    final fieldSession = widget.controller.session;
+    if (fieldSession != null && !widget.controller.isOnline) {
+      unawaited(
+        FieldRecordsApi.cachedLists(
+          FieldSectionQueue.scopeFor(fieldSession),
+        ).then(_onFieldListsLoaded),
+      );
+    }
 
     unawaited(
       tracker
@@ -724,7 +733,9 @@ class _HomeTab extends StatelessWidget {
             const SizedBox(height: 22),
             const _SectionLabel('CRM APP EXPERIENCES'),
             const SizedBox(height: 10),
-            const Text('Open FIELD to choose a published CRM module and work on your assigned sites, dealers or customers.'),
+            const Text(
+              'Open FIELD to choose a published CRM module and work on your assigned sites, dealers or customers.',
+            ),
             // Floating navigation overlays the body.
             const SizedBox(height: 92),
           ],

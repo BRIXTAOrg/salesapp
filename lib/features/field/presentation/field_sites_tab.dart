@@ -30,7 +30,8 @@ class FieldSitesTab extends StatefulWidget {
   State<FieldSitesTab> createState() => _FieldSitesTabState();
 }
 
-class _FieldSitesTabState extends State<FieldSitesTab> {
+class _FieldSitesTabState extends State<FieldSitesTab>
+    with WidgetsBindingObserver {
   final TextEditingController _search = TextEditingController();
   Timer? _debounce;
 
@@ -65,19 +66,29 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
 
   String _initialLens(FieldListExperience experience) =>
       experience.preferNotVisitedDefault &&
-              experience.lenses.any((lens) => lens.key == 'not_visited')
-          ? 'not_visited'
-          : experience.defaultLens;
+          experience.lenses.any((lens) => lens.key == 'not_visited')
+      ? 'not_visited'
+      : experience.defaultLens;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _search.addListener(_onSearch);
     unawaited(_start());
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Re-check server access when returning to the app after an admin change.
+    if (state == AppLifecycleState.resumed && widget.controller.isOnline) {
+      unawaited(_refresh());
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _debounce?.cancel();
     _search.removeListener(_onSearch);
     _search.dispose();
@@ -85,7 +96,13 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
   }
 
   Future<void> _start() async {
-    final cached = await FieldRecordsApi.cachedLists();
+    // BRIXTA_FIELD_REVOKED_CACHE_V1_20261102
+    // Never show previously granted modules before online ACL revalidation.
+    final session = widget.controller.session;
+    final scope = session == null ? '' : FieldSectionQueue.scopeFor(session);
+    final cached = (scope.isEmpty || widget.controller.isOnline)
+        ? <FieldList>[]
+        : await FieldRecordsApi.cachedLists(scope);
     if (cached.isNotEmpty && mounted) {
       setState(() {
         _lists = cached;
@@ -164,11 +181,19 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
       } catch (_) {}
 
       try {
-        final lists = await FieldRecordsApi(session.accessToken).lists();
+        final lists = await FieldRecordsApi(
+          session.accessToken,
+          cacheScope: FieldSectionQueue.scopeFor(session),
+        ).lists();
         if (!mounted) return;
         setState(() {
           _lists = lists;
           if (lists.every((list) => list.key != _listKey)) {
+            // Revoke visible cards immediately when the active module disappears.
+            ++_pageRequestId;
+            _items = const [];
+            _counts = const {};
+            _loading = true;
             _listKey = lists.isEmpty ? null : lists.first.key;
             if (lists.isNotEmpty) {
               _lens = _initialLens(lists.first.config.experience.list);
@@ -185,9 +210,21 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
         });
         widget.onListsLoaded?.call(lists);
       } catch (error) {
-        if (mounted && _lists.isEmpty) {
-          setState(() => _error = error.toString());
+        // Fail closed online: stale cached modules must not survive a failed ACL check.
+        if (mounted) {
+          ++_pageRequestId;
+          setState(() {
+            _lists = const [];
+            _listKey = null;
+            _items = const [];
+            _counts = const {};
+            _loading = false;
+            _error =
+                'Cannot verify FIELD access online. Check connection and refresh.';
+          });
+          widget.onListsLoaded?.call(const []);
         }
+        return;
       }
     } else {
       final pending = await FieldSectionQueue.pending(session);
@@ -204,6 +241,9 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
   }
 
   Future<void> _loadCachedPage() async {
+    // A live connection requires a fresh server authorization check.
+    final session = widget.controller.session;
+    if (session == null || widget.controller.isOnline) return;
     final list = _list;
     if (list == null) return;
 
@@ -211,7 +251,11 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
     final lens = _lens;
     final requestId = _pageRequestId;
 
-    final cached = await FieldRecordsApi.cachedRecords(listKey, lens);
+    final cached = await FieldRecordsApi.cachedRecords(
+      listKey,
+      lens,
+      scope: FieldSectionQueue.scopeFor(session),
+    );
 
     if (cached != null &&
         mounted &&
@@ -244,6 +288,7 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
     try {
       final page = await FieldRecordsApi(
         session.accessToken,
+        cacheScope: FieldSectionQueue.scopeFor(session),
       ).records(list.key, lens: _lens, origin: _origin, query: _search.text);
       if (!mounted || requestId != _pageRequestId) return;
       if (!_lensChosen &&
@@ -262,23 +307,31 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
       });
     } catch (error) {
       if (!mounted || requestId != _pageRequestId) return;
-      final forbidden = error is FieldApiException &&
+      final forbidden =
+          error is FieldApiException &&
           (error.statusCode == 403 || error.statusCode == 404);
       if (forbidden) {
-        await FieldRecordsApi.clearCachedRecords(list.key, _lens);
-        if (mounted) setState(() {
+        await FieldRecordsApi.clearCachedRecords(
+          list.key,
+          _lens,
+          scope: FieldSectionQueue.scopeFor(session),
+        );
+        if (mounted)
+          setState(() {
+            _items = const [];
+            _counts = const {};
+            _loading = false;
+            _error = 'Your CRM access changed. Pull down to refresh.';
+          });
+        return;
+      }
+      // Do not fall back to cached records while online (possibly revoked).
+      if (mounted) {
+        setState(() {
           _items = const [];
           _counts = const {};
           _loading = false;
-          _error = 'Your CRM access changed. Pull down to refresh.';
-        });
-        return;
-      }
-      await _loadCachedPage();
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          if (_items.isEmpty) _error = error.toString();
+          _error = 'Cannot verify FIELD records online. Pull down to retry.';
         });
       }
     }
@@ -428,51 +481,99 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
                   const SizedBox(height: 20),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 22),
-                    child: Row(children: [
-                      Text('YOUR MODULES', style: AppDesign.sans(size: 11, weight: FontWeight.w700,
-                        letterSpacing: 1.6)),
-                      const Spacer(),
-                      Text('${_lists.length} AVAILABLE', style: AppDesign.sans(size: 11,
-                        weight: FontWeight.w600, color: const Color(0xFF64716B))),
-                    ]),
+                    child: Row(
+                      children: [
+                        Text(
+                          'YOUR MODULES',
+                          style: AppDesign.sans(
+                            size: 11,
+                            weight: FontWeight.w700,
+                            letterSpacing: 1.6,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          '${_lists.length} AVAILABLE',
+                          style: AppDesign.sans(
+                            size: 11,
+                            weight: FontWeight.w600,
+                            color: const Color(0xFF64716B),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 10),
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 22),
-                    child: Row(children: [for (final item in _lists) ...[
-                      Semantics(
-                        button:true,
-                        selected:item.key == list?.key,
-                        label:'Open ${item.title}, ${item.total} records',
-                        child: InkWell(
-                          key: ValueKey('field-module-${item.key}'),
-                          onTap:()=>_selectList(item.key),
-                          borderRadius:BorderRadius.circular(18),
-                          child: AnimatedContainer(
-                            duration:const Duration(milliseconds:180),
-                            width:174,
-                            padding:const EdgeInsets.fromLTRB(16,14,16,14),
-                            decoration:BoxDecoration(
-                              color:item.key == list?.key?const Color(0xFF245F52):Colors.white,
-                              borderRadius:BorderRadius.circular(18),
-                              border:Border.all(color:item.key == list?.key
-                                ? const Color(0xFF245F52):const Color(0xFFD5DDD7)),
+                    child: Row(
+                      children: [
+                        for (final item in _lists) ...[
+                          Semantics(
+                            button: true,
+                            selected: item.key == list?.key,
+                            label: 'Open ${item.title}, ${item.total} records',
+                            child: InkWell(
+                              key: ValueKey('field-module-${item.key}'),
+                              onTap: () => _selectList(item.key),
+                              borderRadius: BorderRadius.circular(18),
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                width: 174,
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  14,
+                                  16,
+                                  14,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: item.key == list?.key
+                                      ? const Color(0xFF245F52)
+                                      : Colors.white,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                    color: item.key == list?.key
+                                        ? const Color(0xFF245F52)
+                                        : const Color(0xFFD5DDD7),
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.title,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppDesign.sans(
+                                        size: 14,
+                                        weight: FontWeight.w700,
+                                        color: item.key == list?.key
+                                            ? Colors.white
+                                            : const Color(0xFF1F2823),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      '${item.total} SITES',
+                                      style: AppDesign.sans(
+                                        size: 11,
+                                        weight: FontWeight.w600,
+                                        letterSpacing: 1.0,
+                                        color: item.key == list?.key
+                                            ? const Color(0xFFDCECE5)
+                                            : const Color(0xFF67776D),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                            child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                              Text(item.title,maxLines:1,overflow:TextOverflow.ellipsis,
-                                style:AppDesign.sans(size:14,weight:FontWeight.w700,
-                                  color:item.key == list?.key?Colors.white:const Color(0xFF1F2823))),
-                              const SizedBox(height:8),
-                              Text('${item.total} SITES',style:AppDesign.sans(size:11,
-                                weight:FontWeight.w600,letterSpacing:1.0,
-                                color:item.key == list?.key?const Color(0xFFDCECE5):const Color(0xFF67776D))),
-                            ]),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width:10),
-                    ]]),
+                          const SizedBox(width: 10),
+                        ],
+                      ],
+                    ),
                   ),
                 ],
                 const SizedBox(height: 22),
@@ -511,39 +612,184 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
                   SingleChildScrollView(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 22),
-                    child: Row(children: [
-                      for (final lens in _lenses) ...[
-                        FieldPill(label: lens.label, count: _counts[lens.key],
-                          selected: lens.key == _lens, onTap: () => _selectLens(lens.key)),
-                        const SizedBox(width: 8),
+                    child: Row(
+                      children: [
+                        for (final lens in _lenses) ...[
+                          FieldPill(
+                            label: lens.label,
+                            count: _counts[lens.key],
+                            selected: lens.key == _lens,
+                            onTap: () => _selectLens(lens.key),
+                          ),
+                          const SizedBox(width: 8),
+                        ],
                       ],
-                    ]),
-                  )
-                else Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 22),
-                  child: DropdownButtonFormField<String>(
-                    key: ValueKey('${list?.key}:$_lens'),
-                    initialValue: _lenses.any((lens) => lens.key == _lens) ? _lens : null,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      labelText: 'SHOW SITES',
-                      prefixIcon: const Icon(Icons.filter_list_rounded),
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
-                      filled: true,
-                      fillColor: AppDesign.white,
                     ),
-                    items: _lenses.map((lens) => DropdownMenuItem<String>(
-                      value: lens.key,
-                      child: Text('${lens.label} (${_counts[lens.key] ?? 0})',
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                    )).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        _selectLens(value);
-                      }
-                    },
+                  )
+                // BRIXTA_FIELD_FILTER_SHEET_20261102: keep category picker off site cards.
+                else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 22),
+                    child: Semantics(
+                      button: true,
+                      label: 'Choose which sites to show',
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(18),
+                        onTap: () async {
+                          final selected = await showModalBottomSheet<String>(
+                            context: context,
+                            isScrollControlled: true,
+                            useSafeArea: true,
+                            showDragHandle: true,
+                            backgroundColor: AppDesign.white,
+                            builder: (sheetContext) => DraggableScrollableSheet(
+                              expand: false,
+                              initialChildSize: 0.60,
+                              minChildSize: 0.30,
+                              maxChildSize: 0.88,
+                              builder: (scrollContext, scrollController) => Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      24,
+                                      8,
+                                      24,
+                                      14,
+                                    ),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Show sites',
+                                          style: AppDesign.sans(
+                                            size: 23,
+                                            weight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 5),
+                                        Text(
+                                          'Choose a category to filter this dataset.',
+                                          style: Theme.of(
+                                            scrollContext,
+                                          ).textTheme.bodyMedium,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const Divider(height: 1),
+                                  Expanded(
+                                    child: ListView.separated(
+                                      controller: scrollController,
+                                      itemCount: _lenses.length,
+                                      separatorBuilder: (_, __) =>
+                                          const Divider(
+                                            height: 1,
+                                            indent: 24,
+                                            endIndent: 24,
+                                          ),
+                                      itemBuilder: (itemContext, index) {
+                                        final option = _lenses[index];
+                                        final active = option.key == _lens;
+                                        return ListTile(
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 24,
+                                                vertical: 3,
+                                              ),
+                                          leading: Icon(
+                                            active
+                                                ? Icons
+                                                      .radio_button_checked_rounded
+                                                : Icons
+                                                      .radio_button_off_rounded,
+                                            color: active
+                                                ? const Color(0xFF245F52)
+                                                : const Color(0xFF77827C),
+                                          ),
+                                          title: Text(
+                                            option.label,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppDesign.sans(
+                                              size: 16,
+                                              weight: active
+                                                  ? FontWeight.w700
+                                                  : FontWeight.w500,
+                                            ),
+                                          ),
+                                          trailing: Text(
+                                            '${_counts[option.key] ?? 0}',
+                                            style: AppDesign.sans(
+                                              size: 14,
+                                              weight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          selected: active,
+                                          onTap: () => Navigator.of(
+                                            sheetContext,
+                                          ).pop(option.key),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                          if (mounted && selected != null)
+                            _selectLens(selected);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 17,
+                            vertical: 13,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppDesign.white,
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(color: const Color(0xFFD5DDD7)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.filter_list_rounded,
+                                color: Color(0xFF245F52),
+                              ),
+                              const SizedBox(width: 13),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'SHOW SITES',
+                                      style: AppDesign.sans(
+                                        size: 10,
+                                        weight: FontWeight.w700,
+                                        letterSpacing: 1.3,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '${_lenses.firstWhere((item) => item.key == _lens, orElse: () => _lenses.first).label} (${_counts[_lens] ?? 0})',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppDesign.sans(
+                                        size: 15,
+                                        weight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.keyboard_arrow_down_rounded),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
                 const SizedBox(height: 20),
               ],
             );

@@ -55,7 +55,17 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
   }
 
   Future<void> _load() async {
-    final cached = await FieldRecordsApi.cachedRecord(widget.recordId,moduleKey:widget.moduleKey);
+    // BRIXTA_FIELD_REVOKED_CACHE_V1_20261102
+    // Cached site details are shown only offline, for this exact employee.
+    final session = widget.controller.session;
+    final scope = session == null ? '' : FieldSectionQueue.scopeFor(session);
+    final cached = (session != null && !widget.controller.isOnline)
+        ? await FieldRecordsApi.cachedRecord(
+            widget.recordId,
+            moduleKey: widget.moduleKey,
+            scope: scope,
+          )
+        : null;
     if (cached != null && mounted) {
       setState(() {
         _bundle = cached;
@@ -63,14 +73,16 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
       });
     }
 
-    final session = widget.controller.session;
     if (session == null || !widget.controller.isOnline) {
       if (mounted) setState(() => _loading = false);
       return;
     }
 
     try {
-      final fresh = await FieldRecordsApi(session.accessToken).record(widget.recordId,moduleKey:widget.moduleKey);
+      final fresh = await FieldRecordsApi(
+        session.accessToken,
+        cacheScope: scope,
+      ).record(widget.recordId, moduleKey: widget.moduleKey);
       if (!mounted) return;
       setState(() {
         _bundle = fresh;
@@ -79,7 +91,8 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
       });
     } catch (error) {
       if (!mounted) return;
-      final forbidden = error is FieldApiException &&
+      final forbidden =
+          error is FieldApiException &&
           (error.statusCode == 403 || error.statusCode == 404);
       setState(() {
         _loading = false;
@@ -106,41 +119,83 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
   // The source BX_ reference remains permanent and visible.
   bool _canNameSite(FieldRecordBundle bundle) {
     final steps = bundle.record.sections.keys;
-    return steps.any((k) => RegExp(r'^(verify|verification)(_|$)',caseSensitive:false).hasMatch(k)) ||
-        bundle.list.config.sections.any((section) =>
-          section.title.toLowerCase().startsWith('verify') &&
-          bundle.record.sections.containsKey(section.key));
+    return steps.any(
+          (k) => RegExp(
+            r'^(verify|verification)(_|$)',
+            caseSensitive: false,
+          ).hasMatch(k),
+        ) ||
+        bundle.list.config.sections.any(
+          (section) =>
+              section.title.toLowerCase().startsWith('verify') &&
+              bundle.record.sections.containsKey(section.key),
+        );
   }
 
   Future<void> _renameSite() async {
-    final bundle=_bundle;
-    final session=widget.controller.session;
-    if(bundle==null || session==null) return;
-    final old=bundle.record.summary.title;
-    final text=TextEditingController(text:old==bundle.record.summary.key?'':old);
-    final name=await showDialog<String>(context:context,builder:(context)=>AlertDialog(
-      title:const Text('Name this verified site'),
-      content:Column(mainAxisSize:MainAxisSize.min,children:[
-        const Text('Give it a memorable name. The original BX ID stays unchanged.'),
-        const SizedBox(height:12),
-        TextField(controller:text,autofocus:true,maxLength:100,
-          textCapitalization:TextCapitalization.words,
-          decoration:const InputDecoration(labelText:'Site name',hintText:'e.g. Ahmed residence, Beltola')),
-      ]),
-      actions:[TextButton(onPressed:()=>Navigator.pop(context),child:const Text('CANCEL')),
-        FilledButton(onPressed:()=>Navigator.pop(context,text.text.trim()),child:const Text('SAVE NAME'))],
-    ));
+    final bundle = _bundle;
+    final session = widget.controller.session;
+    if (bundle == null || session == null) return;
+    final old = bundle.record.summary.title;
+    final text = TextEditingController(
+      text: old == bundle.record.summary.key ? '' : old,
+    );
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Name this verified site'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Give it a memorable name. The original BX ID stays unchanged.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: text,
+              autofocus: true,
+              maxLength: 100,
+              textCapitalization: TextCapitalization.words,
+              decoration: const InputDecoration(
+                labelText: 'Site name',
+                hintText: 'e.g. Ahmed residence, Beltola',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('CANCEL'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, text.text.trim()),
+            child: const Text('SAVE NAME'),
+          ),
+        ],
+      ),
+    );
     text.dispose();
-    if(name==null || name.isEmpty || !mounted) return;
-    if(!widget.controller.isOnline){_message('Naming requires network access. Try again when online.');return;}
-    setState(()=>_renaming=true);
+    if (name == null || name.isEmpty || !mounted) return;
+    if (!widget.controller.isOnline) {
+      _message('Naming requires network access. Try again when online.');
+      return;
+    }
+    setState(() => _renaming = true);
     try {
-      await FieldRecordsApi(session.accessToken).renameSite(recordId:widget.recordId,moduleKey:widget.moduleKey,siteName:name);
-      if(!mounted)return;
+      await FieldRecordsApi(session.accessToken).renameSite(
+        recordId: widget.recordId,
+        moduleKey: widget.moduleKey,
+        siteName: name,
+      );
+      if (!mounted) return;
       _message('Site named. Original CRM ID unchanged.');
       await _load();
-    }catch(error){if(mounted)_message('Could not rename: $error');}
-    finally{if(mounted)setState(()=>_renaming=false);}
+    } catch (error) {
+      if (mounted) _message('Could not rename: $error');
+    } finally {
+      if (mounted) setState(() => _renaming = false);
+    }
   }
 
   Future<void> _navigate() async {
@@ -165,14 +220,18 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
     if (point == null) return;
     await Clipboard.setData(
       ClipboardData(
-        text: 'https://www.google.com/maps/search/?api=1&query='
+        text:
+            'https://www.google.com/maps/search/?api=1&query='
             '${point.lat.toStringAsFixed(6)},${point.lng.toStringAsFixed(6)}',
       ),
     );
     if (mounted) _message('Map link copied.');
   }
 
-  Future<void> _openSection(FieldSection section, FieldRecordDetail record) async {
+  Future<void> _openSection(
+    FieldSection section,
+    FieldRecordDetail record,
+  ) async {
     final missing = section.requires
         .where((key) => !record.sections.containsKey(key))
         .toList();
@@ -229,13 +288,22 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
             ],
             if (summary != null) _header(context, summary),
             if (bundle != null && _canNameSite(bundle)) ...[
-              const SizedBox(height:10),
-              OutlinedButton.icon(onPressed:_renaming?null:_renameSite,
-                icon:const Icon(Icons.edit_outlined),
-                label:Text(_renaming?'SAVING…':'NAME / RENAME THIS VERIFIED SITE')),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: _renaming ? null : _renameSite,
+                icon: const Icon(Icons.edit_outlined),
+                label: Text(
+                  _renaming ? 'SAVING…' : 'NAME / RENAME THIS VERIFIED SITE',
+                ),
+              ),
               if (summary?.key != null)
-                Padding(padding:const EdgeInsets.only(top:5),child:Text(
-                  'Original CRM ID: ${summary!.key}',style:Theme.of(context).textTheme.bodySmall)),
+                Padding(
+                  padding: const EdgeInsets.only(top: 5),
+                  child: Text(
+                    'Original CRM ID: ${summary!.key}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
             ],
             if (_point != null &&
                 (experience.showNavigate || experience.showCopyLink)) ...[
@@ -272,12 +340,15 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
             else if (bundle == null)
               FieldCard(
                 child: Text(
-                  _error ?? 'Open this site once with signal to keep it on your phone.',
+                  _error ??
+                      'Open this site once with signal to keep it on your phone.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               )
             else ...[
-              if (experience.layoutStyle == 'timeline_first' && experience.showTimeline && bundle.timeline.isNotEmpty) ...[
+              if (experience.layoutStyle == 'timeline_first' &&
+                  experience.showTimeline &&
+                  bundle.timeline.isNotEmpty) ...[
                 const FieldEyebrow('Recent site activity'),
                 const SizedBox(height: 12),
                 _Timeline(items: bundle.timeline),
@@ -302,7 +373,8 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
                 ),
                 const SizedBox(height: 10),
               ],
-              if (experience.showImportedInfo && bundle.record.info.isNotEmpty) ...[
+              if (experience.showImportedInfo &&
+                  bundle.record.info.isNotEmpty) ...[
                 const SizedBox(height: 22),
                 const FieldEyebrow('From the import'),
                 const SizedBox(height: 12),
@@ -312,7 +384,9 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
                   onToggle: () => setState(() => _showAllInfo = !_showAllInfo),
                 ),
               ],
-              if (experience.layoutStyle != 'timeline_first' && experience.showTimeline && bundle.timeline.isNotEmpty) ...[
+              if (experience.layoutStyle != 'timeline_first' &&
+                  experience.showTimeline &&
+                  bundle.timeline.isNotEmpty) ...[
                 const SizedBox(height: 28),
                 const FieldEyebrow('Timeline'),
                 const SizedBox(height: 14),
@@ -327,9 +401,7 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
 
   Widget _header(BuildContext context, FieldRecordSummary summary) {
     final distance = widget.origin != null && summary.location != null
-        ? formatDistance(
-            _distance(widget.origin!, summary.location!),
-          )
+        ? formatDistance(_distance(widget.origin!, summary.location!))
         : formatDistance(summary.distanceM);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -407,7 +479,8 @@ class _MiniMap extends StatelessWidget {
             initialCenter: sitePoint,
             initialZoom: 16.5,
             interactionOptions: const InteractionOptions(
-              flags: InteractiveFlag.pinchZoom |
+              flags:
+                  InteractiveFlag.pinchZoom |
                   InteractiveFlag.drag |
                   InteractiveFlag.doubleTapZoom,
             ),
@@ -477,39 +550,70 @@ class _FieldEvidenceGallery extends StatelessWidget {
         if (saved is List) {
           for (final value in saved) {
             final path = value?.toString() ?? '';
-            if (path.isNotEmpty) captures.add((label:field.label,path:path));
+            if (path.isNotEmpty) captures.add((label: field.label, path: path));
           }
         } else if (saved is String && saved.isNotEmpty) {
-          captures.add((label:field.label,path:saved));
+          captures.add((label: field.label, path: saved));
         }
       }
     }
     if (captures.isEmpty) return const SizedBox.shrink();
-    return Column(crossAxisAlignment: CrossAxisAlignment.start,children:[
-      const FieldEyebrow('Site evidence'),
-      const SizedBox(height: 12),
-      SizedBox(height: 126,child: ListView.separated(
-        scrollDirection:Axis.horizontal,
-        itemCount:captures.length,
-        separatorBuilder:(_,_)=>const SizedBox(width:10),
-        itemBuilder:(context,index){
-          final item=captures[index];
-          final remote=item.path.startsWith('https://') || item.path.startsWith('http://');
-          return SizedBox(width:108,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            ClipRRect(borderRadius:BorderRadius.circular(14),child:SizedBox(
-              width:108,height:96,
-              child:remote ? Image.network(item.path,fit:BoxFit.cover,
-                errorBuilder:(_,_,_)=>const Icon(Icons.broken_image_outlined))
-                : Image.file(File(item.path),fit:BoxFit.cover,
-                errorBuilder:(_,_,_)=>const Icon(Icons.image_outlined)),
-            )),
-            const SizedBox(height:5),
-            Text(item.label,maxLines:1,overflow:TextOverflow.ellipsis,
-              style:Theme.of(context).textTheme.labelSmall),
-          ]));
-        },
-      )),
-    ]);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const FieldEyebrow('Site evidence'),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 126,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: captures.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (context, index) {
+              final item = captures[index];
+              final remote =
+                  item.path.startsWith('https://') ||
+                  item.path.startsWith('http://');
+              return SizedBox(
+                width: 108,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: SizedBox(
+                        width: 108,
+                        height: 96,
+                        child: remote
+                            ? Image.network(
+                                item.path,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) =>
+                                    const Icon(Icons.broken_image_outlined),
+                              )
+                            : Image.file(
+                                File(item.path),
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) =>
+                                    const Icon(Icons.image_outlined),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      item.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -538,10 +642,12 @@ class _StepTile extends StatelessWidget {
 
     final String detail;
     if (done != null) {
-      detail = 'Done ${formatWhen(done.completedAt)}'
+      detail =
+          'Done ${formatWhen(done.completedAt)}'
           '${done.byName != null ? ' · ${done.byName}' : ''}';
     } else if (locked) {
-      detail = 'After ${missing.map((key) => config.section(key)?.title ?? key).join(', ')}';
+      detail =
+          'After ${missing.map((key) => config.section(key)?.title ?? key).join(', ')}';
     } else {
       detail = section.hint ?? '${section.fields.length} questions';
     }
@@ -583,9 +689,17 @@ class _StepTile extends StatelessWidget {
                   ),
                   alignment: Alignment.center,
                   child: done != null
-                      ? const Icon(Icons.check_rounded, size: 20, color: AppDesign.white)
+                      ? const Icon(
+                          Icons.check_rounded,
+                          size: 20,
+                          color: AppDesign.white,
+                        )
                       : locked
-                      ? const Icon(Icons.lock_outline_rounded, size: 16, color: AppDesign.muted)
+                      ? const Icon(
+                          Icons.lock_outline_rounded,
+                          size: 16,
+                          color: AppDesign.muted,
+                        )
                       : Text(
                           '${index + 1}',
                           style: AppDesign.mono(
@@ -621,7 +735,9 @@ class _StepTile extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 Icon(
-                  done != null ? Icons.edit_outlined : Icons.chevron_right_rounded,
+                  done != null
+                      ? Icons.edit_outlined
+                      : Icons.chevron_right_rounded,
                   size: 20,
                   color: AppDesign.muted,
                 ),
@@ -736,7 +852,10 @@ class _Timeline extends StatelessWidget {
                       children: [
                         Text(
                           items[i].title,
-                          style: AppDesign.sans(size: 15, weight: FontWeight.w600),
+                          style: AppDesign.sans(
+                            size: 15,
+                            weight: FontWeight.w600,
+                          ),
                         ),
                         if (items[i].detail.isNotEmpty) ...[
                           const SizedBox(height: 2),
