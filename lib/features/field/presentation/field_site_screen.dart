@@ -1,5 +1,7 @@
+// BRIXTA_CRM_ACCESS_UX_V1_20261101
 // BRIXTA_SITE_ADMIN_V5
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -8,6 +10,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/config/field_api.dart';
 import '../../../core/design/app_design.dart';
 import '../../../core/design/brixta_feedback.dart';
 import '../../../core/session/app_session_controller.dart';
@@ -74,9 +77,16 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
       });
     } catch (error) {
       if (!mounted) return;
+      final forbidden = error is FieldApiException &&
+          (error.statusCode == 403 || error.statusCode == 404);
       setState(() {
         _loading = false;
-        if (_bundle == null) _error = error.toString();
+        if (forbidden) {
+          _bundle = null;
+          _error = 'You no longer have permission to view this site.';
+        } else if (_bundle == null) {
+          _error = error.toString();
+        }
       });
     }
   }
@@ -264,6 +274,16 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
                 ),
               )
             else ...[
+              if (experience.layoutStyle == 'timeline_first' && experience.showTimeline && bundle.timeline.isNotEmpty) ...[
+                const FieldEyebrow('Recent site activity'),
+                const SizedBox(height: 12),
+                _Timeline(items: bundle.timeline),
+                const SizedBox(height: 24),
+              ],
+              if (experience.showEvidenceGallery) ...[
+                _FieldEvidenceGallery(bundle: bundle),
+                const SizedBox(height: 24),
+              ],
               const FieldEyebrow('Steps'),
               const SizedBox(height: 12),
               for (var i = 0; i < bundle.list.config.sections.length; i++) ...[
@@ -289,7 +309,7 @@ class _FieldSiteScreenState extends State<FieldSiteScreen> {
                   onToggle: () => setState(() => _showAllInfo = !_showAllInfo),
                 ),
               ],
-              if (experience.showTimeline && bundle.timeline.isNotEmpty) ...[
+              if (experience.layoutStyle != 'timeline_first' && experience.showTimeline && bundle.timeline.isNotEmpty) ...[
                 const SizedBox(height: 28),
                 const FieldEyebrow('Timeline'),
                 const SizedBox(height: 14),
@@ -435,6 +455,58 @@ class _MiniMap extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+// BRIXTA_CRM_ACCESS_UX_V1: read-only gallery over existing saved CRM media keys.
+// No new records or uploads are created; the backend may redact media by role.
+class _FieldEvidenceGallery extends StatelessWidget {
+  const _FieldEvidenceGallery({required this.bundle});
+  final FieldRecordBundle bundle;
+
+  @override
+  Widget build(BuildContext context) {
+    final captures = <({String label, String path})>[];
+    for (final section in bundle.list.config.sections) {
+      for (final field in section.fields) {
+        if (field.type != 'photos' && field.type != 'signature') continue;
+        final saved = bundle.record.values[field.key];
+        if (saved is List) {
+          for (final value in saved) {
+            final path = value?.toString() ?? '';
+            if (path.isNotEmpty) captures.add((label:field.label,path:path));
+          }
+        } else if (saved is String && saved.isNotEmpty) {
+          captures.add((label:field.label,path:saved));
+        }
+      }
+    }
+    if (captures.isEmpty) return const SizedBox.shrink();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start,children:[
+      const FieldEyebrow('Site evidence'),
+      const SizedBox(height: 12),
+      SizedBox(height: 126,child: ListView.separated(
+        scrollDirection:Axis.horizontal,
+        itemCount:captures.length,
+        separatorBuilder:(_,_)=>const SizedBox(width:10),
+        itemBuilder:(context,index){
+          final item=captures[index];
+          final remote=item.path.startsWith('https://') || item.path.startsWith('http://');
+          return SizedBox(width:108,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            ClipRRect(borderRadius:BorderRadius.circular(14),child:SizedBox(
+              width:108,height:96,
+              child:remote ? Image.network(item.path,fit:BoxFit.cover,
+                errorBuilder:(_,_,_)=>const Icon(Icons.broken_image_outlined))
+                : Image.file(File(item.path),fit:BoxFit.cover,
+                errorBuilder:(_,_,_)=>const Icon(Icons.image_outlined)),
+            )),
+            const SizedBox(height:5),
+            Text(item.label,maxLines:1,overflow:TextOverflow.ellipsis,
+              style:Theme.of(context).textTheme.labelSmall),
+          ]));
+        },
+      )),
+    ]);
   }
 }
 

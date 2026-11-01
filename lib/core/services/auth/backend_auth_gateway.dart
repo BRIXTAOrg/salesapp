@@ -99,8 +99,14 @@ class BackendAuthGateway implements AuthGateway {
       brixtaAuthDiag('Bootstrap received');
       brixtaAuthDiag('Building workspace session...');
 
+      // The sign-in code may change. Store the immutable tenant schema in
+      // session/offline cache keys, not the editable company login code.
+      final stableSchema = loginBody['tenantSchema']?.toString().trim() ?? '';
+      final stableTenant = stableSchema.isNotEmpty
+          ? request.tenant.copyWith(code: stableSchema)
+          : request.tenant;
       final session = _buildSession(
-        tenant: request.tenant,
+        tenant: stableTenant,
         token: token,
         identifier: request.identifier,
         bootstrap: bootstrap,
@@ -112,7 +118,7 @@ class BackendAuthGateway implements AuthGateway {
       await _cacheSession(
         token: token,
         identifier: request.identifier.trim(),
-        tenantCode: request.tenant.code,
+        tenantCode: stableTenant.code,
         bootstrap: bootstrap,
       );
 

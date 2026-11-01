@@ -1,3 +1,6 @@
+// BRIXTA_COMPANY_ORG_UI_20261101
+// BRIXTA_CRM_ACCESS_UX_V1_20261101
+// BRIXTA_PJP_LOCAL_FIX_20261101
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -6,6 +9,7 @@ import '../../../core/config/field_api.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/session/app_session_controller.dart';
 import '../../field/presentation/field_site_screen.dart';
+import '../../../core/widgets/company_identity_banner.dart';
 
 /// BRIXTA_PJP_MOBILE_V1: published itinerary only, not legacy Responsibilities.
 /// Offline reads use a per-tenant/user/date snapshot. Task writes require server ACK.
@@ -67,7 +71,12 @@ class _PjpHomeTabState extends State<PjpHomeTab> {
       final body = await FieldApi(accessToken: session.accessToken).getJson('/api/salesApp/pjp/today?date=$_date');
       final raw = body['plan'];
       final next = raw is Map ? Map<String, dynamic>.from(raw) : null;
-      if (next != null) await AppDatabase.instance.putCache(_cacheKey, next);
+      if (next != null) {
+        await AppDatabase.instance.putCache(_cacheKey, next);
+      } else {
+        // A successful null response revokes stale offline itineraries.
+        await AppDatabase.instance.removeCache(_cacheKey);
+      }
       if (!mounted) return;
       setState(() { _plan = next; _cached = false; _loading = false; _error = null; });
     } catch (error) {
@@ -137,7 +146,8 @@ class _PjpHomeTabState extends State<PjpHomeTab> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final stops = _stops;
-    final complete = stops.where((x) => x['doneAt'] != null).length;
+    final complete = stops.where((x) => x['type'] == 'site'
+      ? x['verified'] == true : x['doneAt'] != null).length;
     final taskCount = stops.where((x) => x['type'] == 'task').length;
     final siteCount = stops.length - taskCount;
     final employeeName = widget.controller.session?.user.name.trim() ?? '';
@@ -146,6 +156,11 @@ class _PjpHomeTabState extends State<PjpHomeTab> {
     return SafeArea(child: RefreshIndicator(
       onRefresh: _load,
       child: ListView(padding: const EdgeInsets.fromLTRB(24, 24, 24, 150), children: [
+        CompanyIdentityBanner(
+          accessToken: widget.controller.session?.accessToken ?? '',
+          fallbackName: widget.controller.session?.tenant.displayName ?? 'Your company',
+        ),
+        const SizedBox(height: 16),
         // BRIXTA_PJP_EXPERIENCE_V5: branded, CMS-configurable employee Home.
         _JourneyHero(
           plan: _plan,
@@ -166,7 +181,7 @@ class _PjpHomeTabState extends State<PjpHomeTab> {
             const SizedBox(width: 8),
             Expanded(child: _Counter(value: '$taskCount', label: _plan?['taskLabel']?.toString() ?? 'Tasks')),
             const SizedBox(width: 8),
-            Expanded(child: _Counter(value: '$complete', label: 'Tasks done')),
+            Expanded(child: _Counter(value: '$complete', label: 'Stops completed')),
           ]),
           const SizedBox(height: 14),
           if (_plan?['homeShowRouteButton'] != false && stops.any((s) => s['location'] is Map)) SizedBox(width: double.infinity, child: OutlinedButton.icon(
@@ -187,7 +202,10 @@ class _PjpHomeTabState extends State<PjpHomeTab> {
                   const SizedBox(height: 4), Text(stops[i]['note'].toString()),
                 ],
                 const SizedBox(height: 9),
-                if (stops[i]['doneAt'] != null)
+                if (stops[i]['type'] == 'site' && stops[i]['verified'] == true)
+                  Text('VERIFIED · ${stops[i]['verifiedBy'] ?? 'Field team'}',
+                    style: const TextStyle(color: Colors.green))
+                else if (stops[i]['doneAt'] != null)
                   const Text('Completed', style: TextStyle(color: Colors.green))
                 else if (stops[i]['type'] == 'task')
                   TextButton.icon(onPressed: _cached || _submitting ? null : () => _completeTask(stops[i]), icon: const Icon(Icons.check_circle_outline), label: const Text('Mark task done'))
@@ -256,7 +274,14 @@ class _JourneyHero extends StatelessWidget {
     final initials = names.isEmpty ? 'BR' :
         '${names.first.substring(0, 1)}${names.length > 1 ? names.last.substring(0, 1) : ''}'.toUpperCase();
     final next = stops.cast<Map<String, dynamic>?>().firstWhere(
-      (s) => s?['doneAt'] == null, orElse: () => null);
+      (s) {
+        if (s == null) return false;
+        if (s['type'] == 'site') {
+          return s['verified'] != true;
+        }
+        return s['doneAt'] == null;
+      },
+      orElse: () => null);
     final completedTasks = stops.where((s) => s['type'] == 'task' && s['doneAt'] != null).length;
     final tasks = stops.where((s) => s['type'] == 'task').length;
     final eyebrow = plan?['homeHeroEyebrow']?.toString().trim();

@@ -1,3 +1,4 @@
+// BRIXTA_CRM_ACCESS_UX_V1_20261101
 // BRIXTA_SITE_ADMIN_V5
 import 'dart:convert';
 import 'dart:io';
@@ -206,6 +207,8 @@ class FieldListExperience {
     this.recordScope = 'all',
     this.search = true,
     this.defaultLens = 'mine',
+    this.preferNotVisitedDefault = true,
+    this.filterControl = 'dropdown',
     this.lenses = defaultFieldLenses,
     this.cardFields = const [],
     this.badgeField,
@@ -223,6 +226,8 @@ class FieldListExperience {
       recordScope: json['recordScope']?.toString() ?? 'all',
       search: json['search'] != false,
       defaultLens: json['defaultLens']?.toString() ?? 'mine',
+      preferNotVisitedDefault: json['preferNotVisitedDefault'] != false,
+      filterControl: json['filterControl']?.toString() == 'pills' ? 'pills' : 'dropdown',
       lenses: lenses.isEmpty ? defaultFieldLenses : lenses,
       cardFields: _strings(json['cardFields']),
       badgeField: json['badgeField']?.toString(),
@@ -237,6 +242,8 @@ class FieldListExperience {
   final String recordScope;
   final bool search;
   final String defaultLens;
+  final bool preferNotVisitedDefault;
+  final String filterControl;
   final List<FieldLens> lenses;
   final List<String> cardFields;
   final String? badgeField;
@@ -254,6 +261,8 @@ class FieldDetailExperience {
     this.showCopyLink = true,
     this.showImportedInfo = true,
     this.showTimeline = true,
+    this.showEvidenceGallery = true,
+    this.layoutStyle = 'standard',
   });
 
   factory FieldDetailExperience.fromJson(Map<String, dynamic> json) =>
@@ -263,6 +272,8 @@ class FieldDetailExperience {
         showCopyLink: json['showCopyLink'] != false,
         showImportedInfo: json['showImportedInfo'] != false,
         showTimeline: json['showTimeline'] != false,
+        showEvidenceGallery: json['showEvidenceGallery'] != false,
+        layoutStyle: json['layoutStyle']?.toString() == 'timeline_first' ? 'timeline_first' : 'standard',
       );
 
   final bool showMap;
@@ -270,6 +281,8 @@ class FieldDetailExperience {
   final bool showCopyLink;
   final bool showImportedInfo;
   final bool showTimeline;
+  final bool showEvidenceGallery;
+  final String layoutStyle;
 }
 
 class FieldExperience {
@@ -636,6 +649,9 @@ class FieldRecordsApi {
     return FieldRecordPage.fromJson(body);
   }
 
+  static Future<void> clearCachedRecords(String listKey, String lens) =>
+      AppDatabase.instance.removeCache(_pageCache(listKey,lens));
+
   static Future<FieldRecordPage?> cachedRecords(
     String listKey,
     String lens,
@@ -648,9 +664,17 @@ class FieldRecordsApi {
   }
 
   Future<FieldRecordBundle> record(String id) async {
-    final body = await _api.getJson(
-      '/api/salesApp/field/records/${Uri.encodeComponent(id)}',
-    );
+    late final Map<String, dynamic> body;
+    try {
+      body = await _api.getJson(
+        '/api/salesApp/field/records/${Uri.encodeComponent(id)}',
+      );
+    } on FieldApiException catch (error) {
+      if (error.statusCode == 403 || error.statusCode == 404) {
+        await AppDatabase.instance.removeCache(_recordCache(id));
+      }
+      rethrow;
+    }
     await AppDatabase.instance.putCache(_recordCache(id), body);
     return FieldRecordBundle.fromJson(body);
   }

@@ -1,8 +1,10 @@
+// BRIXTA_CRM_ACCESS_UX_V1_20261101
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../../../core/config/field_api.dart';
 import '../../../core/design/app_design.dart';
 import '../../../core/design/app_icons.dart';
 import '../../../core/design/brixta_feedback.dart';
@@ -61,6 +63,12 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
 
   List<FieldLens> get _lenses => _experience.lenses;
 
+  String _initialLens(FieldListExperience experience) =>
+      experience.preferNotVisitedDefault &&
+              experience.lenses.any((lens) => lens.key == 'not_visited')
+          ? 'not_visited'
+          : experience.defaultLens;
+
   @override
   void initState() {
     super.initState();
@@ -83,7 +91,7 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
         _lists = cached;
         _listKey ??= cached.first.key;
         if (!_lensChosen) {
-          _lens = cached.first.config.experience.list.defaultLens;
+          _lens = _initialLens(cached.first.config.experience.list);
         }
       });
       widget.onListsLoaded?.call(cached);
@@ -163,7 +171,7 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
           if (lists.every((list) => list.key != _listKey)) {
             _listKey = lists.isEmpty ? null : lists.first.key;
             if (lists.isNotEmpty) {
-              _lens = lists.first.config.experience.list.defaultLens;
+              _lens = _initialLens(lists.first.config.experience.list);
               _lensChosen = false;
             }
           } else if (!_lensChosen && lists.isNotEmpty) {
@@ -171,7 +179,7 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
               (list) => list.key == _listKey,
               orElse: () => lists.first,
             );
-            _lens = active.config.experience.list.defaultLens;
+            _lens = _initialLens(active.config.experience.list);
           }
           _error = null;
         });
@@ -254,6 +262,18 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
       });
     } catch (error) {
       if (!mounted || requestId != _pageRequestId) return;
+      final forbidden = error is FieldApiException &&
+          (error.statusCode == 403 || error.statusCode == 404);
+      if (forbidden) {
+        await FieldRecordsApi.clearCachedRecords(list.key, _lens);
+        if (mounted) setState(() {
+          _items = const [];
+          _counts = const {};
+          _loading = false;
+          _error = 'Your CRM access changed. Pull down to refresh.';
+        });
+        return;
+      }
       await _loadCachedPage();
       if (mounted) {
         setState(() {
@@ -284,7 +304,7 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
     final selected = _lists.firstWhere((item) => item.key == key);
     setState(() {
       _listKey = key;
-      _lens = selected.config.experience.list.defaultLens;
+      _lens = _initialLens(selected.config.experience.list);
       _lensChosen = false;
       _items = const [];
       _loading = true;
@@ -454,21 +474,41 @@ class _FieldSitesTabState extends State<FieldSitesTab> {
                   ),
                   const SizedBox(height: 16),
                 ],
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 22),
-                  child: Row(
-                    children: [
+                if (_experience.filterControl == 'pills')
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 22),
+                    child: Row(children: [
                       for (final lens in _lenses) ...[
-                        FieldPill(
-                          label: lens.label,
-                          count: _counts[lens.key],
-                          selected: lens.key == _lens,
-                          onTap: () => _selectLens(lens.key),
-                        ),
+                        FieldPill(label: lens.label, count: _counts[lens.key],
+                          selected: lens.key == _lens, onTap: () => _selectLens(lens.key)),
                         const SizedBox(width: 8),
                       ],
-                    ],
+                    ]),
+                  )
+                else Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 22),
+                  child: DropdownButtonFormField<String>(
+                    key: ValueKey('${list?.key}:$_lens'),
+                    initialValue: _lenses.any((lens) => lens.key == _lens) ? _lens : null,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: 'SHOW SITES',
+                      prefixIcon: const Icon(Icons.filter_list_rounded),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
+                      filled: true,
+                      fillColor: AppDesign.white,
+                    ),
+                    items: _lenses.map((lens) => DropdownMenuItem<String>(
+                      value: lens.key,
+                      child: Text('${lens.label} (${_counts[lens.key] ?? 0})',
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    )).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        _selectLens(value);
+                      }
+                    },
                   ),
                 ),
                 const SizedBox(height: 20),

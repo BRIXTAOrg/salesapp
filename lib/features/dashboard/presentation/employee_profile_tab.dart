@@ -1,3 +1,4 @@
+// BRIXTA_COMPANY_ORG_UI_20261101
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -9,6 +10,7 @@ import '../../../core/design/brixta_feedback.dart';
 import '../../../core/device/device_identity.dart';
 import '../../../core/services/runtime/responsibility_runtime_api.dart';
 import '../../../core/session/app_session_controller.dart';
+import '../../../core/widgets/company_identity_banner.dart';
 import '../../tracking/presentation/tracking_controller.dart';
 
 class EmployeeProfileTab extends StatefulWidget {
@@ -112,6 +114,11 @@ class _EmployeeProfileTabState extends State<EmployeeProfileTab> {
               ),
             ),
             const SizedBox(height: 24),
+            CompanyIdentityBanner(
+              accessToken: session.accessToken,
+              fallbackName: session.tenant.displayName,
+            ),
+            const SizedBox(height: 16),
 
             _ProfileHero(
               name: session.user.name,
