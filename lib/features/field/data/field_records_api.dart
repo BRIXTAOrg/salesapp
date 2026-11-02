@@ -629,6 +629,17 @@ class FieldRecordsApi {
     return raw.map(FieldList.fromJson).toList();
   }
 
+  // BRIXTA_FIELD_LIVE_ACCESS_POLL_V1_20261102
+  // Only module keys; employee's token is authoritative. Never cached.
+  Future<Set<String>> authorizedModuleKeys() async {
+    final response = await _api.getJson('/api/salesApp/field/access');
+    final raw = response['moduleKeys'];
+    if (raw is! List || raw.any((key) => key is! String || key.isEmpty)) {
+      throw const FieldApiException('Invalid FIELD module access response.');
+    }
+    return raw.cast<String>().toSet();
+  }
+
   static Future<List<FieldList>> cachedLists(String scope) async {
     final cached = await AppDatabase.instance.getCache(_listsCache(scope));
     return _maps(cached).map(FieldList.fromJson).toList();

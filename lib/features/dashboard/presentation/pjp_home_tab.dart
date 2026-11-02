@@ -2,6 +2,7 @@
 // BRIXTA_CRM_ACCESS_UX_V1_20261101
 // BRIXTA_PJP_LOCAL_FIX_20261101
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -223,18 +224,18 @@ class _PjpHomeTabState extends State<PjpHomeTab> {
     }
   }
 
-  Future<void> _openRoute() async {
-    final positions = _stops
-        .where((s) => s['location'] is Map)
-        .take(8)
-        .toList();
+  Future<void> _openRoute({int section = 0}) async {
+    final allPositions = _stops.where((s) => s['location'] is Map).toList();
+    final start = math.max(0, section) * 8;
+    final positions = allPositions.skip(start).take(8).toList();
     if (positions.isEmpty) return;
     final origin = _plan?['origin'];
     if (origin is! Map) return;
     String coords(dynamic point) => '${point['lat']},${point['lng']}';
+    final departure = start > 0 ? allPositions[start - 1]['location'] : origin;
     final params = <String, String>{
       'api': '1',
-      'origin': coords(origin),
+      'origin': coords(departure),
       'destination': coords(positions.last['location']),
       'travelmode': 'driving',
     };
@@ -261,6 +262,7 @@ class _PjpHomeTabState extends State<PjpHomeTab> {
         .length;
     final taskCount = stops.where((x) => x['type'] == 'task').length;
     final siteCount = stops.length - taskCount;
+    final mappedStopCount = stops.where((s) => s['location'] is Map).length;
     final employeeName = widget.controller.session?.user.name.trim() ?? '';
     final designation =
         widget.controller.session?.user.designation.trim() ?? '';
@@ -327,16 +329,33 @@ class _PjpHomeTabState extends State<PjpHomeTab> {
                 ],
               ),
               const SizedBox(height: 14),
-              if (_plan?['homeShowRouteButton'] != false &&
-                  stops.any((s) => s['location'] is Map))
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: _openRoute,
-                    icon: const Icon(Icons.route),
-                    label: const Text('OPEN JOURNEY MAP'),
+              if (_plan?['homeShowRouteButton'] != false && mappedStopCount > 0) ...[
+                if (mappedStopCount <= 8)
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _openRoute(),
+                      icon: const Icon(Icons.route),
+                      label: const Text('OPEN JOURNEY MAP'),
+                    ),
+                  )
+                else ...[
+                  const Text('Open road directions in consecutive sections. The next section starts where the previous one ended.'),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 6,
+                    children: [
+                      for (var section = 0; section < (mappedStopCount + 7) ~/ 8; section++)
+                        OutlinedButton.icon(
+                          onPressed: () => _openRoute(section: section),
+                          icon: const Icon(Icons.route),
+                          label: Text('MAP ${section * 8 + 1}–${math.min((section + 1) * 8, mappedStopCount)}'),
+                        ),
+                    ],
                   ),
-                ),
+                ],
+              ],
               const SizedBox(height: 18),
               Text('YOUR STOPS', style: theme.textTheme.labelLarge),
               const SizedBox(height: 10),

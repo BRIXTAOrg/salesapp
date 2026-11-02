@@ -34,6 +34,10 @@ class _FieldSitesTabState extends State<FieldSitesTab>
     with WidgetsBindingObserver {
   final TextEditingController _search = TextEditingController();
   Timer? _debounce;
+  // BRIXTA_FIELD_LIVE_ACCESS_POLL_V1_20261102
+  Timer? _accessPollTimer;
+  bool _accessPollInProgress = false;
+  bool _appForeground = true;
 
   List<FieldList> _lists = const [];
   String? _listKey;
@@ -64,24 +68,40 @@ class _FieldSitesTabState extends State<FieldSitesTab>
 
   List<FieldLens> get _lenses => _experience.lenses;
 
-  String _initialLens(FieldListExperience experience) =>
-      experience.preferNotVisitedDefault &&
-          experience.lenses.any((lens) => lens.key == 'not_visited')
-      ? 'not_visited'
-      : experience.defaultLens;
+  String _initialLens(FieldList list) {
+    final experience = list.config.experience.list;
+
+    // Worked Sites opens on Verified by default.
+    // Other App Experiences retain their existing defaults.
+    if (list.title.trim().toLowerCase() == 'worked sites' &&
+        experience.lenses.any((lens) => lens.key == 'verified')) {
+      return 'verified';
+    }
+
+    return experience.preferNotVisitedDefault &&
+            experience.lenses.any((lens) => lens.key == 'not_visited')
+        ? 'not_visited'
+        : experience.defaultLens;
+  }
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _search.addListener(_onSearch);
+    // Lightweight server-side ACL check while FIELD is running.
+    _accessPollTimer = Timer.periodic(
+      const Duration(seconds: 20),
+      (_) => unawaited(_pollModuleAccess()),
+    );
     unawaited(_start());
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     // Re-check server access when returning to the app after an admin change.
-    if (state == AppLifecycleState.resumed && widget.controller.isOnline) {
+    _appForeground = state == AppLifecycleState.resumed;
+    if (_appForeground && widget.controller.isOnline) {
       unawaited(_refresh());
     }
   }
@@ -89,6 +109,7 @@ class _FieldSitesTabState extends State<FieldSitesTab>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _accessPollTimer?.cancel();
     _debounce?.cancel();
     _search.removeListener(_onSearch);
     _search.dispose();
@@ -108,7 +129,7 @@ class _FieldSitesTabState extends State<FieldSitesTab>
         _lists = cached;
         _listKey ??= cached.first.key;
         if (!_lensChosen) {
-          _lens = _initialLens(cached.first.config.experience.list);
+          _lens = _initialLens(cached.first);
         }
       });
       widget.onListsLoaded?.call(cached);
@@ -170,6 +191,83 @@ class _FieldSitesTabState extends State<FieldSitesTab>
     }
   }
 
+  // Authorization is checked against the live backend without flushing
+  // offline submissions. Reload the full module list only if access changes.
+  Future<void> _pollModuleAccess() async {
+    if (_accessPollInProgress ||
+        !mounted ||
+        !_appForeground ||
+        !widget.controller.isOnline) {
+      return;
+    }
+    final session = widget.controller.session;
+    if (session == null) return;
+    _accessPollInProgress = true;
+    try {
+      final api = FieldRecordsApi(
+        session.accessToken,
+        cacheScope: FieldSectionQueue.scopeFor(session),
+      );
+      final authorized = await api.authorizedModuleKeys();
+      if (!mounted ||
+          !_appForeground ||
+          !widget.controller.isOnline ||
+          widget.controller.session?.accessToken != session.accessToken) {
+        return;
+      }
+      final visible = _lists.map((item) => item.key).toSet();
+      if (visible.length == authorized.length &&
+          visible.containsAll(authorized)) {
+        return;
+      }
+      // Server authorization changed. Fetch the authoritative module list.
+      final fresh = await api.lists();
+      if (!mounted ||
+          !_appForeground ||
+          widget.controller.session?.accessToken != session.accessToken) {
+        return;
+      }
+      ++_pageRequestId; // Invalidate older pending record-page responses.
+      setState(() {
+        _lists = fresh;
+        if (fresh.every((item) => item.key != _listKey)) {
+          _listKey = fresh.isEmpty ? null : fresh.first.key;
+          _lensChosen = false;
+          if (fresh.isNotEmpty) {
+            _lens = _initialLens(fresh.first);
+          }
+        }
+        _items = const [];
+        _counts = const {};
+        _loading = fresh.isNotEmpty;
+        _error = null;
+      });
+      widget.onListsLoaded?.call(fresh);
+      await _loadPage();
+    } on FieldApiException catch (error) {
+      if (error.statusCode == 401 || error.statusCode == 403) {
+        // Account disabled/sign-in revoked: do not leave a visible module.
+        if (!mounted) return;
+        ++_pageRequestId;
+        setState(() {
+          _lists = const [];
+          _listKey = null;
+          _items = const [];
+          _counts = const {};
+          _loading = false;
+          _error = 'FIELD access expired or was revoked. Sign in again.';
+        });
+        widget.onListsLoaded?.call(const []);
+      }
+      // Other network errors do not authorize any new access. A future
+      // successful probe, or pull-to-refresh, will revalidate permissions.
+    } catch (_) {
+      // Transient network failure: server retains authority over every write.
+    } finally {
+      _accessPollInProgress = false;
+    }
+  }
+
   Future<void> _refresh() async {
     final session = widget.controller.session;
     if (session == null) return;
@@ -196,7 +294,7 @@ class _FieldSitesTabState extends State<FieldSitesTab>
             _loading = true;
             _listKey = lists.isEmpty ? null : lists.first.key;
             if (lists.isNotEmpty) {
-              _lens = _initialLens(lists.first.config.experience.list);
+              _lens = _initialLens(lists.first);
               _lensChosen = false;
             }
           } else if (!_lensChosen && lists.isNotEmpty) {
@@ -204,7 +302,7 @@ class _FieldSitesTabState extends State<FieldSitesTab>
               (list) => list.key == _listKey,
               orElse: () => lists.first,
             );
-            _lens = _initialLens(active.config.experience.list);
+            _lens = _initialLens(active);
           }
           _error = null;
         });
@@ -357,7 +455,7 @@ class _FieldSitesTabState extends State<FieldSitesTab>
     final selected = _lists.firstWhere((item) => item.key == key);
     setState(() {
       _listKey = key;
-      _lens = _initialLens(selected.config.experience.list);
+      _lens = _initialLens(selected);
       _lensChosen = false;
       _items = const [];
       _loading = true;
